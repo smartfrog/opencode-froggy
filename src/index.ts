@@ -105,7 +105,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           const { agent, model } = commands[name] ?? {}
           
           log(`${prefix} executing command`, { command: name, args, agent, model })
-          await ctx.client.session.command({
+          const result = await ctx.client.session.command({
             path: { id: sessionID },
             body: { 
               command: name,
@@ -115,20 +115,23 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
             },
             query: { directory: ctx.directory },
           })
+          log(`${prefix} command result`, { command: name, status: result.response?.status, error: result.error })
         } else if ("skill" in action) {
           log(`${prefix} executing skill`, { skill: action.skill })
-          await ctx.client.session.prompt({
+          const result = await ctx.client.session.prompt({
             path: { id: sessionID },
             body: { parts: [{ type: "text", text: `Use the skill tool to load the "${action.skill}" skill and follow its instructions.` }] },
             query: { directory: ctx.directory },
           })
+          log(`${prefix} skill result`, { skill: action.skill, status: result.response?.status, error: result.error })
         } else if ("tool" in action) {
           log(`${prefix} executing tool`, { tool: action.tool.name })
-          await ctx.client.session.prompt({
+          const result = await ctx.client.session.prompt({
             path: { id: sessionID },
             body: { parts: [{ type: "text", text: `Use the ${action.tool.name} tool with these arguments: ${JSON.stringify(action.tool.args)}` }] },
             query: { directory: ctx.directory },
           })
+          log(`${prefix} tool result`, { tool: action.tool.name, status: result.response?.status, error: result.error })
         }
       } catch (error) {
         log(`${prefix} action failed, continuing`, { error: String(error) })
@@ -250,20 +253,15 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           log("[event] session.idle - setting mainSessionID from idle event", { sessionID })
         }
 
-        const files = modifiedCodeFiles.get(sessionID)
-        if (!files || files.size === 0) {
-          log("[event] session.idle - no modified files, skipping")
-          return
-        }
-
         const eventHooks = hooks.get("session.idle")
         if (!eventHooks || eventHooks.length === 0) {
           log("[event] session.idle - no hooks defined, skipping")
           return
         }
 
+        const files = modifiedCodeFiles.get(sessionID)
         modifiedCodeFiles.delete(sessionID)
-        await triggerHooks("session.idle", sessionID, { files: Array.from(files) })
+        await triggerHooks("session.idle", sessionID, { files: files ? Array.from(files) : [] })
       }
     },
   }

@@ -29,7 +29,17 @@ Hooks are loaded from OpenCode configuration directories (global and project-lev
 
 ### Skills
 
-Skills are loaded from `skill/<name>/SKILL.md`. Frontmatter `name` and `description` are supported; the name defaults to the directory name. The plugin exposes a `skill` tool that lists available skills and returns their instructions. If no skills are present, the tool reports none.
+The plugin supports skills loaded from `skill/<name>/SKILL.md` within the plugin directory. No skills are included by default. The plugin exposes a `skill` tool that lists available skills and returns their instructions.
+
+To add your own skills, create a directory structure like:
+
+```
+skill/
+  my-skill/
+    SKILL.md
+```
+
+The `SKILL.md` file supports YAML frontmatter with `name` and `description` fields. The name defaults to the directory name if not specified.
 
 ### Hooks
 
