@@ -9,17 +9,13 @@ import {
   type CommandConfig,
   type AgentConfigOutput,
 } from "./loaders"
+import { log } from "./logger"
 
 export { parseFrontmatter, loadAgents, loadSkills, loadCommands } from "./loaders"
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface CountdownState {
-  timer: ReturnType<typeof setTimeout>
-  interval: ReturnType<typeof setInterval>
-}
 
 interface ToolExecuteBeforeInput {
   tool: string
@@ -43,8 +39,7 @@ const AGENT_DIR = join(PLUGIN_ROOT, "agent")
 const SKILL_DIR = join(PLUGIN_ROOT, "skill")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
 
-const AUTO_SKILL_NAME = "post-change-code-simplification"
-const COUNTDOWN_SECONDS = 5
+const AUTO_COMMAND_NAME = "simplify-changes"
 
 // ============================================================================
 // PLUGIN
@@ -57,76 +52,33 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
   const modifiedCodeFiles = new Map<string, Set<string>>()
   let mainSessionID: string | undefined
-  const countdowns = new Map<string, CountdownState>()
 
-  const autoSkill = skills.find((s) => s.name === AUTO_SKILL_NAME)
+  const autoCommand = commands[AUTO_COMMAND_NAME]
+  log("[init] Plugin loaded", { 
+    autoCommand: autoCommand ? AUTO_COMMAND_NAME : undefined, 
+    agents: Object.keys(agents), 
+    commands: Object.keys(commands),
+    skills: skills.map(s => s.name) 
+  })
 
-  function cancelCountdown(sessionID: string): void {
-    const state = countdowns.get(sessionID)
-    if (state) {
-      clearTimeout(state.timer)
-      clearInterval(state.interval)
-      countdowns.delete(sessionID)
+  async function executeAutoSimplify(sessionID: string): Promise<void> {
+    log("[executeAutoSimplify] Starting", { sessionID })
+
+    if (!autoCommand) {
+      log("[executeAutoSimplify] No autoCommand found, skipping")
+      return
     }
-  }
-
-  function startCountdown(sessionID: string, files: Set<string>): void {
-    cancelCountdown(sessionID)
-
-    const showCountdownToast = (seconds: number) =>
-      ctx.client.tui
-        .showToast({
-          body: {
-            title: "Code Simplification",
-            message: `Simplifying in ${seconds}s... (${files.size} files)`,
-            variant: "info",
-            duration: 900,
-          },
-        })
-        .catch(() => {})
-
-    let remaining = COUNTDOWN_SECONDS
-    showCountdownToast(remaining)
-
-    const interval = setInterval(() => {
-      remaining--
-      if (remaining > 0) {
-        showCountdownToast(remaining)
-      }
-    }, 1000)
-
-    const timer = setTimeout(() => {
-      cancelCountdown(sessionID)
-      executeSkill(sessionID, files)
-    }, COUNTDOWN_SECONDS * 1000)
-
-    countdowns.set(sessionID, { timer, interval })
-  }
-
-  async function executeSkill(
-    sessionID: string,
-    files: Set<string>
-  ): Promise<void> {
-    if (!autoSkill) return
-
-    const prompt = [
-      `[SYSTEM - AUTO CODE SIMPLIFICATION]`,
-      ``,
-      `Code files were modified during this session:`,
-      ...Array.from(files).map((f) => `- ${f}`),
-      ``,
-      `Execute the skill "${AUTO_SKILL_NAME}" to simplify the changes.`,
-      `Use the \`skill\` tool with name="${AUTO_SKILL_NAME}" to load instructions.`,
-    ].join("\n")
 
     try {
+      log("[executeAutoSimplify] Sending command to session")
       await ctx.client.session.prompt({
         path: { id: sessionID },
-        body: { parts: [{ type: "text", text: prompt }] },
+        body: { parts: [{ type: "text", text: `/${AUTO_COMMAND_NAME}` }] },
         query: { directory: ctx.directory },
       })
+      log("[executeAutoSimplify] Command sent successfully")
     } catch (error) {
-      console.debug("[SmartfrogPlugin] executeSkill failed:", error)
+      log("[executeAutoSimplify] Failed", { error: String(error) })
     }
   }
 
@@ -182,6 +134,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       const filePath = (output.args?.filePath ?? output.args?.file_path ?? output.args?.path) as string | undefined
       if (!filePath) return
 
+      log("[tool.execute.before] File modified", { sessionID, filePath, tool: input.tool })
+
       let files = modifiedCodeFiles.get(sessionID)
       if (!files) {
         files = new Set()
@@ -199,56 +153,51 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           | undefined
         if (info?.id && !info.parentID) {
           mainSessionID = info.id
+          log("[event] session.created - main session", { sessionID: info.id })
         }
       }
 
       if (event.type === "session.deleted") {
         const info = props?.info as { id?: string } | undefined
         if (info?.id) {
+          log("[event] session.deleted", { sessionID: info.id })
           modifiedCodeFiles.delete(info.id)
-          cancelCountdown(info.id)
           if (info.id === mainSessionID) {
             mainSessionID = undefined
           }
         }
       }
 
-      if (event.type === "message.updated") {
-        const info = props?.info as
-          | { sessionID?: string; role?: string }
-          | undefined
-        if (
-          info?.sessionID &&
-          info?.role === "user" &&
-          countdowns.has(info.sessionID)
-        ) {
-          cancelCountdown(info.sessionID)
-          ctx.client.tui
-            .showToast({
-              body: {
-                title: "Code Simplification",
-                message: "Cancelled",
-                variant: "warning",
-                duration: 2000,
-              },
-            })
-            .catch(() => {})
-        }
-      }
-
       if (event.type === "session.idle") {
         const sessionID = props?.sessionID as string | undefined
+        log("[event] session.idle", { sessionID, mainSessionID })
+
         if (!sessionID) return
 
-        if (sessionID !== mainSessionID) return
+        if (!mainSessionID) {
+          mainSessionID = sessionID
+          log("[event] session.idle - setting mainSessionID from idle event", { sessionID })
+        }
+
+        if (sessionID !== mainSessionID) {
+          log("[event] session.idle - not main session, skipping")
+          return
+        }
 
         const files = modifiedCodeFiles.get(sessionID)
-        if (!files || files.size === 0) return
+        if (!files || files.size === 0) {
+          log("[event] session.idle - no modified files, skipping")
+          return
+        }
 
-        if (!autoSkill) return
+        if (!autoCommand) {
+          log("[event] session.idle - no autoCommand, skipping")
+          return
+        }
 
         modifiedCodeFiles.delete(sessionID)
-        startCountdown(sessionID, files)
+        log("[event] session.idle - executing command", { files: Array.from(files) })
+        executeAutoSimplify(sessionID)
       }
     },
   }
