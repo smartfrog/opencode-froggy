@@ -197,21 +197,7 @@ The plugin does not require additional configuration. All agents, commands, skil
 
 ### Supported Code File Extensions
 
-The auto-simplification feature tracks files with these extensions:
-
-- JavaScript/TypeScript: `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`
-- Python: `.py`
-- Go: `.go`
-- Rust: `.rs`
-- Ruby: `.rb`
-- Java/Kotlin/Scala: `.java`, `.kt`, `.scala`
-- C/C++: `.c`, `.cpp`, `.h`, `.hpp`
-- C#: `.cs`
-- Swift: `.swift`
-- PHP: `.php`
-- Web: `.vue`, `.svelte`, `.astro`
-- Shell: `.sh`, `.bash`, `.zsh`, `.fish`
-- Data/Config: `.sql`, `.graphql`, `.prisma`, `.yaml`, `.yml`, `.toml`
+The auto-simplification hook does not filter by extension. It tracks any file paths modified via `write` or `edit` in the current session, then runs on `session.idle` if hooks are configured.
 
 ## Development
 
