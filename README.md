@@ -178,6 +178,15 @@ Code extensions treated as "code" by default:
   | `2` | Blocking error, stop remaining actions in this hook |
   | Other | Non-blocking error, log warning and continue |
 
+  **Result feedback:**
+  Bash hook results are automatically sent back to your session, so you can see what happened:
+  ```
+  [BASH HOOK ✓] npm run lint
+  Exit: 0 | Duration: 1234ms
+  Stdout: All files passed linting
+  ```
+  The feedback includes a status icon (✓ success, ✗ failure), exit code, execution duration, and stdout/stderr output (truncated to 500 characters). This message appears in your session but does not trigger a response from the assistant.
+
 #### Execution behavior
 
 - Action errors are logged and do not stop later actions.
