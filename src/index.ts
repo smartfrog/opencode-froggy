@@ -1,5 +1,4 @@
 import { tool, type Plugin, type ToolContext } from "@opencode-ai/plugin"
-import type { Config } from "@opencode-ai/sdk"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -133,12 +132,12 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   }
 
   return {
-    config: async (config: Config): Promise<void> => {
+    config: async (config: Record<string, unknown>): Promise<void> => {
       if (Object.keys(agents).length > 0) {
-        config.agent = { ...(config.agent ?? {}), ...agents }
+        config.agent = { ...(config.agent as Record<string, unknown> ?? {}), ...agents }
       }
       if (Object.keys(commands).length > 0) {
-        config.command = { ...(config.command ?? {}), ...commands }
+        config.command = { ...(config.command as Record<string, unknown> ?? {}), ...commands }
       }
     },
 

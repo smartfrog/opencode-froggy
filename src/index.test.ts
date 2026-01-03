@@ -104,6 +104,15 @@ describe("isCodeFile", () => {
     expect(isCodeFile("file.Tsx")).toBe(true)
     expect(isCodeFile("file.PY")).toBe(true)
   })
+
+  it("should return false for non-string input", () => {
+    expect(isCodeFile(null)).toBe(false)
+    expect(isCodeFile(undefined)).toBe(false)
+    expect(isCodeFile({})).toBe(false)
+    expect(isCodeFile({ path: "file.ts" })).toBe(false)
+    expect(isCodeFile(123)).toBe(false)
+    expect(isCodeFile(["file.ts"])).toBe(false)
+  })
 })
 
 describe("loadAgents", () => {

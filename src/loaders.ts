@@ -69,7 +69,10 @@ export const CODE_EXTENSIONS = new Set([
 // UTILITIES
 // ============================================================================
 
-export function parseFrontmatter<T>(content: string): { data: T; body: string } {
+export function parseFrontmatter<T>(content: unknown): { data: T; body: string } {
+  if (typeof content !== "string") {
+    return { data: {} as T, body: "" }
+  }
   const match = content.match(/^---\r?\n([\s\S]*?)(?:\r?\n)?---(?:\r?\n)?([\s\S]*)$/)
   if (!match) {
     return { data: {} as T, body: content }
@@ -83,7 +86,8 @@ export function parseFrontmatter<T>(content: string): { data: T; body: string } 
   }
 }
 
-export function isCodeFile(filePath: string): boolean {
+export function isCodeFile(filePath: unknown): boolean {
+  if (typeof filePath !== "string") return false
   const ext = extname(filePath).toLowerCase()
   return CODE_EXTENSIONS.has(ext)
 }
