@@ -4,7 +4,6 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import {
   parseFrontmatter,
-  isCodeFile,
   loadAgents,
   loadSkills,
   loadCommands,
@@ -58,60 +57,6 @@ Body content`
 
     expect(result.data).toEqual({})
     expect(result.body).toBe(content)
-  })
-})
-
-describe("isCodeFile", () => {
-  it("should return true for TypeScript files", () => {
-    expect(isCodeFile("file.ts")).toBe(true)
-    expect(isCodeFile("file.tsx")).toBe(true)
-    expect(isCodeFile("/path/to/file.ts")).toBe(true)
-  })
-
-  it("should return true for JavaScript files", () => {
-    expect(isCodeFile("file.js")).toBe(true)
-    expect(isCodeFile("file.jsx")).toBe(true)
-    expect(isCodeFile("file.mjs")).toBe(true)
-    expect(isCodeFile("file.cjs")).toBe(true)
-  })
-
-  it("should return true for other code files", () => {
-    expect(isCodeFile("file.py")).toBe(true)
-    expect(isCodeFile("file.go")).toBe(true)
-    expect(isCodeFile("file.rs")).toBe(true)
-    expect(isCodeFile("file.java")).toBe(true)
-    expect(isCodeFile("file.c")).toBe(true)
-    expect(isCodeFile("file.cpp")).toBe(true)
-  })
-
-  it("should return true for config-as-code files", () => {
-    expect(isCodeFile("config.yaml")).toBe(true)
-    expect(isCodeFile("config.yml")).toBe(true)
-    expect(isCodeFile("config.toml")).toBe(true)
-  })
-
-  it("should return false for non-code files", () => {
-    expect(isCodeFile("file.md")).toBe(false)
-    expect(isCodeFile("file.txt")).toBe(false)
-    expect(isCodeFile("file.json")).toBe(false)
-    expect(isCodeFile("file.html")).toBe(false)
-    expect(isCodeFile("file.css")).toBe(false)
-    expect(isCodeFile("image.png")).toBe(false)
-  })
-
-  it("should be case insensitive", () => {
-    expect(isCodeFile("file.TS")).toBe(true)
-    expect(isCodeFile("file.Tsx")).toBe(true)
-    expect(isCodeFile("file.PY")).toBe(true)
-  })
-
-  it("should return false for non-string input", () => {
-    expect(isCodeFile(null)).toBe(false)
-    expect(isCodeFile(undefined)).toBe(false)
-    expect(isCodeFile({})).toBe(false)
-    expect(isCodeFile({ path: "file.ts" })).toBe(false)
-    expect(isCodeFile(123)).toBe(false)
-    expect(isCodeFile(["file.ts"])).toBe(false)
   })
 })
 

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { join, basename, extname } from "node:path"
+import { join, basename } from "node:path"
 import yaml from "js-yaml"
 
 // ============================================================================
@@ -52,20 +52,6 @@ export interface AgentConfigOutput {
 }
 
 // ============================================================================
-// CONSTANTS
-// ============================================================================
-
-export const CODE_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".py", ".rb", ".go", ".rs", ".java", ".kt", ".scala",
-  ".c", ".cpp", ".h", ".hpp", ".cs", ".swift",
-  ".php", ".vue", ".svelte", ".astro",
-  ".sh", ".bash", ".zsh", ".fish",
-  ".sql", ".graphql", ".prisma",
-  ".yaml", ".yml", ".toml",
-])
-
-// ============================================================================
 // UTILITIES
 // ============================================================================
 
@@ -84,12 +70,6 @@ export function parseFrontmatter<T>(content: unknown): { data: T; body: string }
   } catch {
     return { data: {} as T, body: content }
   }
-}
-
-export function isCodeFile(filePath: unknown): boolean {
-  if (typeof filePath !== "string") return false
-  const ext = extname(filePath).toLowerCase()
-  return CODE_EXTENSIONS.has(ext)
 }
 
 // ============================================================================

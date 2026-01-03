@@ -5,13 +5,12 @@ import {
   loadAgents,
   loadSkills,
   loadCommands,
-  isCodeFile,
   type LoadedSkill,
   type CommandConfig,
   type AgentConfigOutput,
 } from "./loaders"
 
-export { parseFrontmatter, isCodeFile, loadAgents, loadSkills, loadCommands } from "./loaders"
+export { parseFrontmatter, loadAgents, loadSkills, loadCommands } from "./loaders"
 
 // ============================================================================
 // TYPES
@@ -181,7 +180,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       if (!["write", "edit"].includes(input.tool)) return
 
       const filePath = (output.args?.filePath ?? output.args?.file_path ?? output.args?.path) as string | undefined
-      if (!filePath || !isCodeFile(filePath)) return
+      if (!filePath) return
 
       let files = modifiedCodeFiles.get(sessionID)
       if (!files) {
