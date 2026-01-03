@@ -142,6 +142,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
             ? { command: action.bash, timeout: DEFAULT_BASH_TIMEOUT }
             : { command: action.bash.command, timeout: action.bash.timeout ?? DEFAULT_BASH_TIMEOUT }
 
+          const startTime = Date.now()
           log(`${prefix} executing bash`, { command, timeout })
 
           const bashContext: BashContext = {
@@ -152,6 +153,26 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           }
 
           const result = await executeBashAction(command, timeout, bashContext, ctx.directory)
+          const duration = Date.now() - startTime
+
+          const statusIcon = result.exitCode === 0 ? "✓" : "✗"
+          const hookMessage = [
+            `[BASH HOOK ${statusIcon}] ${command}`,
+            `Exit: ${result.exitCode} | Duration: ${duration}ms`,
+            result.stdout.trim() ? `Stdout: ${result.stdout.slice(0, 500).trim()}` : null,
+            result.stderr.trim() ? `Stderr: ${result.stderr.slice(0, 500).trim()}` : null,
+          ].filter(Boolean).join("\n")
+
+          await ctx.client.session.prompt({
+            path: { id: sessionID },
+            body: {
+              noReply: true,
+              parts: [{ type: "text", text: hookMessage }],
+            },
+            query: { directory: ctx.directory },
+          }).catch((err) => {
+            log(`${prefix} failed to send hook message`, { error: String(err) })
+          })
 
           if (result.exitCode === 2) {
             log(`${prefix} bash blocked, stopping actions`, { stderr: result.stderr })
