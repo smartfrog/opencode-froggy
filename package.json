@@ -1,0 +1,45 @@
+{
+  "name": "opencode-froggy",
+  "version": "1.0.0",
+  "description": "OpenCode plugin with custom agents, skills, commands, and auto-simplification on session idle",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist",
+    "agent",
+    "command",
+    "skill"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "code-review",
+    "code-simplification",
+    "ai-agent"
+  ],
+  "author": "Fred",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fred/opencode-froggy"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "latest",
+    "@types/bun": "latest",
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.16"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  }
+}
