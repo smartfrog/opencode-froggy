@@ -1,6 +1,10 @@
 # opencode-froggy
 
-An OpenCode plugin that provides custom agents, commands, skills, and automatic code simplification on session idle.
+## Overview
+
+opencode-froggy is an OpenCode plugin that adds agents, commands, skills, and a hook system.
+It can automatically simplify changes when the session becomes idle, if files were modified
+via `write` or `edit`. Resources are loaded automatically from `agent/`, `command/`, `skill/`, and `hook/`.
 
 ## Features
 
@@ -24,9 +28,7 @@ An OpenCode plugin that provides custom agents, commands, skills, and automatic 
 
 ### Skills
 
-| Skill | Description |
-|-------|-------------|
-| `post-change-code-simplification` | Enforce systematic code simplification after any code modification using git-diff-based scope |
+Skills are loaded from `skill/<name>/SKILL.md`. Frontmatter `name` and `description` are supported; the name defaults to the directory name. The plugin exposes a `skill` tool that lists available skills and returns their instructions. If no skills are present, the tool reports none.
 
 ### Hooks
 
@@ -83,8 +85,8 @@ Code extensions treated as "code" by default:
       - `args: "main feature"`
   - If the command exists in config, the plugin reuses its `agent` and `model`.
 - **Skill**
-  - `skill: post-change-code-simplification`
-  - The plugin prompts the session to use the `skill` tool.
+  - `skill: my-skill`
+  - The name must match a loaded skill. The plugin prompts the session to call the `skill` tool for that skill.
 - **Tool**
   - `tool:`
     - `name: bash`
@@ -110,7 +112,6 @@ hooks:
 
   - event: session.created
     actions:
-      - skill: post-change-code-simplification
       - command:
           name: review-pr
           args: "main feature"
@@ -189,17 +190,9 @@ Creates a branch (if on main/master), commits with an appropriate message, and p
 
 Runs the test suite with coverage and suggests fixes for failures.
 
-### Load a skill manually
-
-Use the `skill` tool to load skill instructions:
-
-```
-skill({ name: "post-change-code-simplification" })
-```
-
 ## Configuration Options
 
-The plugin does not require additional configuration. All agents, commands, skills, and hooks are loaded automatically from the `agent/`, `command/`, `skill/`, and `hook/` directories.
+The plugin does not require additional configuration. Agents, commands, skills, and hooks are loaded automatically from the `agent/`, `command/`, `skill/`, and `hook/` directories.
 
 ### Supported Code File Extensions
 
