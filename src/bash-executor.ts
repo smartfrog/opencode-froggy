@@ -5,6 +5,8 @@ export interface BashContext {
   event: string
   cwd: string
   files?: string[]
+  tool_name?: string
+  tool_args?: Record<string, unknown>
 }
 
 export interface BashResult {

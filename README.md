@@ -84,8 +84,20 @@ hooks:
 | `session.idle` | Emitted when a session becomes idle and has files modified via `write` or `edit` in that session |
 | `session.created` | Emitted when a session is created |
 | `session.deleted` | Emitted when a session is deleted |
-| `tool.after.write` | Accepted in config but not emitted by this plugin |
-| `tool.after.edit` | Accepted in config but not emitted by this plugin |
+| `tool.before.*` | Emitted before any tool executes. Exit code 2 blocks the tool. |
+| `tool.before.<name>` | Emitted before a specific tool (e.g., `tool.before.write`). Exit code 2 blocks the tool. |
+| `tool.after.*` | Emitted after any tool executes |
+| `tool.after.<name>` | Emitted after a specific tool (e.g., `tool.after.edit`) |
+
+**Tool hook execution order:**
+1. `tool.before.*` (all tools)
+2. `tool.before.<name>` (specific tool)
+3. *(tool executes)*
+4. `tool.after.*` (all tools)
+5. `tool.after.<name>` (specific tool)
+
+**Blocking tools with exit code 2:**
+For `tool.before.*` and `tool.before.<name>` hooks, a bash action returning exit code 2 will block the tool from executing. The stderr output is displayed to the user as the block reason.
 
 #### Conditions
 
@@ -164,6 +176,17 @@ Code extensions treated as "code" by default:
   }
   ```
   The `files` array is only present for `session.idle` events and contains paths modified via `write` or `edit`.
+
+  For tool hooks (`tool.before.*`, `tool.after.*`), additional fields are provided:
+  ```json
+  {
+    "session_id": "abc123",
+    "event": "tool.before.write",
+    "cwd": "/path/to/project",
+    "tool_name": "write",
+    "tool_args": { "filePath": "src/index.ts", "content": "..." }
+  }
+  ```
 
   **Environment variables vs stdin JSON:**
   - **Environment variables**: Direct access via `$VAR`, convenient for simple values like paths and IDs
@@ -256,6 +279,53 @@ else
   echo "Critical lint errors found, blocking further actions"
   exit 2  # Block remaining actions
 fi
+```
+
+#### Example tool hooks
+
+**Block modifications to sensitive files:**
+```yaml
+hooks:
+  - event: tool.before.write
+    actions:
+      - bash: |
+          file=$(cat | jq -r '.tool_args.filePath // .tool_args.file_path // .tool_args.path')
+          if echo "$file" | grep -qE '\.(env|pem|key)$'; then
+            echo "Cannot modify sensitive files: $file" >&2
+            exit 2
+          fi
+
+  - event: tool.before.edit
+    actions:
+      - bash: |
+          file=$(cat | jq -r '.tool_args.filePath // .tool_args.file_path // .tool_args.path')
+          if echo "$file" | grep -qE '\.(env|pem|key)$'; then
+            echo "Cannot modify sensitive files: $file" >&2
+            exit 2
+          fi
+```
+
+**Auto-format TypeScript files after write:**
+```yaml
+hooks:
+  - event: tool.after.write
+    actions:
+      - bash: |
+          file=$(cat | jq -r '.tool_args.filePath // .tool_args.file_path // .tool_args.path')
+          if echo "$file" | grep -qE '\.tsx?$'; then
+            npx prettier --write "$file"
+          fi
+```
+
+**Log all tool executions:**
+```yaml
+hooks:
+  - event: tool.before.*
+    actions:
+      - bash: |
+          context=$(cat)
+          tool=$(echo "$context" | jq -r '.tool_name')
+          echo "[$(date)] Tool: $tool" >> /tmp/opencode-tools.log
 ```
 
 ## Installation

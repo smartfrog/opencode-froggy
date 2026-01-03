@@ -648,6 +648,131 @@ hooks:
     expect(result.has("tool.after.write")).toBe(true)
     expect(result.has("tool.after.edit")).toBe(true)
   })
+
+  it("should support tool.before.* wildcard event", () => {
+    const hookContent = `---
+hooks:
+  - event: tool.before.*
+    actions:
+      - bash: "echo before all tools"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+
+    expect(result.size).toBe(1)
+    expect(result.has("tool.before.*")).toBe(true)
+    expect(result.get("tool.before.*")![0].actions[0]).toEqual({ bash: "echo before all tools" })
+  })
+
+  it("should support tool.after.* wildcard event", () => {
+    const hookContent = `---
+hooks:
+  - event: tool.after.*
+    actions:
+      - bash: "echo after all tools"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+
+    expect(result.size).toBe(1)
+    expect(result.has("tool.after.*")).toBe(true)
+  })
+
+  it("should support tool.before.<name> specific events", () => {
+    const hookContent = `---
+hooks:
+  - event: tool.before.write
+    actions:
+      - bash: "echo before write"
+  - event: tool.before.edit
+    actions:
+      - bash: "echo before edit"
+  - event: tool.before.bash
+    actions:
+      - bash: "echo before bash"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+
+    expect(result.size).toBe(3)
+    expect(result.has("tool.before.write")).toBe(true)
+    expect(result.has("tool.before.edit")).toBe(true)
+    expect(result.has("tool.before.bash")).toBe(true)
+  })
+
+  it("should support mixed wildcard and specific tool events", () => {
+    const hookContent = `---
+hooks:
+  - event: tool.before.*
+    actions:
+      - bash: "echo before all"
+  - event: tool.before.write
+    actions:
+      - bash: "echo before write specifically"
+  - event: tool.after.*
+    actions:
+      - bash: "echo after all"
+  - event: tool.after.write
+    actions:
+      - bash: "echo after write specifically"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+
+    expect(result.size).toBe(4)
+    expect(result.has("tool.before.*")).toBe(true)
+    expect(result.has("tool.before.write")).toBe(true)
+    expect(result.has("tool.after.*")).toBe(true)
+    expect(result.has("tool.after.write")).toBe(true)
+  })
+
+  it("should reject tool.before without suffix", () => {
+    const hookContent = `---
+hooks:
+  - event: tool.before
+    actions:
+      - bash: "echo invalid"
+  - event: tool.before.write
+    actions:
+      - bash: "echo valid"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+
+    expect(result.size).toBe(1)
+    expect(result.has("tool.before" as HookEvent)).toBe(false)
+    expect(result.has("tool.before.write")).toBe(true)
+  })
+
+  it("should reject tool.after without suffix", () => {
+    const hookContent = `---
+hooks:
+  - event: tool.after
+    actions:
+      - bash: "echo invalid"
+  - event: session.idle
+    actions:
+      - bash: "echo valid"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+
+    expect(result.size).toBe(1)
+    expect(result.has("tool.after" as HookEvent)).toBe(false)
+    expect(result.has("session.idle")).toBe(true)
+  })
 })
 
 describe("executeBashAction", () => {
@@ -799,6 +924,39 @@ describe("executeBashAction", () => {
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("hello world")
     expect(result.stdout).toContain("test")
+  })
+
+  it("should pass tool_name and tool_args via stdin for tool hooks", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "tool.before.write",
+      cwd: testDir,
+      tool_name: "write",
+      tool_args: { filePath: "/path/to/file.ts", content: "hello" },
+    }
+
+    const result = await executeBashAction("cat", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.tool_name).toBe("write")
+    expect(parsed.tool_args).toEqual({ filePath: "/path/to/file.ts", content: "hello" })
+    expect(parsed.event).toBe("tool.before.write")
+  })
+
+  it("should not include tool fields when not provided", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("cat", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.tool_name).toBeUndefined()
+    expect(parsed.tool_args).toBeUndefined()
   })
 })
 

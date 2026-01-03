@@ -52,8 +52,8 @@ export type HookEvent =
   | "session.idle"
   | "session.created"
   | "session.deleted"
-  | "tool.after.write"
-  | "tool.after.edit"
+  | `tool.before.${string}`
+  | `tool.after.${string}`
 
 export type HookCondition = "isMainSession" | "hasCodeChange"
 
@@ -85,13 +85,8 @@ interface HooksFileFrontmatter {
   hooks?: HookConfig[]
 }
 
-const VALID_HOOK_EVENTS: HookEvent[] = [
-  "session.idle",
-  "session.created",
-  "session.deleted",
-  "tool.after.write",
-  "tool.after.edit",
-]
+const SESSION_HOOK_EVENTS = ["session.idle", "session.created", "session.deleted"]
+const TOOL_HOOK_PATTERN = /^tool\.(before|after)\..+$/
 
 export interface AgentConfigOutput {
   description: string
@@ -209,7 +204,7 @@ export function loadCommands(commandDir: string): Record<string, CommandConfig> 
 }
 
 function isValidHookEvent(event: string): event is HookEvent {
-  return VALID_HOOK_EVENTS.includes(event as HookEvent)
+  return SESSION_HOOK_EVENTS.includes(event) || TOOL_HOOK_PATTERN.test(event)
 }
 
 export function loadHooks(hookDir: string): Map<HookEvent, HookConfig[]> {

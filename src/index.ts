@@ -35,6 +35,23 @@ interface ToolExecuteBeforeOutput {
   args: Record<string, unknown>
 }
 
+interface ToolExecuteAfterInput {
+  tool: string
+  sessionID: string
+  callID: string
+}
+
+interface ToolExecuteAfterOutput {
+  title: string
+  output: string
+  metadata: Record<string, unknown>
+}
+
+interface HookExecutionResult {
+  blocked: boolean
+  blockReason?: string
+}
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -61,6 +78,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   const hooks = mergeHooks(globalHooks, projectHooks)
 
   const modifiedCodeFiles = new Map<string, Set<string>>()
+  const pendingToolArgs = new Map<string, Record<string, unknown>>()
   let mainSessionID: string | undefined
 
   log("[init] Plugin loaded", { 
@@ -73,23 +91,25 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   async function executeHookActions(
     hook: HookConfig, 
     sessionID: string, 
-    extraLog?: Record<string, unknown>
-  ): Promise<void> {
+    extraLog?: Record<string, unknown>,
+    options?: { canBlock?: boolean }
+  ): Promise<HookExecutionResult> {
     const prefix = `[hook:${hook.event}]`
+    const canBlock = options?.canBlock ?? false
 
     const conditions = hook.conditions ?? []
 
     for (const condition of conditions) {
       if (condition === "isMainSession" && sessionID !== mainSessionID) {
         log(`${prefix} condition not met, skipping`, { sessionID, condition })
-        return
+        return { blocked: false }
       }
 
       if (condition === "hasCodeChange") {
         const files = extraLog?.files as string[] | undefined
         if (!files || !files.some(hasCodeExtension)) {
           log(`${prefix} condition not met, skipping`, { sessionID, condition })
-          return
+          return { blocked: false }
         }
       }
     }
@@ -150,6 +170,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
             event: hook.event,
             cwd: ctx.directory,
             files: extraLog?.files as string[] | undefined,
+            tool_name: extraLog?.tool_name as string | undefined,
+            tool_args: extraLog?.tool_args as Record<string, unknown> | undefined,
           }
 
           const result = await executeBashAction(command, timeout, bashContext, ctx.directory)
@@ -175,8 +197,12 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           })
 
           if (result.exitCode === 2) {
-            log(`${prefix} bash blocked, stopping actions`, { stderr: result.stderr })
-            return
+            log(`${prefix} bash exit code 2`, { stderr: result.stderr, canBlock })
+            if (canBlock) {
+              const blockReason = result.stderr.trim() || "Blocked by hook"
+              return { blocked: true, blockReason }
+            }
+            return { blocked: false }
           }
 
           if (result.exitCode !== 0) {
@@ -191,15 +217,41 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     }
 
     log(`${prefix} completed`)
+    return { blocked: false }
   }
 
-  async function triggerHooks(event: HookEvent, sessionID: string, extraLog?: Record<string, unknown>) {
+  async function triggerHooks(
+    event: HookEvent, 
+    sessionID: string, 
+    extraLog?: Record<string, unknown>,
+    options?: { canBlock?: boolean }
+  ): Promise<HookExecutionResult> {
     const eventHooks = hooks.get(event)
-    if (!eventHooks) return
+    if (!eventHooks) return { blocked: false }
 
     for (const hook of eventHooks) {
-      await executeHookActions(hook, sessionID, extraLog)
+      const result = await executeHookActions(hook, sessionID, extraLog, options)
+      if (result.blocked) return result
     }
+    return { blocked: false }
+  }
+
+  async function triggerToolHooks(
+    phase: "before" | "after",
+    toolName: string,
+    sessionID: string,
+    toolArgs: Record<string, unknown>
+  ): Promise<HookExecutionResult> {
+    const canBlock = phase === "before"
+    const extraLog = { tool_name: toolName, tool_args: toolArgs }
+
+    const wildcardEvent = `tool.${phase}.*` as HookEvent
+    const wildcardResult = await triggerHooks(wildcardEvent, sessionID, extraLog, { canBlock })
+    if (wildcardResult.blocked) return wildcardResult
+
+    const specificEvent = `tool.${phase}.${toolName}` as HookEvent
+    const specificResult = await triggerHooks(specificEvent, sessionID, extraLog, { canBlock })
+    return specificResult
   }
 
   return {
@@ -249,19 +301,42 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       const sessionID = input.sessionID
       if (!sessionID) return
 
-      if (!["write", "edit"].includes(input.tool)) return
+      const toolArgs = output.args ?? {}
+      
+      pendingToolArgs.set(input.callID, toolArgs)
 
-      const filePath = (output.args?.filePath ?? output.args?.file_path ?? output.args?.path) as string | undefined
-      if (!filePath) return
-
-      log("[tool.execute.before] File modified", { sessionID, filePath, tool: input.tool })
-
-      let files = modifiedCodeFiles.get(sessionID)
-      if (!files) {
-        files = new Set()
-        modifiedCodeFiles.set(sessionID, files)
+      const result = await triggerToolHooks("before", input.tool, sessionID, toolArgs)
+      if (result.blocked) {
+        pendingToolArgs.delete(input.callID)
+        throw new Error(result.blockReason ?? "Blocked by hook")
       }
-      files.add(filePath)
+
+      if (["write", "edit"].includes(input.tool)) {
+        const filePath = (toolArgs.filePath ?? toolArgs.file_path ?? toolArgs.path) as string | undefined
+        if (filePath) {
+          log("[tool.execute.before] File modified", { sessionID, filePath, tool: input.tool })
+
+          let files = modifiedCodeFiles.get(sessionID)
+          if (!files) {
+            files = new Set()
+            modifiedCodeFiles.set(sessionID, files)
+          }
+          files.add(filePath)
+        }
+      }
+    },
+
+    "tool.execute.after": async (
+      input: ToolExecuteAfterInput,
+      _output: ToolExecuteAfterOutput
+    ): Promise<void> => {
+      const sessionID = input.sessionID
+      if (!sessionID) return
+
+      const toolArgs = pendingToolArgs.get(input.callID) ?? {}
+      pendingToolArgs.delete(input.callID)
+      
+      await triggerToolHooks("after", input.tool, sessionID, toolArgs)
     },
 
     event: async ({ event }) => {
