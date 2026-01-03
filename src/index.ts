@@ -13,6 +13,11 @@ import {
 import { getGlobalHookDir, getProjectHookDir } from "./config-paths"
 import { hasCodeExtension } from "./code-files"
 import { log } from "./logger"
+import {
+  executeBashAction,
+  DEFAULT_BASH_TIMEOUT,
+  type BashContext,
+} from "./bash-executor"
 
 export { parseFrontmatter, loadAgents, loadSkills, loadCommands } from "./loaders"
 
@@ -132,6 +137,32 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
             query: { directory: ctx.directory },
           })
           log(`${prefix} tool result`, { tool: action.tool.name, status: result.response?.status, error: result.error })
+        } else if ("bash" in action) {
+          const { command, timeout } = typeof action.bash === "string"
+            ? { command: action.bash, timeout: DEFAULT_BASH_TIMEOUT }
+            : { command: action.bash.command, timeout: action.bash.timeout ?? DEFAULT_BASH_TIMEOUT }
+
+          log(`${prefix} executing bash`, { command, timeout })
+
+          const bashContext: BashContext = {
+            session_id: sessionID,
+            event: hook.event,
+            cwd: ctx.directory,
+            files: extraLog?.files as string[] | undefined,
+          }
+
+          const result = await executeBashAction(command, timeout, bashContext, ctx.directory)
+
+          if (result.exitCode === 2) {
+            log(`${prefix} bash blocked, stopping actions`, { stderr: result.stderr })
+            return
+          }
+
+          if (result.exitCode !== 0) {
+            log(`${prefix} bash failed (non-blocking)`, { exitCode: result.exitCode, stderr: result.stderr })
+          } else {
+            log(`${prefix} bash completed`, { stdout: result.stdout.slice(0, 200) })
+          }
         }
       } catch (error) {
         log(`${prefix} action failed, continuing`, { error: String(error) })

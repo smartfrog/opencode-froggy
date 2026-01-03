@@ -116,6 +116,67 @@ Code extensions treated as "code" by default:
     - `name: bash`
     - `args: { command: "echo done" }`
   - The plugin prompts the session to use the tool with these arguments.
+- **Bash**
+  Executes a shell command directly without involving the LLM. Useful for running linters, formatters, build scripts, or custom automation.
+
+  **Configuration:**
+  ```yaml
+  # Short form
+  - bash: "npm run lint"
+
+  # Long form with custom timeout
+  - bash:
+      command: "$OPENCODE_PROJECT_DIR/.opencode/hooks/init.sh"
+      timeout: 30000  # milliseconds (default: 60000)
+  ```
+
+  **Environment variables:**
+
+  The plugin injects these variables into the child process environment before executing the command:
+
+  | Variable | Value | Use case |
+  |----------|-------|----------|
+  | `OPENCODE_PROJECT_DIR` | Absolute path to the project (e.g., `/home/user/project`) | Reference project files from scripts located elsewhere |
+  | `OPENCODE_SESSION_ID` | The OpenCode session identifier | Logging, tracing, or conditioning actions based on session |
+
+  Example usage in a script:
+  ```bash
+  #!/bin/bash
+  # Access variables directly
+  echo "Project: $OPENCODE_PROJECT_DIR"
+  echo "Session: $OPENCODE_SESSION_ID"
+
+  # Access a project file
+  cat "$OPENCODE_PROJECT_DIR/package.json"
+
+  # Log with session ID
+  echo "[$OPENCODE_SESSION_ID] Hook executed" >> /tmp/opencode.log
+  ```
+
+  **Stdin JSON context:**
+  The command receives a JSON object via stdin with session context:
+  ```json
+  {
+    "session_id": "abc123",
+    "event": "session.idle",
+    "cwd": "/path/to/project",
+    "files": ["src/index.ts", "src/utils.ts"]
+  }
+  ```
+  The `files` array is only present for `session.idle` events and contains paths modified via `write` or `edit`.
+
+  **Environment variables vs stdin JSON:**
+  - **Environment variables**: Direct access via `$VAR`, convenient for simple values like paths and IDs
+  - **Stdin JSON**: Contains richer context (event type, working directory, modified files), requires parsing with `jq` or similar
+
+  Both mechanisms are complementary. Use environment variables for quick access to project path and session ID; use stdin JSON when you need event details or the list of modified files.
+
+  **Exit codes:**
+  | Code | Behavior |
+  |------|----------|
+  | `0` | Success, continue to next action |
+  | `2` | Blocking error, stop remaining actions in this hook |
+  | Other | Non-blocking error, log warning and continue |
 
 #### Execution behavior
 
@@ -131,18 +192,61 @@ hooks:
   - event: session.idle
     conditions: [hasCodeChange, isMainSession]
     actions:
+      - bash: "npm run lint --fix"
       - command: simplify-changes
 
   - event: session.created
     actions:
+      - bash:
+          command: "$OPENCODE_PROJECT_DIR/.opencode/hooks/init.sh"
+          timeout: 30000
       - command:
           name: review-pr
           args: "main feature"
-      - tool:
-          name: bash
-          args:
-            command: "echo done"
 ---
+```
+
+#### Example bash hook scripts
+
+**Simple lint-on-idle hook:**
+```yaml
+hooks:
+  - event: session.idle
+    conditions: [hasCodeChange]
+    actions:
+      - bash: "npm run lint --fix"
+```
+
+**Custom initialization script (`.opencode/hooks/init.sh`):**
+```bash
+#!/bin/bash
+set -e
+
+# Read JSON context from stdin
+context=$(cat)
+session_id=$(echo "$context" | jq -r '.session_id')
+event=$(echo "$context" | jq -r '.event')
+cwd=$(echo "$context" | jq -r '.cwd')
+
+echo "Session $session_id triggered $event in $cwd"
+
+# Use environment variables
+echo "Project: $OPENCODE_PROJECT_DIR"
+
+# Exit 0 for success, 2 to block remaining actions
+exit 0
+```
+
+**Conditional blocking based on lint errors:**
+```bash
+#!/bin/bash
+# Run linter and block if critical errors found
+if ! npm run lint 2>&1 | grep -q "critical"; then
+  exit 0  # Success, continue
+else
+  echo "Critical lint errors found, blocking further actions"
+  exit 2  # Block remaining actions
+fi
 ```
 
 ## Installation

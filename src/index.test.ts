@@ -12,6 +12,7 @@ import {
   type HookConfig,
   type HookEvent,
 } from "./loaders"
+import { executeBashAction, type BashContext } from "./bash-executor"
 
 describe("parseFrontmatter", () => {
   it("should parse valid frontmatter", () => {
@@ -400,6 +401,75 @@ hooks:
     })
   })
 
+  it("should load hook with bash action (short form)", () => {
+    const hookContent = `---
+hooks:
+  - event: session.idle
+    actions:
+      - bash: "npm run lint"
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+    const hooks = result.get("session.idle")!
+
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0].actions).toHaveLength(1)
+    expect(hooks[0].actions[0]).toEqual({ bash: "npm run lint" })
+  })
+
+  it("should load hook with bash action (long form with timeout)", () => {
+    const hookContent = `---
+hooks:
+  - event: session.created
+    actions:
+      - bash:
+          command: "$OPENCODE_PROJECT_DIR/.opencode/hooks/init.sh"
+          timeout: 30000
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+    const hooks = result.get("session.created")!
+
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0].actions[0]).toEqual({
+      bash: {
+        command: "$OPENCODE_PROJECT_DIR/.opencode/hooks/init.sh",
+        timeout: 30000,
+      },
+    })
+  })
+
+  it("should load hook with mixed actions including bash", () => {
+    const hookContent = `---
+hooks:
+  - event: session.idle
+    conditions: [hasCodeChange]
+    actions:
+      - bash: "npm run lint"
+      - command: simplify-changes
+      - bash:
+          command: "npm run format"
+          timeout: 10000
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+    const hooks = result.get("session.idle")!
+
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0].actions).toHaveLength(3)
+    expect(hooks[0].actions[0]).toEqual({ bash: "npm run lint" })
+    expect(hooks[0].actions[1]).toEqual({ command: "simplify-changes" })
+    expect(hooks[0].actions[2]).toEqual({
+      bash: { command: "npm run format", timeout: 10000 },
+    })
+  })
+
   it("should load hook with command with args", () => {
     const hookContent = `---
 hooks:
@@ -577,6 +647,158 @@ hooks:
     expect(result.has("session.deleted")).toBe(true)
     expect(result.has("tool.after.write")).toBe(true)
     expect(result.has("tool.after.edit")).toBe(true)
+  })
+})
+
+describe("executeBashAction", () => {
+  let testDir: string
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `opencode-bash-test-${Date.now()}`)
+    mkdirSync(testDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  it("should execute simple command and return stdout", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("echo hello", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout.trim()).toBe("hello")
+    expect(result.stderr).toBe("")
+  })
+
+  it("should return exit code 1 for failing command", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("exit 1", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(1)
+  })
+
+  it("should return exit code 2 for blocking command", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("echo 'blocked' >&2 && exit 2", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(2)
+    expect(result.stderr.trim()).toBe("blocked")
+  })
+
+  it("should capture stderr", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("echo 'error message' >&2", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr.trim()).toBe("error message")
+  })
+
+  it("should set OPENCODE_PROJECT_DIR environment variable", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("echo $OPENCODE_PROJECT_DIR", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout.trim()).toBe(testDir)
+  })
+
+  it("should set OPENCODE_SESSION_ID environment variable", async () => {
+    const context: BashContext = {
+      session_id: "my-session-123",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("echo $OPENCODE_SESSION_ID", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout.trim()).toBe("my-session-123")
+  })
+
+  it("should pass context as JSON via stdin", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+      files: ["file1.ts", "file2.ts"],
+    }
+
+    const result = await executeBashAction("cat", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.session_id).toBe("test-session")
+    expect(parsed.event).toBe("session.idle")
+    expect(parsed.files).toEqual(["file1.ts", "file2.ts"])
+  })
+
+  it("should timeout long-running commands", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("sleep 10", 100, context, testDir)
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain("timed out")
+  })
+
+  it("should run command in specified cwd", async () => {
+    const subDir = join(testDir, "subdir")
+    mkdirSync(subDir)
+
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: subDir,
+    }
+
+    const result = await executeBashAction("pwd", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    // macOS resolves /var to /private/var, so we check if the path ends with the subdir
+    expect(result.stdout.trim()).toContain("subdir")
+  })
+
+  it("should handle command with special characters", async () => {
+    const context: BashContext = {
+      session_id: "test-session",
+      event: "session.idle",
+      cwd: testDir,
+    }
+
+    const result = await executeBashAction("echo 'hello world' && echo \"test\"", 5000, context, testDir)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain("hello world")
+    expect(result.stdout).toContain("test")
   })
 })
 
