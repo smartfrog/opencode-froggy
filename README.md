@@ -28,14 +28,66 @@ An OpenCode plugin that provides custom agents, commands, skills, and automatic 
 |-------|-------------|
 | `post-change-code-simplification` | Enforce systematic code simplification after any code modification using git-diff-based scope |
 
-### Auto-Simplification on Idle
+### Hooks
 
-The plugin automatically tracks code file modifications during a session. When the main session becomes idle, it starts a 5-second countdown and then triggers the `post-change-code-simplification` skill to simplify recently modified code.
+Hooks allow you to configure actions to execute on specific events. All hooks are defined in a single file `hook/hooks.md`.
 
-- Tracks modifications to common code file extensions (.ts, .tsx, .js, .py, .go, .rs, etc.)
-- Shows toast notifications during countdown
-- Countdown is cancelled if the user sends a new message
-- Only triggers on the main session (not subagent sessions)
+#### Supported Events
+
+| Event | Description |
+|-------|-------------|
+| `session.idle` | Triggered when the main session becomes idle with modified files |
+| `session.created` | Triggered when a new session is created |
+| `session.deleted` | Triggered when a session is deleted |
+| `tool.after.write` | Triggered after a file write operation |
+| `tool.after.edit` | Triggered after a file edit operation |
+
+#### Hook File Format
+
+```markdown
+# hook/hooks.md
+---
+hooks:
+  - event: session.idle
+    condition: isMainSession  # Optional: only "isMainSession" supported for now
+    actions:
+      - command: simplify-changes           # Execute a command
+
+  - event: session.created
+    actions:
+      - skill: post-change-code-simplification  # Load and execute a skill
+      - command:                            # Command with arguments
+          name: review-pr
+          args: "main feature"
+      - tool:                               # Execute a tool directly
+          name: bash
+          args:
+            command: "echo done"
+---
+```
+
+#### Default Hook
+
+The plugin ships with a default `session.idle` hook that triggers code simplification:
+
+```markdown
+# hook/hooks.md
+---
+hooks:
+  - event: session.idle
+    condition: isMainSession
+    actions:
+      - command: simplify-changes
+---
+```
+
+#### Conditions
+
+| Condition | Description |
+|-----------|-------------|
+| `isMainSession` | Only execute if triggered on the main session (not subagent sessions) |
+
+Multiple hooks can be defined for the same event with different conditions. They execute in declaration order.
 
 ## Installation
 
@@ -115,7 +167,7 @@ skill({ name: "post-change-code-simplification" })
 
 ## Configuration Options
 
-The plugin does not require additional configuration. All agents, commands, and skills are loaded automatically from the `agent/`, `command/`, and `skill/` directories.
+The plugin does not require additional configuration. All agents, commands, skills, and hooks are loaded automatically from the `agent/`, `command/`, `skill/`, and `hook/` directories.
 
 ### Supported Code File Extensions
 

@@ -5,9 +5,8 @@ import {
   loadAgents,
   loadSkills,
   loadCommands,
-  type LoadedSkill,
-  type CommandConfig,
-  type AgentConfigOutput,
+  loadHooks,
+  type HookConfig,
 } from "./loaders"
 import { log } from "./logger"
 
@@ -38,8 +37,7 @@ const PLUGIN_ROOT = join(__dirname, "..")
 const AGENT_DIR = join(PLUGIN_ROOT, "agent")
 const SKILL_DIR = join(PLUGIN_ROOT, "skill")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
-
-const AUTO_COMMAND_NAME = "simplify-changes"
+const HOOK_DIR = join(PLUGIN_ROOT, "hook")
 
 // ============================================================================
 // PLUGIN
@@ -49,37 +47,71 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   const agents = loadAgents(AGENT_DIR)
   const skills = loadSkills(SKILL_DIR)
   const commands = loadCommands(COMMAND_DIR)
+  const hooks = loadHooks(HOOK_DIR)
 
   const modifiedCodeFiles = new Map<string, Set<string>>()
   let mainSessionID: string | undefined
 
-  const autoCommand = commands[AUTO_COMMAND_NAME]
   log("[init] Plugin loaded", { 
-    autoCommand: autoCommand ? AUTO_COMMAND_NAME : undefined, 
     agents: Object.keys(agents), 
     commands: Object.keys(commands),
-    skills: skills.map(s => s.name) 
+    skills: skills.map(s => s.name),
+    hooks: Array.from(hooks.keys()),
   })
 
-  async function executeAutoSimplify(sessionID: string): Promise<void> {
-    log("[executeAutoSimplify] Starting", { sessionID })
+  async function executeHookActions(hook: HookConfig, sessionID: string): Promise<void> {
+    log("[executeHookActions] Starting", { event: hook.event, sessionID, actionsCount: hook.actions.length })
 
-    if (!autoCommand) {
-      log("[executeAutoSimplify] No autoCommand found, skipping")
-      return
+    for (const action of hook.actions) {
+      try {
+        if ("command" in action) {
+          const cmdName = typeof action.command === "string" ? action.command : action.command.name
+          const cmdArgs = typeof action.command === "string" ? "" : action.command.args
+          const cmdConfig = commands[cmdName]
+          
+          log("[executeHookActions] Executing command", { command: cmdName, args: cmdArgs, agent: cmdConfig?.agent, model: cmdConfig?.model })
+          await ctx.client.session.command({
+            path: { id: sessionID },
+            body: { 
+              command: cmdName,
+              arguments: cmdArgs,
+              agent: cmdConfig?.agent,
+              model: cmdConfig?.model,
+            },
+            query: { directory: ctx.directory },
+          })
+        } else if ("skill" in action) {
+          const text = `Use the skill tool to load the "${action.skill}" skill and follow its instructions.`
+          
+          log("[executeHookActions] Executing skill", { skill: action.skill })
+          await ctx.client.session.prompt({
+            path: { id: sessionID },
+            body: { parts: [{ type: "text", text }] },
+            query: { directory: ctx.directory },
+          })
+        } else if ("tool" in action) {
+          const text = `Use the ${action.tool.name} tool with these arguments: ${JSON.stringify(action.tool.args)}`
+          
+          log("[executeHookActions] Executing tool", { tool: action.tool.name })
+          await ctx.client.session.prompt({
+            path: { id: sessionID },
+            body: { parts: [{ type: "text", text }] },
+            query: { directory: ctx.directory },
+          })
+        }
+      } catch (error) {
+        log("[executeHookActions] Action failed, continuing", { error: String(error) })
+      }
     }
 
-    try {
-      log("[executeAutoSimplify] Sending command to session")
-      await ctx.client.session.prompt({
-        path: { id: sessionID },
-        body: { parts: [{ type: "text", text: `/${AUTO_COMMAND_NAME}` }] },
-        query: { directory: ctx.directory },
-      })
-      log("[executeAutoSimplify] Command sent successfully")
-    } catch (error) {
-      log("[executeAutoSimplify] Failed", { error: String(error) })
+    log("[executeHookActions] Completed", { event: hook.event })
+  }
+
+  function checkHookCondition(hook: HookConfig, sessionID: string): boolean {
+    if (hook.condition === "isMainSession") {
+      return sessionID === mainSessionID
     }
+    return true
   }
 
   return {
@@ -155,12 +187,27 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           mainSessionID = info.id
           log("[event] session.created - main session", { sessionID: info.id })
         }
+
+        const eventHooks = hooks.get("session.created") ?? []
+        for (const hook of eventHooks) {
+          if (info?.id && checkHookCondition(hook, info.id)) {
+            executeHookActions(hook, info.id)
+          }
+        }
       }
 
       if (event.type === "session.deleted") {
         const info = props?.info as { id?: string } | undefined
         if (info?.id) {
           log("[event] session.deleted", { sessionID: info.id })
+
+          const eventHooks = hooks.get("session.deleted") ?? []
+          for (const hook of eventHooks) {
+            if (checkHookCondition(hook, info.id)) {
+              await executeHookActions(hook, info.id)
+            }
+          }
+
           modifiedCodeFiles.delete(info.id)
           if (info.id === mainSessionID) {
             mainSessionID = undefined
@@ -179,25 +226,26 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           log("[event] session.idle - setting mainSessionID from idle event", { sessionID })
         }
 
-        if (sessionID !== mainSessionID) {
-          log("[event] session.idle - not main session, skipping")
-          return
-        }
-
         const files = modifiedCodeFiles.get(sessionID)
         if (!files || files.size === 0) {
           log("[event] session.idle - no modified files, skipping")
           return
         }
 
-        if (!autoCommand) {
-          log("[event] session.idle - no autoCommand, skipping")
+        const eventHooks = hooks.get("session.idle") ?? []
+        if (eventHooks.length === 0) {
+          log("[event] session.idle - no hooks defined, skipping")
           return
         }
 
         modifiedCodeFiles.delete(sessionID)
-        log("[event] session.idle - executing command", { files: Array.from(files) })
-        executeAutoSimplify(sessionID)
+        log("[event] session.idle - executing hooks", { files: Array.from(files), hooksCount: eventHooks.length })
+        
+        for (const hook of eventHooks) {
+          if (checkHookCondition(hook, sessionID)) {
+            await executeHookActions(hook, sessionID)
+          }
+        }
       }
     },
   }

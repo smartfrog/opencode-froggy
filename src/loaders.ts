@@ -25,6 +25,7 @@ export interface SkillFrontmatter {
 export interface CommandFrontmatter {
   description: string
   agent?: string
+  model?: string
 }
 
 export interface CommandConfig {
@@ -41,6 +42,51 @@ export interface LoadedSkill {
   path: string
   body: string
 }
+
+// ============================================================================
+// HOOK TYPES
+// ============================================================================
+
+export type HookEvent =
+  | "session.idle"
+  | "session.created"
+  | "session.deleted"
+  | "tool.after.write"
+  | "tool.after.edit"
+
+export type HookCondition = "isMainSession"
+
+export interface HookActionCommand {
+  command: string | { name: string; args: string }
+}
+
+export interface HookActionSkill {
+  skill: string
+}
+
+export interface HookActionTool {
+  tool: { name: string; args: Record<string, unknown> }
+}
+
+export type HookAction = HookActionCommand | HookActionSkill | HookActionTool
+
+export interface HookConfig {
+  event: HookEvent
+  condition?: HookCondition
+  actions: HookAction[]
+}
+
+interface HooksFileFrontmatter {
+  hooks?: HookConfig[]
+}
+
+const VALID_HOOK_EVENTS: HookEvent[] = [
+  "session.idle",
+  "session.created",
+  "session.deleted",
+  "tool.after.write",
+  "tool.after.edit",
+]
 
 export interface AgentConfigOutput {
   description: string
@@ -145,9 +191,46 @@ export function loadCommands(commandDir: string): Record<string, CommandConfig> 
     commands[commandName] = {
       description: data.description || "",
       agent: data.agent,
+      model: data.model,
       template: body.trim(),
     }
   }
 
   return commands
+}
+
+function isValidHookEvent(event: string): event is HookEvent {
+  return VALID_HOOK_EVENTS.includes(event as HookEvent)
+}
+
+export function loadHooks(hookDir: string): Map<HookEvent, HookConfig[]> {
+  const hooks = new Map<HookEvent, HookConfig[]>()
+
+  const hooksFilePath = join(hookDir, "hooks.md")
+  if (!existsSync(hooksFilePath)) return hooks
+
+  const content = readFileSync(hooksFilePath, "utf-8")
+  const { data } = parseFrontmatter<HooksFileFrontmatter>(content)
+
+  if (!data.hooks || !Array.isArray(data.hooks)) return hooks
+
+  for (const hookDef of data.hooks) {
+    if (!hookDef.event || !isValidHookEvent(hookDef.event)) continue
+    if (!hookDef.actions || !Array.isArray(hookDef.actions)) continue
+
+    const hookConfig: HookConfig = {
+      event: hookDef.event,
+      condition: hookDef.condition,
+      actions: hookDef.actions,
+    }
+
+    const existing = hooks.get(hookDef.event)
+    if (existing) {
+      existing.push(hookConfig)
+    } else {
+      hooks.set(hookDef.event, [hookConfig])
+    }
+  }
+
+  return hooks
 }
