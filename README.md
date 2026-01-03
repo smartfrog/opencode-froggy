@@ -4,7 +4,8 @@
 
 opencode-froggy is an OpenCode plugin that adds agents, commands, skills, and a hook system.
 It can automatically simplify changes when the session becomes idle, if files were modified
-via `write` or `edit`. Resources are loaded automatically from `agent/`, `command/`, `skill/`, and `hook/`.
+via `write` or `edit`. Resources are loaded automatically from `agent/`, `command/`, and `skill/`.
+Hooks are loaded from OpenCode configuration directories (global and project-level).
 
 ## Features
 
@@ -32,7 +33,21 @@ Skills are loaded from `skill/<name>/SKILL.md`. Frontmatter `name` and `descript
 
 ### Hooks
 
-Hooks run actions on session events. Configuration lives in `hook/hooks.md`.
+Hooks run actions on session events. Configuration is loaded from standard OpenCode configuration directories.
+
+#### Configuration locations
+
+Hooks are loaded from these locations (in order, merged together):
+
+| Platform | Global | Project |
+|----------|--------|---------|
+| Linux | `~/.config/opencode/hook/hooks.md` | `<project>/.opencode/hook/hooks.md` |
+| macOS | `~/.config/opencode/hook/hooks.md` | `<project>/.opencode/hook/hooks.md` |
+| Windows | `~/.config/opencode/hook/hooks.md` or `%APPDATA%/opencode/hook/hooks.md` | `<project>/.opencode/hook/hooks.md` |
+
+On Windows, `~/.config` is preferred for cross-platform consistency. If hooks exist in `%APPDATA%` but not in `~/.config`, the `%APPDATA%` location is used.
+
+Global hooks run first, then project hooks are added. Hooks from both sources are combined (not overridden).
 
 #### Configuration file
 
@@ -40,10 +55,9 @@ Hooks run actions on session events. Configuration lives in `hook/hooks.md`.
 - Each hook defines `event`, `actions`, and optional `conditions`.
 - Hooks for the same event run in declaration order.
 
-Minimal schema:
+Example `hooks.md`:
 
 ```markdown
-# hook/hooks.md
 ---
 hooks:
   - event: session.idle
@@ -99,10 +113,9 @@ Code extensions treated as "code" by default:
 - `session.idle` only fires if files were modified via `write` or `edit`; the session's modified file list is cleared after the hook runs.
 - The main session is set on `session.created` with no parent, or on the first `session.idle` if needed.
 
-Example:
+Example with multiple hooks:
 
 ```markdown
-# hook/hooks.md
 ---
 hooks:
   - event: session.idle
@@ -192,7 +205,7 @@ Runs the test suite with coverage and suggests fixes for failures.
 
 ## Configuration Options
 
-The plugin does not require additional configuration. Agents, commands, skills, and hooks are loaded automatically from the `agent/`, `command/`, `skill/`, and `hook/` directories.
+The plugin does not require additional configuration. Agents, commands, and skills are loaded automatically from the `agent/`, `command/`, and `skill/` directories within the plugin. Hooks are loaded from the standard OpenCode configuration directories (see Hooks section above).
 
 ### Supported Code File Extensions
 

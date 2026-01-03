@@ -6,9 +6,11 @@ import {
   loadSkills,
   loadCommands,
   loadHooks,
+  mergeHooks,
   type HookConfig,
   type HookEvent,
 } from "./loaders"
+import { getGlobalHookDir, getProjectHookDir } from "./config-paths"
 import { hasCodeExtension } from "./code-files"
 import { log } from "./logger"
 
@@ -39,7 +41,6 @@ const PLUGIN_ROOT = join(__dirname, "..")
 const AGENT_DIR = join(PLUGIN_ROOT, "agent")
 const SKILL_DIR = join(PLUGIN_ROOT, "skill")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
-const HOOK_DIR = join(PLUGIN_ROOT, "hook")
 
 // ============================================================================
 // PLUGIN
@@ -49,7 +50,10 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   const agents = loadAgents(AGENT_DIR)
   const skills = loadSkills(SKILL_DIR)
   const commands = loadCommands(COMMAND_DIR)
-  const hooks = loadHooks(HOOK_DIR)
+
+  const globalHooks = loadHooks(getGlobalHookDir())
+  const projectHooks = loadHooks(getProjectHookDir(ctx.directory))
+  const hooks = mergeHooks(globalHooks, projectHooks)
 
   const modifiedCodeFiles = new Map<string, Set<string>>()
   let mainSessionID: string | undefined

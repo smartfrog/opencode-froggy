@@ -8,6 +8,9 @@ import {
   loadSkills,
   loadCommands,
   loadHooks,
+  mergeHooks,
+  type HookConfig,
+  type HookEvent,
 } from "./loaders"
 
 describe("parseFrontmatter", () => {
@@ -574,6 +577,81 @@ hooks:
     expect(result.has("session.deleted")).toBe(true)
     expect(result.has("tool.after.write")).toBe(true)
     expect(result.has("tool.after.edit")).toBe(true)
+  })
+})
+
+describe("mergeHooks", () => {
+  it("should return empty map when merging empty maps", () => {
+    const result = mergeHooks(
+      new Map<HookEvent, HookConfig[]>(),
+      new Map<HookEvent, HookConfig[]>()
+    )
+    expect(result.size).toBe(0)
+  })
+
+  it("should merge maps with non-overlapping events", () => {
+    const hook1: HookConfig = { event: "session.idle", actions: [{ command: "cmd1" }] }
+    const hook2: HookConfig = { event: "session.created", actions: [{ command: "cmd2" }] }
+
+    const map1 = new Map<HookEvent, HookConfig[]>([["session.idle", [hook1]]])
+    const map2 = new Map<HookEvent, HookConfig[]>([["session.created", [hook2]]])
+
+    const result = mergeHooks(map1, map2)
+
+    expect(result.size).toBe(2)
+    expect(result.has("session.idle")).toBe(true)
+    expect(result.has("session.created")).toBe(true)
+  })
+
+  it("should concatenate hooks for overlapping events in order", () => {
+    const hook1: HookConfig = { event: "session.idle", actions: [{ command: "cmd1" }] }
+    const hook2: HookConfig = { event: "session.idle", actions: [{ command: "cmd2" }] }
+
+    const map1 = new Map<HookEvent, HookConfig[]>([["session.idle", [hook1]]])
+    const map2 = new Map<HookEvent, HookConfig[]>([["session.idle", [hook2]]])
+
+    const result = mergeHooks(map1, map2)
+
+    expect(result.size).toBe(1)
+    const hooks = result.get("session.idle")!
+    expect(hooks).toHaveLength(2)
+    expect(hooks[0]).toBe(hook1)
+    expect(hooks[1]).toBe(hook2)
+  })
+
+  it("should handle single map input", () => {
+    const hook: HookConfig = { event: "session.idle", actions: [{ command: "cmd" }] }
+    const map = new Map<HookEvent, HookConfig[]>([["session.idle", [hook]]])
+
+    const result = mergeHooks(map)
+
+    expect(result.size).toBe(1)
+    expect(result.get("session.idle")).toHaveLength(1)
+  })
+
+  it("should handle multiple maps with multiple events each", () => {
+    const globalHook1: HookConfig = { event: "session.idle", actions: [{ command: "global-idle" }] }
+    const globalHook2: HookConfig = { event: "session.created", actions: [{ command: "global-created" }] }
+    const projectHook1: HookConfig = { event: "session.idle", actions: [{ command: "project-idle" }] }
+    const projectHook2: HookConfig = { event: "session.deleted", actions: [{ command: "project-deleted" }] }
+
+    const globalMap = new Map<HookEvent, HookConfig[]>([
+      ["session.idle", [globalHook1]],
+      ["session.created", [globalHook2]],
+    ])
+    const projectMap = new Map<HookEvent, HookConfig[]>([
+      ["session.idle", [projectHook1]],
+      ["session.deleted", [projectHook2]],
+    ])
+
+    const result = mergeHooks(globalMap, projectMap)
+
+    expect(result.size).toBe(3)
+    expect(result.get("session.idle")).toHaveLength(2)
+    expect(result.get("session.idle")![0]).toBe(globalHook1)
+    expect(result.get("session.idle")![1]).toBe(projectHook1)
+    expect(result.get("session.created")).toHaveLength(1)
+    expect(result.get("session.deleted")).toHaveLength(1)
   })
 })
 

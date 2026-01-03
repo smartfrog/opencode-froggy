@@ -239,3 +239,18 @@ export function loadHooks(hookDir: string): Map<HookEvent, HookConfig[]> {
 
   return hooks
 }
+
+export function mergeHooks(
+  ...hookMaps: Map<HookEvent, HookConfig[]>[]
+): Map<HookEvent, HookConfig[]> {
+  const merged = new Map<HookEvent, HookConfig[]>()
+
+  for (const hookMap of hookMaps) {
+    for (const [event, configs] of hookMap) {
+      const existing = merged.get(event) ?? []
+      merged.set(event, [...existing, ...configs])
+    }
+  }
+
+  return merged
+}
