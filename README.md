@@ -35,7 +35,7 @@ Hooks run actions on session events. Configuration lives in `hook/hooks.md`.
 #### Configuration file
 
 - YAML frontmatter must include a `hooks` list.
-- Each hook defines `event`, `actions`, and an optional `condition`.
+- Each hook defines `event`, `actions`, and optional `conditions`.
 - Hooks for the same event run in declaration order.
 
 Minimal schema:
@@ -45,7 +45,7 @@ Minimal schema:
 ---
 hooks:
   - event: session.idle
-    condition: hasCodeChange
+    conditions: [hasCodeChange, isMainSession]
     actions:
       - command: simplify-changes
 ---
@@ -67,6 +67,8 @@ hooks:
 |-----------|-------------|
 | `isMainSession` | Run only for the main session (not sub-sessions) |
 | `hasCodeChange` | Run only if at least one modified file looks like code |
+
+All listed conditions must pass for the hook to run.
 
 Code extensions treated as "code" by default:
 `ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`, `json`, `yml`, `yaml`, `toml`, `css`, `scss`, `sass`, `less`, `html`, `vue`, `svelte`, `go`, `rs`, `c`, `h`, `cpp`, `cc`, `cxx`, `hpp`, `java`, `py`, `rb`, `php`, `sh`, `bash`, `kt`, `kts`, `swift`, `m`, `mm`, `cs`, `fs`, `scala`, `clj`, `hs`, `lua`.
@@ -102,7 +104,7 @@ Example:
 ---
 hooks:
   - event: session.idle
-    condition: hasCodeChange
+    conditions: [hasCodeChange, isMainSession]
     actions:
       - command: simplify-changes
 
@@ -201,7 +203,7 @@ The plugin does not require additional configuration. All agents, commands, skil
 
 ### Supported Code File Extensions
 
-The `hasCodeChange` condition checks file extensions against the default set listed in the Hooks section. Hooks without that condition still trigger on any modified file paths tracked via `write` or `edit` in the current session.
+The `hasCodeChange` condition checks file extensions against the default set listed in the Hooks section. Hooks without any conditions still trigger on any modified file paths tracked via `write` or `edit` in the current session.
 
 ## Development
 

@@ -68,22 +68,26 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   ): Promise<void> {
     const prefix = `[hook:${hook.event}]`
 
-    if (hook.condition === "isMainSession" && sessionID !== mainSessionID) {
-      log(`${prefix} condition not met, skipping`, { sessionID, condition: hook.condition })
-      return
-    }
+    const conditions = hook.conditions ?? []
 
-    if (hook.condition === "hasCodeChange") {
-      const files = extraLog?.files as string[] | undefined
-      if (!files || !files.some(hasCodeExtension)) {
-        log(`${prefix} condition not met, skipping`, { sessionID, condition: hook.condition })
+    for (const condition of conditions) {
+      if (condition === "isMainSession" && sessionID !== mainSessionID) {
+        log(`${prefix} condition not met, skipping`, { sessionID, condition })
         return
+      }
+
+      if (condition === "hasCodeChange") {
+        const files = extraLog?.files as string[] | undefined
+        if (!files || !files.some(hasCodeExtension)) {
+          log(`${prefix} condition not met, skipping`, { sessionID, condition })
+          return
+        }
       }
     }
 
     log(`${prefix} starting`, { 
       sessionID, 
-      condition: hook.condition, 
+      conditions,
       actions: hook.actions.length, 
       ...extraLog 
     })

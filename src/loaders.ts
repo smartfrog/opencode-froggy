@@ -73,7 +73,7 @@ export type HookAction = HookActionCommand | HookActionSkill | HookActionTool
 
 export interface HookConfig {
   event: HookEvent
-  condition?: HookCondition
+  conditions?: HookCondition[]
   actions: HookAction[]
 }
 
@@ -225,7 +225,7 @@ export function loadHooks(hookDir: string): Map<HookEvent, HookConfig[]> {
 
     const hookConfig: HookConfig = {
       event: hookDef.event,
-      condition: hookDef.condition,
+      conditions: Array.isArray(hookDef.conditions) ? hookDef.conditions : undefined,
       actions: hookDef.actions,
     }
 

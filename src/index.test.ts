@@ -328,7 +328,7 @@ describe("loadHooks", () => {
     const hookContent = `---
 hooks:
   - event: session.idle
-    condition: isMainSession
+    conditions: [isMainSession]
     actions:
       - command: simplify-changes
 ---`
@@ -343,7 +343,7 @@ hooks:
     const hooks = result.get("session.idle")!
     expect(hooks).toHaveLength(1)
     expect(hooks[0].event).toBe("session.idle")
-    expect(hooks[0].condition).toBe("isMainSession")
+    expect(hooks[0].conditions).toEqual(["isMainSession"])
     expect(hooks[0].actions).toHaveLength(1)
     expect(hooks[0].actions[0]).toEqual({ command: "simplify-changes" })
   })
@@ -352,9 +352,11 @@ hooks:
     const hookContent = `---
 hooks:
   - event: session.idle
-    condition: hasCodeChange
+    conditions: [hasCodeChange]
     actions:
       - command: simplify-changes
+
+
 ---`
 
     writeFileSync(join(testDir, "hooks.md"), hookContent)
@@ -363,14 +365,15 @@ hooks:
     const hooks = result.get("session.idle")!
 
     expect(hooks).toHaveLength(1)
-    expect(hooks[0].condition).toBe("hasCodeChange")
+    expect(hooks[0].conditions).toEqual(["hasCodeChange"])
   })
+
 
   it("should load hook with multiple actions", () => {
     const hookContent = `---
 hooks:
   - event: session.idle
-    condition: isMainSession
+    conditions: [isMainSession]
     actions:
       - command: simplify-changes
       - skill: post-change-code-simplification
@@ -415,7 +418,7 @@ hooks:
     })
   })
 
-  it("should load hook without condition", () => {
+  it("should load hook without conditions", () => {
     const hookContent = `---
 hooks:
   - event: session.deleted
@@ -429,7 +432,7 @@ hooks:
     const hooks = result.get("session.deleted")!
 
     expect(hooks).toHaveLength(1)
-    expect(hooks[0].condition).toBeUndefined()
+    expect(hooks[0].conditions).toBeUndefined()
   })
 
   it("should load multiple hooks for different events", () => {
@@ -460,7 +463,7 @@ hooks:
     const hookContent = `---
 hooks:
   - event: session.idle
-    condition: isMainSession
+    conditions: [isMainSession]
     actions:
       - command: first-cmd
   - event: session.idle
@@ -475,9 +478,9 @@ hooks:
     expect(result.size).toBe(1)
     const hooks = result.get("session.idle")!
     expect(hooks).toHaveLength(2)
-    expect(hooks[0].condition).toBe("isMainSession")
+    expect(hooks[0].conditions).toEqual(["isMainSession"])
     expect(hooks[0].actions[0]).toEqual({ command: "first-cmd" })
-    expect(hooks[1].condition).toBeUndefined()
+    expect(hooks[1].conditions).toBeUndefined()
     expect(hooks[1].actions[0]).toEqual({ command: "second-cmd" })
   })
 
