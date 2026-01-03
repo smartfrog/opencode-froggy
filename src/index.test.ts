@@ -348,6 +348,24 @@ hooks:
     expect(hooks[0].actions[0]).toEqual({ command: "simplify-changes" })
   })
 
+  it("should load hook with hasCodeChange condition", () => {
+    const hookContent = `---
+hooks:
+  - event: session.idle
+    condition: hasCodeChange
+    actions:
+      - command: simplify-changes
+---`
+
+    writeFileSync(join(testDir, "hooks.md"), hookContent)
+
+    const result = loadHooks(testDir)
+    const hooks = result.get("session.idle")!
+
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0].condition).toBe("hasCodeChange")
+  })
+
   it("should load hook with multiple actions", () => {
     const hookContent = `---
 hooks:
@@ -555,3 +573,4 @@ hooks:
     expect(result.has("tool.after.edit")).toBe(true)
   })
 })
+

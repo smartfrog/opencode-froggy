@@ -9,6 +9,7 @@ import {
   type HookConfig,
   type HookEvent,
 } from "./loaders"
+import { hasCodeExtension } from "./code-files"
 import { log } from "./logger"
 
 export { parseFrontmatter, loadAgents, loadSkills, loadCommands } from "./loaders"
@@ -70,6 +71,14 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     if (hook.condition === "isMainSession" && sessionID !== mainSessionID) {
       log(`${prefix} condition not met, skipping`, { sessionID, condition: hook.condition })
       return
+    }
+
+    if (hook.condition === "hasCodeChange") {
+      const files = extraLog?.files as string[] | undefined
+      if (!files || !files.some(hasCodeExtension)) {
+        log(`${prefix} condition not met, skipping`, { sessionID, condition: hook.condition })
+        return
+      }
     }
 
     log(`${prefix} starting`, { 

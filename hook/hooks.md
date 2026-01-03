@@ -1,7 +1,7 @@
 ---
 hooks:
   - event: session.idle
-    condition: isMainSession
+    condition: hasCodeChange
     actions:
       - command: simplify-changes
 ---

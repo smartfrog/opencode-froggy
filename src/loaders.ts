@@ -55,7 +55,7 @@ export type HookEvent =
   | "tool.after.write"
   | "tool.after.edit"
 
-export type HookCondition = "isMainSession"
+export type HookCondition = "isMainSession" | "hasCodeChange"
 
 export interface HookActionCommand {
   command: string | { name: string; args: string }

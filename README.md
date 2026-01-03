@@ -45,7 +45,7 @@ Minimal schema:
 ---
 hooks:
   - event: session.idle
-    condition: isMainSession
+    condition: hasCodeChange
     actions:
       - command: simplify-changes
 ---
@@ -66,6 +66,10 @@ hooks:
 | Condition | Description |
 |-----------|-------------|
 | `isMainSession` | Run only for the main session (not sub-sessions) |
+| `hasCodeChange` | Run only if at least one modified file looks like code |
+
+Code extensions treated as "code" by default:
+`ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`, `json`, `yml`, `yaml`, `toml`, `css`, `scss`, `sass`, `less`, `html`, `vue`, `svelte`, `go`, `rs`, `c`, `h`, `cpp`, `cc`, `cxx`, `hpp`, `java`, `py`, `rb`, `php`, `sh`, `bash`, `kt`, `kts`, `swift`, `m`, `mm`, `cs`, `fs`, `scala`, `clj`, `hs`, `lua`.
 
 #### Supported actions
 
@@ -98,7 +102,7 @@ Example:
 ---
 hooks:
   - event: session.idle
-    condition: isMainSession
+    condition: hasCodeChange
     actions:
       - command: simplify-changes
 
@@ -197,7 +201,7 @@ The plugin does not require additional configuration. All agents, commands, skil
 
 ### Supported Code File Extensions
 
-The auto-simplification hook does not filter by extension. It tracks any file paths modified via `write` or `edit` in the current session, then runs on `session.idle` if hooks are configured.
+The `hasCodeChange` condition checks file extensions against the default set listed in the Hooks section. Hooks without that condition still trigger on any modified file paths tracked via `write` or `edit` in the current session.
 
 ## Development
 
