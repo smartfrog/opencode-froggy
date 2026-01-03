@@ -30,45 +30,15 @@ An OpenCode plugin that provides custom agents, commands, skills, and automatic 
 
 ### Hooks
 
-Hooks allow you to configure actions to execute on specific events. All hooks are defined in a single file `hook/hooks.md`.
+Hooks run actions on session events. Configuration lives in `hook/hooks.md`.
 
-#### Supported Events
+#### Configuration file
 
-| Event | Description |
-|-------|-------------|
-| `session.idle` | Triggered when the main session becomes idle with modified files |
-| `session.created` | Triggered when a new session is created |
-| `session.deleted` | Triggered when a session is deleted |
-| `tool.after.write` | Triggered after a file write operation |
-| `tool.after.edit` | Triggered after a file edit operation |
+- YAML frontmatter must include a `hooks` list.
+- Each hook defines `event`, `actions`, and an optional `condition`.
+- Hooks for the same event run in declaration order.
 
-#### Hook File Format
-
-```markdown
-# hook/hooks.md
----
-hooks:
-  - event: session.idle
-    condition: isMainSession  # Optional: only "isMainSession" supported for now
-    actions:
-      - command: simplify-changes           # Execute a command
-
-  - event: session.created
-    actions:
-      - skill: post-change-code-simplification  # Load and execute a skill
-      - command:                            # Command with arguments
-          name: review-pr
-          args: "main feature"
-      - tool:                               # Execute a tool directly
-          name: bash
-          args:
-            command: "echo done"
----
-```
-
-#### Default Hook
-
-The plugin ships with a default `session.idle` hook that triggers code simplification:
+Minimal schema:
 
 ```markdown
 # hook/hooks.md
@@ -81,13 +51,69 @@ hooks:
 ---
 ```
 
+#### Supported events
+
+| Event | Description |
+|-------|-------------|
+| `session.idle` | Emitted when a session becomes idle and has files modified via `write` or `edit` in that session |
+| `session.created` | Emitted when a session is created |
+| `session.deleted` | Emitted when a session is deleted |
+| `tool.after.write` | Accepted in config but not emitted by this plugin |
+| `tool.after.edit` | Accepted in config but not emitted by this plugin |
+
 #### Conditions
 
 | Condition | Description |
 |-----------|-------------|
-| `isMainSession` | Only execute if triggered on the main session (not subagent sessions) |
+| `isMainSession` | Run only for the main session (not sub-sessions) |
 
-Multiple hooks can be defined for the same event with different conditions. They execute in declaration order.
+#### Supported actions
+
+- **Command**
+  - Short form: `command: simplify-changes`
+  - With args:
+    - `command:`
+      - `name: review-pr`
+      - `args: "main feature"`
+  - If the command exists in config, the plugin reuses its `agent` and `model`.
+- **Skill**
+  - `skill: post-change-code-simplification`
+  - The plugin prompts the session to use the `skill` tool.
+- **Tool**
+  - `tool:`
+    - `name: bash`
+    - `args: { command: "echo done" }`
+  - The plugin prompts the session to use the tool with these arguments.
+
+#### Execution behavior
+
+- Action errors are logged and do not stop later actions.
+- `session.idle` only fires if files were modified via `write` or `edit`; the session's modified file list is cleared after the hook runs.
+- The main session is set on `session.created` with no parent, or on the first `session.idle` if needed.
+
+Example:
+
+```markdown
+# hook/hooks.md
+---
+hooks:
+  - event: session.idle
+    condition: isMainSession
+    actions:
+      - command: simplify-changes
+
+  - event: session.created
+    actions:
+      - skill: post-change-code-simplification
+      - command:
+          name: review-pr
+          args: "main feature"
+      - tool:
+          name: bash
+          args:
+            command: "echo done"
+---
+```
 
 ## Installation
 
