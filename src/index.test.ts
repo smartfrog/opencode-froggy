@@ -104,6 +104,53 @@ You are a test agent.`
     expect(result["test-agent"].prompt).toContain("You are a test agent.")
   })
 
+  it("should load agent with permissions and singular permission key", () => {
+    const agentContent = `---
+description: Permission agent
+permission:
+  bash: allow
+---
+Content`
+
+    writeFileSync(join(testDir, "perm.md"), agentContent)
+
+    const result = loadAgents(testDir)
+
+    expect(result["perm"].permissions).toEqual({ bash: "allow" })
+  })
+
+  it("should prioritize permissions (plural) over permission (singular)", () => {
+    const agentContent = `---
+description: Dual permission agent
+permission:
+  bash: deny
+permissions:
+  bash: allow
+---
+Content`
+
+    writeFileSync(join(testDir, "dual.md"), agentContent)
+
+    const result = loadAgents(testDir)
+
+    expect(result["dual"].permissions).toEqual({ bash: "allow" })
+  })
+
+  it("should not include undefined optional fields", () => {
+    const agentContent = `---
+description: Minimal agent
+---
+Content`
+
+    writeFileSync(join(testDir, "minimal.md"), agentContent)
+
+    const result = loadAgents(testDir)
+
+    expect(result["minimal"]).not.toHaveProperty("temperature")
+    expect(result["minimal"]).not.toHaveProperty("tools")
+    expect(result["minimal"]).not.toHaveProperty("permissions")
+  })
+
   it("should convert agent mode to primary", () => {
     const agentContent = `---
 description: Primary agent

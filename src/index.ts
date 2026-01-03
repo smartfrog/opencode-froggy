@@ -7,6 +7,7 @@ import {
   loadCommands,
   loadHooks,
   type HookConfig,
+  type HookEvent,
 } from "./loaders"
 import { log } from "./logger"
 
@@ -59,59 +60,74 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     hooks: Array.from(hooks.keys()),
   })
 
-  async function executeHookActions(hook: HookConfig, sessionID: string): Promise<void> {
-    log("[executeHookActions] Starting", { event: hook.event, sessionID, actionsCount: hook.actions.length })
+  async function executeHookActions(
+    hook: HookConfig, 
+    sessionID: string, 
+    extraLog?: Record<string, unknown>
+  ): Promise<void> {
+    const prefix = `[hook:${hook.event}]`
+
+    if (hook.condition === "isMainSession" && sessionID !== mainSessionID) {
+      log(`${prefix} condition not met, skipping`, { sessionID, condition: hook.condition })
+      return
+    }
+
+    log(`${prefix} starting`, { 
+      sessionID, 
+      condition: hook.condition, 
+      actions: hook.actions.length, 
+      ...extraLog 
+    })
 
     for (const action of hook.actions) {
       try {
         if ("command" in action) {
-          const cmdName = typeof action.command === "string" ? action.command : action.command.name
-          const cmdArgs = typeof action.command === "string" ? "" : action.command.args
-          const cmdConfig = commands[cmdName]
+          const { name, args = "" } = typeof action.command === "string" 
+            ? { name: action.command } 
+            : action.command
+          const { agent, model } = commands[name] ?? {}
           
-          log("[executeHookActions] Executing command", { command: cmdName, args: cmdArgs, agent: cmdConfig?.agent, model: cmdConfig?.model })
+          log(`${prefix} executing command`, { command: name, args, agent, model })
           await ctx.client.session.command({
             path: { id: sessionID },
             body: { 
-              command: cmdName,
-              arguments: cmdArgs,
-              agent: cmdConfig?.agent,
-              model: cmdConfig?.model,
+              command: name,
+              arguments: args,
+              agent,
+              model,
             },
             query: { directory: ctx.directory },
           })
         } else if ("skill" in action) {
-          const text = `Use the skill tool to load the "${action.skill}" skill and follow its instructions.`
-          
-          log("[executeHookActions] Executing skill", { skill: action.skill })
+          log(`${prefix} executing skill`, { skill: action.skill })
           await ctx.client.session.prompt({
             path: { id: sessionID },
-            body: { parts: [{ type: "text", text }] },
+            body: { parts: [{ type: "text", text: `Use the skill tool to load the "${action.skill}" skill and follow its instructions.` }] },
             query: { directory: ctx.directory },
           })
         } else if ("tool" in action) {
-          const text = `Use the ${action.tool.name} tool with these arguments: ${JSON.stringify(action.tool.args)}`
-          
-          log("[executeHookActions] Executing tool", { tool: action.tool.name })
+          log(`${prefix} executing tool`, { tool: action.tool.name })
           await ctx.client.session.prompt({
             path: { id: sessionID },
-            body: { parts: [{ type: "text", text }] },
+            body: { parts: [{ type: "text", text: `Use the ${action.tool.name} tool with these arguments: ${JSON.stringify(action.tool.args)}` }] },
             query: { directory: ctx.directory },
           })
         }
       } catch (error) {
-        log("[executeHookActions] Action failed, continuing", { error: String(error) })
+        log(`${prefix} action failed, continuing`, { error: String(error) })
       }
     }
 
-    log("[executeHookActions] Completed", { event: hook.event })
+    log(`${prefix} completed`)
   }
 
-  function checkHookCondition(hook: HookConfig, sessionID: string): boolean {
-    if (hook.condition === "isMainSession") {
-      return sessionID === mainSessionID
+  async function triggerHooks(event: HookEvent, sessionID: string, extraLog?: Record<string, unknown>) {
+    const eventHooks = hooks.get(event)
+    if (!eventHooks) return
+
+    for (const hook of eventHooks) {
+      await executeHookActions(hook, sessionID, extraLog)
     }
-    return true
   }
 
   return {
@@ -180,38 +196,29 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       const props = event.properties as Record<string, unknown> | undefined
 
       if (event.type === "session.created") {
-        const info = props?.info as
-          | { id?: string; parentID?: string }
-          | undefined
-        if (info?.id && !info.parentID) {
-          mainSessionID = info.id
-          log("[event] session.created - main session", { sessionID: info.id })
+        const info = props?.info as { id?: string; parentID?: string } | undefined
+        const sessionID = info?.id
+        if (!sessionID) return
+
+        if (!info.parentID) {
+          mainSessionID = sessionID
+          log("[event] session.created - main session", { sessionID })
         }
 
-        const eventHooks = hooks.get("session.created") ?? []
-        for (const hook of eventHooks) {
-          if (info?.id && checkHookCondition(hook, info.id)) {
-            executeHookActions(hook, info.id)
-          }
-        }
+        await triggerHooks("session.created", sessionID)
       }
 
       if (event.type === "session.deleted") {
         const info = props?.info as { id?: string } | undefined
-        if (info?.id) {
-          log("[event] session.deleted", { sessionID: info.id })
+        const sessionID = info?.id
+        if (!sessionID) return
 
-          const eventHooks = hooks.get("session.deleted") ?? []
-          for (const hook of eventHooks) {
-            if (checkHookCondition(hook, info.id)) {
-              await executeHookActions(hook, info.id)
-            }
-          }
+        log("[event] session.deleted", { sessionID })
+        await triggerHooks("session.deleted", sessionID)
 
-          modifiedCodeFiles.delete(info.id)
-          if (info.id === mainSessionID) {
-            mainSessionID = undefined
-          }
+        modifiedCodeFiles.delete(sessionID)
+        if (sessionID === mainSessionID) {
+          mainSessionID = undefined
         }
       }
 
@@ -232,20 +239,14 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
           return
         }
 
-        const eventHooks = hooks.get("session.idle") ?? []
-        if (eventHooks.length === 0) {
+        const eventHooks = hooks.get("session.idle")
+        if (!eventHooks || eventHooks.length === 0) {
           log("[event] session.idle - no hooks defined, skipping")
           return
         }
 
         modifiedCodeFiles.delete(sessionID)
-        log("[event] session.idle - executing hooks", { files: Array.from(files), hooksCount: eventHooks.length })
-        
-        for (const hook of eventHooks) {
-          if (checkHookCondition(hook, sessionID)) {
-            await executeHookActions(hook, sessionID)
-          }
-        }
+        await triggerHooks("session.idle", sessionID, { files: Array.from(files) })
       }
     },
   }

@@ -12,6 +12,7 @@ export interface AgentFrontmatter {
   temperature?: number
   tools?: Record<string, boolean>
   permission?: Record<string, unknown>
+  permissions?: Record<string, unknown>
 }
 
 export interface SkillFrontmatter {
@@ -93,6 +94,7 @@ export interface AgentConfigOutput {
   mode: "subagent" | "primary" | "all"
   temperature?: number
   tools?: Record<string, boolean>
+  permissions?: Record<string, unknown>
   prompt: string
   [key: string]: unknown
 }
@@ -137,12 +139,15 @@ export function loadAgents(agentDir: string): Record<string, AgentConfigOutput> 
     const agentName = basename(file, ".md")
     const mode = data.mode === "agent" ? "primary" : "subagent"
 
+    const permissions = data.permissions ?? data.permission
+
     agents[agentName] = {
       description: data.description || "",
       mode,
-      temperature: data.temperature,
-      tools: data.tools,
       prompt: body.trim(),
+      ...(data.temperature !== undefined && { temperature: data.temperature }),
+      ...(data.tools !== undefined && { tools: data.tools }),
+      ...(permissions !== undefined && { permissions }),
     }
   }
 
