@@ -7,7 +7,6 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
 ## Table of Contents
 
 - [Installation](#installation)
-- [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Agents](#agents)
 - [Tools](#tools)
@@ -22,59 +21,29 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
   - [Execution Behavior](#execution-behavior)
   - [Example Hook Configurations](#example-hook-configurations)
 - [Configuration Options](#configuration-options)
-- [Development](#development)
 - [License](#license)
 
 ---
 
 ## Installation
 
-Add the plugin to your OpenCode configuration file at `~/.config/opencode/opencode.json`:
+### From npm (recommended)
+
+Add the plugin to your OpenCode configuration file (`opencode.json`):
 
 ```json
 {
-  "plugin": {
-    "froggy": {
-      "module": "opencode-froggy"
-    }
-  }
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-froggy"]
 }
 ```
 
-For development (from source):
+### From local files
 
-```json
-{
-  "plugin": {
-    "froggy": {
-      "path": "/path/to/opencode-froggy"
-    }
-  }
-}
-```
+Alternatively, clone or copy the plugin files to one of these directories:
 
----
-
-## Quick Start
-
-After installation, you can immediately use the available commands:
-
-```bash
-# Review all uncommitted changes (staged, unstaged, untracked)
-/review-changes
-
-# Review a pull request
-/review-pr feature-branch main
-
-# Simplify uncommitted code
-/simplify-changes
-
-# Create a commit with auto-generated message and push
-/commit
-
-# Run tests with coverage report
-/tests-coverage
-```
+- **Project-local**: `.opencode/plugin/opencode-froggy/`
+- **Global**: `~/.config/opencode/plugin/opencode-froggy/`
 
 ---
 
@@ -522,39 +491,6 @@ The plugin does not require additional configuration. Agents, commands, and skil
 ### Supported Code File Extensions
 
 The `hasCodeChange` condition checks file extensions against the default set listed in the [Conditions](#conditions) section. Hooks without any conditions still trigger on any modified file paths tracked via `write` or `edit` in the current session.
-
----
-
-## Development
-
-### Prerequisites
-
-- Node.js 18+
-- npm
-
-### Setup
-
-```bash
-npm install
-```
-
-### Build
-
-```bash
-npm run build
-```
-
-### Run Tests
-
-```bash
-npm test
-```
-
-### Type Checking
-
-```bash
-npm run typecheck
-```
 
 ---
 
