@@ -155,19 +155,45 @@ Content`
     expect(result["minimal"]).not.toHaveProperty("permissions")
   })
 
-  it("should convert agent mode to primary", () => {
-    const agentContent = `---
+  it("should use mode value directly (primary, subagent, all)", () => {
+    const primaryContent = `---
 description: Primary agent
-mode: agent
+mode: primary
 ---
 
 Content`
 
-    writeFileSync(join(testDir, "primary.md"), agentContent)
+    const subagentContent = `---
+description: Subagent
+mode: subagent
+---
+
+Content`
+
+    const allContent = `---
+description: All modes agent
+mode: all
+---
+
+Content`
+
+    const noModeContent = `---
+description: No mode specified
+---
+
+Content`
+
+    writeFileSync(join(testDir, "primary.md"), primaryContent)
+    writeFileSync(join(testDir, "subagent.md"), subagentContent)
+    writeFileSync(join(testDir, "all.md"), allContent)
+    writeFileSync(join(testDir, "nomode.md"), noModeContent)
 
     const result = loadAgents(testDir)
 
     expect(result["primary"].mode).toBe("primary")
+    expect(result["subagent"].mode).toBe("subagent")
+    expect(result["all"].mode).toBe("all")
+    expect(result["nomode"].mode).toBe("all")
   })
 
   it("should ignore non-markdown files", () => {

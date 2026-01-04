@@ -54,6 +54,60 @@ gitingest({
 - For large repositories, use pattern filtering to focus on relevant files
 - The `maxFileSize` parameter controls individual file size, not total output size
 
+#### diff-summary
+
+Generate a structured summary of git diffs. Use for reviewing branch comparisons or working tree changes. Returns stats, commits, files changed, and full diff in a structured markdown format.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `source` | `string` | No | - | Source branch to compare (e.g., `feature-branch`). If omitted, analyzes working tree changes. |
+| `target` | `string` | No | `main` | Target branch to compare against |
+| `remote` | `string` | No | `origin` | Git remote name |
+
+**Usage examples:**
+
+```typescript
+// Analyze working tree changes (staged, unstaged, and untracked files)
+diffSummary({})
+
+// Compare feature branch against main
+diffSummary({ source: "feature-branch" })
+
+// Compare feature branch against develop
+diffSummary({ 
+  source: "feature-branch",
+  target: "develop"
+})
+
+// Compare branches on a different remote
+diffSummary({
+  source: "feature-branch",
+  target: "main",
+  remote: "upstream"
+})
+```
+
+**Output structure:**
+
+For branch comparisons:
+- Stats Overview: Summary of changes (insertions, deletions)
+- Commits to Review: List of commits in the range
+- Files Changed: List of modified files
+- Full Diff: Complete diff with context
+
+For working tree changes:
+- Status Overview: Git status output
+- Staged Changes: Stats, files, and diff for staged changes
+- Unstaged Changes: Stats, files, and diff for unstaged changes
+- Untracked Files: List and diffs for new untracked files
+
+**Notes:**
+
+- When comparing branches, the tool fetches from the remote before generating the diff
+- Diffs include 5 lines of context and function context for better readability
+
 ### Agents
 
 | Agent | Mode | Description |

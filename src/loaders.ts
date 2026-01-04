@@ -8,8 +8,11 @@ import yaml from "js-yaml"
 
 export interface AgentFrontmatter {
   description: string
-  mode?: "subagent" | "agent"
+  mode?: "primary" | "subagent" | "all"
+  model?: string
   temperature?: number
+  maxSteps?: number
+  disable?: boolean
   tools?: Record<string, boolean>
   permission?: Record<string, unknown>
   permissions?: Record<string, unknown>
@@ -27,6 +30,7 @@ export interface CommandFrontmatter {
   description: string
   agent?: string
   model?: string
+  subtask?: boolean
 }
 
 export interface CommandConfig {
@@ -87,7 +91,10 @@ const TOOL_HOOK_PATTERN = /^tool\.(before|after)\..+$/
 export interface AgentConfigOutput {
   description: string
   mode: "subagent" | "primary" | "all"
+  model?: string
   temperature?: number
+  maxSteps?: number
+  disable?: boolean
   tools?: Record<string, boolean>
   permissions?: Record<string, unknown>
   prompt: string
@@ -132,7 +139,7 @@ export function loadAgents(agentDir: string): Record<string, AgentConfigOutput> 
     const { data, body } = parseFrontmatter<AgentFrontmatter>(content)
 
     const agentName = basename(file, ".md")
-    const mode = data.mode === "agent" ? "primary" : "subagent"
+    const mode = data.mode ?? "all"
 
     const permissions = data.permissions ?? data.permission
 
@@ -140,7 +147,10 @@ export function loadAgents(agentDir: string): Record<string, AgentConfigOutput> 
       description: data.description || "",
       mode,
       prompt: body.trim(),
+      ...(data.model !== undefined && { model: data.model }),
       ...(data.temperature !== undefined && { temperature: data.temperature }),
+      ...(data.maxSteps !== undefined && { maxSteps: data.maxSteps }),
+      ...(data.disable !== undefined && { disable: data.disable }),
       ...(data.tools !== undefined && { tools: data.tools }),
       ...(permissions !== undefined && { permissions }),
     }
@@ -192,6 +202,7 @@ export function loadCommands(commandDir: string): Record<string, CommandConfig> 
       description: data.description || "",
       agent: data.agent,
       model: data.model,
+      subtask: data.subtask,
       template: body.trim(),
     }
   }
