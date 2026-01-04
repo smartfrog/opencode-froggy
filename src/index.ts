@@ -18,6 +18,7 @@ import {
   DEFAULT_BASH_TIMEOUT,
   type BashContext,
 } from "./bash-executor"
+import { diffSummary } from "./diff-summary"
 
 export { parseFrontmatter, loadAgents, loadSkills, loadCommands } from "./loaders"
 
@@ -317,6 +318,18 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
           const data = await response.json() as GitingestResponse
           return `${data.summary}\n\n${data.tree}\n\n${data.content}`
+        },
+      }),
+
+      "diff-summary": tool({
+        description: "Generate a structured summary of git diffs. Use for reviewing branches comparison or working tree changes. Returns stats, commits, files changed, and full diff.",
+        args: {
+          source: tool.schema.string().optional().describe("Source branch to compare (e.g., 'feature-branch'). If omitted, analyzes working tree changes."),
+          target: tool.schema.string().optional().describe("Target branch to compare against (default: 'main')"),
+          remote: tool.schema.string().optional().describe("Git remote name (default: 'origin')"),
+        },
+        async execute(args: { source?: string; target?: string; remote?: string }, _context: ToolContext) {
+          return diffSummary(args, ctx.directory)
         },
       }),
     },
