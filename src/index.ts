@@ -1,9 +1,8 @@
-import { tool, type Plugin, type ToolContext } from "@opencode-ai/plugin"
+import { type Plugin } from "@opencode-ai/plugin"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   loadAgents,
-  loadSkills,
   loadCommands,
   loadHooks,
   mergeHooks,
@@ -18,9 +17,12 @@ import {
   DEFAULT_BASH_TIMEOUT,
   type BashContext,
 } from "./bash-executor"
-import { diffSummary } from "./diff-summary"
+import {
+  gitingestTool,
+  createDiffSummaryTool,
+} from "./tools"
 
-export { parseFrontmatter, loadAgents, loadSkills, loadCommands } from "./loaders"
+export { parseFrontmatter, loadAgents, loadCommands } from "./loaders"
 
 // ============================================================================
 // TYPES
@@ -62,7 +64,6 @@ const __dirname = dirname(__filename)
 
 const PLUGIN_ROOT = join(__dirname, "..")
 const AGENT_DIR = join(PLUGIN_ROOT, "agent")
-const SKILL_DIR = join(PLUGIN_ROOT, "skill")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
 
 // ============================================================================
@@ -71,7 +72,6 @@ const COMMAND_DIR = join(PLUGIN_ROOT, "command")
 
 const SmartfrogPlugin: Plugin = async (ctx) => {
   const agents = loadAgents(AGENT_DIR)
-  const skills = loadSkills(SKILL_DIR)
   const commands = loadCommands(COMMAND_DIR)
 
   const globalHooks = loadHooks(getGlobalHookDir())
@@ -85,8 +85,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   log("[init] Plugin loaded", { 
     agents: Object.keys(agents), 
     commands: Object.keys(commands),
-    skills: skills.map(s => s.name),
     hooks: Array.from(hooks.keys()),
+    tools: ["gitingest", "diff-summary"],
   })
 
   async function executeHookActions(
@@ -258,80 +258,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     },
 
     tool: {
-      skill: tool({
-        description: `Load a skill to get detailed instructions for a specific task. Skills provide specialized knowledge and step-by-step guidance. Use this when a task matches an available skill's description. <available_skills>${skills.map((s) => `\n  <skill>\n    <name>${s.name}</name>\n    <description>${s.description}</description>\n  </skill>`).join("")}\n</available_skills>`,
-        args: {
-          name: tool.schema
-            .string()
-            .describe(
-              "The skill identifier from available_skills (e.g., 'post-change-code-simplification')"
-            ),
-        },
-        async execute(args: { name: string }, _context: ToolContext) {
-          const skill = skills.find((s) => s.name === args.name)
-          if (!skill) {
-            const available = skills.map((s) => s.name).join(", ")
-            throw new Error(
-              `Skill "${args.name}" not found. Available skills: ${available || "none"}`
-            )
-          }
-
-          return [
-            `## Skill: ${skill.name}`,
-            "",
-            `**Base directory**: ${dirname(skill.path)}`,
-            "",
-            skill.body,
-          ].join("\n")
-        },
-      }),
-
-      gitingest: tool({
-        description: "Fetch a GitHub repository's full content via gitingest.com. Returns summary, directory tree, and file contents optimized for LLM analysis. Use when you need to understand an external repository's structure or code.",
-        args: {
-          url: tool.schema.string().describe("GitHub repository URL (e.g., https://github.com/owner/repo)"),
-          maxFileSize: tool.schema.number().optional().describe("Maximum file size in bytes to include (default: 50000)"),
-          pattern: tool.schema.string().optional().describe("Glob pattern to filter files (e.g., '*.py' or 'src/*')"),
-          patternType: tool.schema.enum(["include", "exclude"]).optional().describe("Whether pattern includes or excludes matching files (default: exclude)"),
-        },
-        async execute(args: { url: string; maxFileSize?: number; pattern?: string; patternType?: "include" | "exclude" }, _context: ToolContext) {
-          const response = await fetch("https://gitingest.com/api/ingest", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              input_text: args.url,
-              max_file_size: args.maxFileSize ?? 50000,
-              pattern: args.pattern ?? "",
-              pattern_type: args.patternType ?? "exclude",
-            }),
-          })
-
-          if (!response.ok) {
-            throw new Error(`gitingest API error: ${response.status} ${response.statusText}`)
-          }
-
-          interface GitingestResponse {
-            summary: string
-            tree: string
-            content: string
-          }
-
-          const data = await response.json() as GitingestResponse
-          return `${data.summary}\n\n${data.tree}\n\n${data.content}`
-        },
-      }),
-
-      "diff-summary": tool({
-        description: "Generate a structured summary of git diffs. Use for reviewing branches comparison or working tree changes. Returns stats, commits, files changed, and full diff.",
-        args: {
-          source: tool.schema.string().optional().describe("Source branch to compare (e.g., 'feature-branch'). If omitted, analyzes working tree changes."),
-          target: tool.schema.string().optional().describe("Target branch to compare against (default: 'main')"),
-          remote: tool.schema.string().optional().describe("Git remote name (default: 'origin')"),
-        },
-        async execute(args: { source?: string; target?: string; remote?: string }, _context: ToolContext) {
-          return diffSummary(args, ctx.directory)
-        },
-      }),
+      gitingest: gitingestTool,
+      "diff-summary": createDiffSummaryTool(ctx.directory),
     },
 
     "tool.execute.before": async (

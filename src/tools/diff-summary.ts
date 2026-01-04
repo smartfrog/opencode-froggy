@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { log } from "./logger"
+import { tool, type ToolContext } from "@opencode-ai/plugin"
+import { log } from "../logger"
 
 const execFileAsync = promisify(execFile)
 
 const DIFF_CONTEXT_LINES = 5
 
-interface DiffSummaryArgs {
+export interface DiffSummaryArgs {
   source?: string
   target?: string
   remote?: string
@@ -136,4 +137,30 @@ export async function diffSummary(args: DiffSummaryArgs, cwd: string): Promise<s
   }
 
   return getWorkingTreeDiff(cwd)
+}
+
+export function createDiffSummaryTool(directory: string) {
+  return tool({
+    description:
+      "Generate a structured summary of git diffs. Use for reviewing branches comparison or working tree changes. Returns stats, commits, files changed, and full diff.",
+    args: {
+      source: tool.schema
+        .string()
+        .optional()
+        .describe(
+          "Source branch to compare (e.g., 'feature-branch'). If omitted, analyzes working tree changes."
+        ),
+      target: tool.schema
+        .string()
+        .optional()
+        .describe("Target branch to compare against (default: 'main')"),
+      remote: tool.schema
+        .string()
+        .optional()
+        .describe("Git remote name (default: 'origin')"),
+    },
+    async execute(args: DiffSummaryArgs, _context: ToolContext) {
+      return diffSummary(args, directory)
+    },
+  })
 }
