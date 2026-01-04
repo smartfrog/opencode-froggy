@@ -2,11 +2,57 @@
 
 ## Overview
 
-opencode-froggy is an OpenCode plugin that adds agents, commands, skills, and a hook system.
-It can automatically simplify changes when the session becomes idle, if files were modified
-via `write` or `edit`. Hooks are loaded from OpenCode configuration directories (global and project-level).
+Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code reviewer, architect, partner, etc.), dedicated commands such as simplify-code and review-pr, and tools such as gitingest.
 
 ## Features
+
+### Tools
+
+#### gitingest
+
+Fetch a GitHub repository's full content via gitingest.com. Returns summary, directory tree, and file contents optimized for LLM analysis. Use when you need to understand an external repository's structure or code.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `url` | `string` | Yes | - | The GitHub repository URL to fetch |
+| `maxFileSize` | `number` | No | `50000` | Maximum file size in bytes to include |
+| `pattern` | `string` | No | `""` | Glob pattern to filter files (e.g., `*.ts`, `src/**/*.py`) |
+| `patternType` | `"include"` \| `"exclude"` | No | `"exclude"` | Whether to include or exclude files matching the pattern |
+
+**Usage examples:**
+
+```typescript
+// Fetch entire repository
+gitingest({ url: "https://github.com/user/repo" })
+
+// Only TypeScript files
+gitingest({ 
+  url: "https://github.com/user/repo",
+  pattern: "*.ts",
+  patternType: "include"
+})
+
+// Exclude test files
+gitingest({
+  url: "https://github.com/user/repo", 
+  pattern: "*.test.ts",
+  patternType: "exclude"
+})
+
+// Increase max file size to 100KB
+gitingest({
+  url: "https://github.com/user/repo",
+  maxFileSize: 100000
+})
+```
+
+**Limitations:**
+
+- Content is truncated to 300k characters (server-side limit from gitingest.com)
+- For large repositories, use pattern filtering to focus on relevant files
+- The `maxFileSize` parameter controls individual file size, not total output size
 
 ### Agents
 
@@ -17,7 +63,7 @@ via `write` or `edit`. Hooks are loaded from OpenCode configuration directories 
 | `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
-| `rubber-duck` | agent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
+| `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
 
 ### Commands
 

@@ -1,7 +1,8 @@
 ---
 hooks:
   - event: session.idle
-    conditions: [hasCodeChange]
+    conditions: [hasCodeChange, isMainSession]
     actions:
+      - command: /simplify-code
       - bash: "npm run test"
 ---

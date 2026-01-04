@@ -1,6 +1,6 @@
 ---
 description: Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction.
-mode: agent
+mode: subagent
 temperature: 0.8
 tools:
   write: false
