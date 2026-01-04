@@ -51,7 +51,8 @@ Alternatively, clone or copy the plugin files to one of these directories:
 
 | Command | Description | Agent |
 |---------|-------------|-------|
-| `/commit` | Create a commit with appropriate message, create branch if on main/master, and push | `build` |
+| `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
+| `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
 | `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
 | `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
