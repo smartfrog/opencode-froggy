@@ -380,7 +380,6 @@ hooks:
     conditions: [isMainSession]
     actions:
       - command: simplify-changes
-      - skill: post-change-code-simplification
       - tool:
           name: bash
           args:
@@ -393,10 +392,9 @@ hooks:
     const hooks = result.get("session.idle")!
 
     expect(hooks).toHaveLength(1)
-    expect(hooks[0].actions).toHaveLength(3)
+    expect(hooks[0].actions).toHaveLength(2)
     expect(hooks[0].actions[0]).toEqual({ command: "simplify-changes" })
-    expect(hooks[0].actions[1]).toEqual({ skill: "post-change-code-simplification" })
-    expect(hooks[0].actions[2]).toEqual({ 
+    expect(hooks[0].actions[1]).toEqual({ 
       tool: { name: "bash", args: { command: "echo done" } } 
     })
   })

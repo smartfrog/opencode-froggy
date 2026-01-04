@@ -141,14 +141,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
             query: { directory: ctx.directory },
           })
           log(`${prefix} command result`, { command: name, status: result.response?.status, error: result.error })
-        } else if ("skill" in action) {
-          log(`${prefix} executing skill`, { skill: action.skill })
-          const result = await ctx.client.session.prompt({
-            path: { id: sessionID },
-            body: { parts: [{ type: "text", text: `Use the skill tool to load the "${action.skill}" skill and follow its instructions.` }] },
-            query: { directory: ctx.directory },
-          })
-          log(`${prefix} skill result`, { skill: action.skill, status: result.response?.status, error: result.error })
         } else if ("tool" in action) {
           log(`${prefix} executing tool`, { tool: action.tool.name })
           const result = await ctx.client.session.prompt({

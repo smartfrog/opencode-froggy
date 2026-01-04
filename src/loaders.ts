@@ -61,10 +61,6 @@ export interface HookActionCommand {
   command: string | { name: string; args: string }
 }
 
-export interface HookActionSkill {
-  skill: string
-}
-
 export interface HookActionTool {
   tool: { name: string; args: Record<string, unknown> }
 }
@@ -73,7 +69,7 @@ export interface HookActionBash {
   bash: string | { command: string; timeout?: number }
 }
 
-export type HookAction = HookActionCommand | HookActionSkill | HookActionTool | HookActionBash
+export type HookAction = HookActionCommand | HookActionTool | HookActionBash
 
 export interface HookConfig {
   event: HookEvent
