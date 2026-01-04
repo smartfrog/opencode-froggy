@@ -1,7 +1,7 @@
 {
   "name": "opencode-froggy",
-  "version": "1.0.0",
-  "description": "OpenCode plugin with custom agents, skills, commands, and auto-simplification on session idle",
+  "version": "0.1.0",
+  "description": "OpenCode plugin with a hook layer (tool.before.*, session.idle...), agents (code-reviewer, doc-writer), and commands (/review-pr, /commit)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -18,16 +18,22 @@
   },
   "keywords": [
     "opencode",
+    "opencode-plugin",
     "plugin",
+    "hooks",
     "code-review",
     "code-simplification",
-    "ai-agent"
+    "ai-agent",
+    "llm",
+    "automation",
+    "developer-tools",
+    "cli"
   ],
   "author": "Fred",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fred/opencode-froggy"
+    "url": "https://github.com/smartfrog/opencode-froggy"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"
