@@ -1,18 +1,115 @@
 # opencode-froggy
 
-## Overview
-
 Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code reviewer, architect, partner, etc.), dedicated commands such as simplify-code and review-pr, and tools such as gitingest.
 
-## Features
+---
 
-### Tools
+## Table of Contents
 
-#### gitingest
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Agents](#agents)
+- [Tools](#tools)
+  - [gitingest](#gitingest)
+  - [diff-summary](#diff-summary)
+- [Hooks](#hooks)
+  - [Configuration Locations](#configuration-locations)
+  - [Configuration File Format](#configuration-file-format)
+  - [Supported Events](#supported-events)
+  - [Conditions](#conditions)
+  - [Supported Actions](#supported-actions)
+  - [Execution Behavior](#execution-behavior)
+  - [Example Hook Configurations](#example-hook-configurations)
+- [Configuration Options](#configuration-options)
+- [Development](#development)
+- [License](#license)
+
+---
+
+## Installation
+
+Add the plugin to your OpenCode configuration file at `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "plugin": {
+    "froggy": {
+      "module": "opencode-froggy"
+    }
+  }
+}
+```
+
+For development (from source):
+
+```json
+{
+  "plugin": {
+    "froggy": {
+      "path": "/path/to/opencode-froggy"
+    }
+  }
+}
+```
+
+---
+
+## Quick Start
+
+After installation, you can immediately use the available commands:
+
+```bash
+# Review all uncommitted changes (staged, unstaged, untracked)
+/review-changes
+
+# Review a pull request
+/review-pr feature-branch main
+
+# Simplify uncommitted code
+/simplify-changes
+
+# Create a commit with auto-generated message and push
+/commit
+
+# Run tests with coverage report
+/tests-coverage
+```
+
+---
+
+## Commands
+
+| Command | Description | Agent |
+|---------|-------------|-------|
+| `/commit` | Create a commit with appropriate message, create branch if on main/master, and push | `build` |
+| `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
+| `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
+| `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
+| `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
+
+---
+
+## Agents
+
+| Agent | Mode | Description |
+|-------|------|-------------|
+| `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
+| `code-reviewer` | subagent | Reviews code for quality, correctness, and security. Read-only with restricted git access. |
+| `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
+| `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
+| `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
+| `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
+
+---
+
+## Tools
+
+### gitingest
 
 Fetch a GitHub repository's full content via gitingest.com. Returns summary, directory tree, and file contents optimized for LLM analysis. Use when you need to understand an external repository's structure or code.
 
-**Parameters:**
+#### Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -21,7 +118,7 @@ Fetch a GitHub repository's full content via gitingest.com. Returns summary, dir
 | `pattern` | `string` | No | `""` | Glob pattern to filter files (e.g., `*.ts`, `src/**/*.py`) |
 | `patternType` | `"include"` \| `"exclude"` | No | `"exclude"` | Whether to include or exclude files matching the pattern |
 
-**Usage examples:**
+#### Usage Examples
 
 ```typescript
 // Fetch entire repository
@@ -48,17 +145,19 @@ gitingest({
 })
 ```
 
-**Limitations:**
+#### Limitations
 
 - Content is truncated to 300k characters (server-side limit from gitingest.com)
 - For large repositories, use pattern filtering to focus on relevant files
 - The `maxFileSize` parameter controls individual file size, not total output size
 
-#### diff-summary
+---
+
+### diff-summary
 
 Generate a structured summary of git diffs. Use for reviewing branch comparisons or working tree changes. Returns stats, commits, files changed, and full diff in a structured markdown format.
 
-**Parameters:**
+#### Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -66,7 +165,7 @@ Generate a structured summary of git diffs. Use for reviewing branch comparisons
 | `target` | `string` | No | `main` | Target branch to compare against |
 | `remote` | `string` | No | `origin` | Git remote name |
 
-**Usage examples:**
+#### Usage Examples
 
 ```typescript
 // Analyze working tree changes (staged, unstaged, and untracked files)
@@ -89,51 +188,32 @@ diffSummary({
 })
 ```
 
-**Output structure:**
+#### Output Structure
 
-For branch comparisons:
+**For branch comparisons:**
 - Stats Overview: Summary of changes (insertions, deletions)
 - Commits to Review: List of commits in the range
 - Files Changed: List of modified files
 - Full Diff: Complete diff with context
 
-For working tree changes:
+**For working tree changes:**
 - Status Overview: Git status output
 - Staged Changes: Stats, files, and diff for staged changes
 - Unstaged Changes: Stats, files, and diff for unstaged changes
 - Untracked Files: List and diffs for new untracked files
 
-**Notes:**
+#### Notes
 
 - When comparing branches, the tool fetches from the remote before generating the diff
 - Diffs include 5 lines of context and function context for better readability
 
-### Agents
+---
 
-| Agent | Mode | Description |
-|-------|------|-------------|
-| `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
-| `code-reviewer` | subagent | Reviews code for quality, correctness, and security. Read-only with restricted git access. |
-| `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
-| `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
-| `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
-| `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
-
-### Commands
-
-| Command | Description | Agent |
-|---------|-------------|-------|
-| `/commit` | Create a commit with appropriate message, create branch if on main/master, and push | `build` |
-| `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
-| `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
-| `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
-| `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
-
-### Hooks
+## Hooks
 
 Hooks run actions on session events. Configuration is loaded from standard OpenCode configuration directories.
 
-#### Configuration locations
+### Configuration Locations
 
 Hooks are loaded from these locations (in order, merged together):
 
@@ -147,11 +227,11 @@ On Windows, `~/.config` is preferred for cross-platform consistency. If hooks ex
 
 Global hooks run first, then project hooks are added. Hooks from both sources are combined (not overridden).
 
-#### Configuration file
+### Configuration File Format
 
-- YAML frontmatter must include a `hooks` list.
-- Each hook defines `event`, `actions`, and optional `conditions`.
-- Hooks for the same event run in declaration order.
+- YAML frontmatter must include a `hooks` list
+- Each hook defines `event`, `actions`, and optional `conditions`
+- Hooks for the same event run in declaration order
 
 Example `hooks.md`:
 
@@ -165,7 +245,7 @@ hooks:
 ---
 ```
 
-#### Supported events
+### Supported Events
 
 | Event | Description |
 |-------|-------------|
@@ -177,17 +257,19 @@ hooks:
 | `tool.after.*` | Emitted after any tool executes |
 | `tool.after.<name>` | Emitted after a specific tool (e.g., `tool.after.edit`) |
 
-**Tool hook execution order:**
+#### Tool Hook Execution Order
+
 1. `tool.before.*` (all tools)
 2. `tool.before.<name>` (specific tool)
 3. *(tool executes)*
 4. `tool.after.*` (all tools)
 5. `tool.after.<name>` (specific tool)
 
-**Blocking tools with exit code 2:**
+#### Blocking Tools with Exit Code 2
+
 For `tool.before.*` and `tool.before.<name>` hooks, a bash action returning exit code 2 will block the tool from executing. The stderr output is displayed to the user as the block reason.
 
-#### Conditions
+### Conditions
 
 | Condition | Description |
 |-----------|-------------|
@@ -196,112 +278,126 @@ For `tool.before.*` and `tool.before.<name>` hooks, a bash action returning exit
 
 All listed conditions must pass for the hook to run.
 
-Code extensions treated as "code" by default:
+**Code extensions treated as "code":**
+
 `ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`, `json`, `yml`, `yaml`, `toml`, `css`, `scss`, `sass`, `less`, `html`, `vue`, `svelte`, `go`, `rs`, `c`, `h`, `cpp`, `cc`, `cxx`, `hpp`, `java`, `py`, `rb`, `php`, `sh`, `bash`, `kt`, `kts`, `swift`, `m`, `mm`, `cs`, `fs`, `scala`, `clj`, `hs`, `lua`.
 
-#### Supported actions
+### Supported Actions
 
-- **Command**
-  - Short form: `command: simplify-changes`
-  - With args:
-    - `command:`
-      - `name: review-pr`
-      - `args: "main feature"`
-  - If the command exists in config, the plugin reuses its `agent` and `model`.
-- **Tool**
-  - `tool:`
-    - `name: bash`
-    - `args: { command: "echo done" }`
-  - The plugin prompts the session to use the tool with these arguments.
-- **Bash**
-  Executes a shell command directly without involving the LLM. Useful for running linters, formatters, build scripts, or custom automation.
+#### Command Action
 
-  **Configuration:**
-  ```yaml
-  # Short form
-  - bash: "npm run lint"
+Execute a plugin command.
 
-  # Long form with custom timeout
-  - bash:
-      command: "$OPENCODE_PROJECT_DIR/.opencode/hooks/init.sh"
-      timeout: 30000  # milliseconds (default: 60000)
-  ```
+```yaml
+# Short form
+- command: simplify-changes
 
-  **Environment variables:**
+# With arguments
+- command:
+    name: review-pr
+    args: "main feature"
+```
 
-  The plugin injects these variables into the child process environment before executing the command:
+If the command exists in config, the plugin reuses its `agent` and `model`.
 
-  | Variable | Value | Use case |
-  |----------|-------|----------|
-  | `OPENCODE_PROJECT_DIR` | Absolute path to the project (e.g., `/home/user/project`) | Reference project files from scripts located elsewhere |
-  | `OPENCODE_SESSION_ID` | The OpenCode session identifier | Logging, tracing, or conditioning actions based on session |
+#### Tool Action
 
-  Example usage in a script:
-  ```bash
-  #!/bin/bash
-  # Access variables directly
-  echo "Project: $OPENCODE_PROJECT_DIR"
-  echo "Session: $OPENCODE_SESSION_ID"
+Prompt the session to use a tool with specific arguments.
 
-  # Access a project file
-  cat "$OPENCODE_PROJECT_DIR/package.json"
+```yaml
+- tool:
+    name: bash
+    args: { command: "echo done" }
+```
 
-  # Log with session ID
-  echo "[$OPENCODE_SESSION_ID] Hook executed" >> /tmp/opencode.log
-  ```
+#### Bash Action
 
-  **Stdin JSON context:**
-  The command receives a JSON object via stdin with session context:
-  ```json
-  {
-    "session_id": "abc123",
-    "event": "session.idle",
-    "cwd": "/path/to/project",
-    "files": ["src/index.ts", "src/utils.ts"]
-  }
-  ```
-  The `files` array is only present for `session.idle` events and contains paths modified via `write` or `edit`.
+Execute a shell command directly without involving the LLM. Useful for running linters, formatters, build scripts, or custom automation.
 
-  For tool hooks (`tool.before.*`, `tool.after.*`), additional fields are provided:
-  ```json
-  {
-    "session_id": "abc123",
-    "event": "tool.before.write",
-    "cwd": "/path/to/project",
-    "tool_name": "write",
-    "tool_args": { "filePath": "src/index.ts", "content": "..." }
-  }
-  ```
+**Configuration:**
 
-  **Environment variables vs stdin JSON:**
-  - **Environment variables**: Direct access via `$VAR`, convenient for simple values like paths and IDs
-  - **Stdin JSON**: Contains richer context (event type, working directory, modified files), requires parsing with `jq` or similar
+```yaml
+# Short form
+- bash: "npm run lint"
 
-  Both mechanisms are complementary. Use environment variables for quick access to project path and session ID; use stdin JSON when you need event details or the list of modified files.
+# Long form with custom timeout
+- bash:
+    command: "$OPENCODE_PROJECT_DIR/.opencode/hooks/init.sh"
+    timeout: 30000  # milliseconds (default: 60000)
+```
 
-  **Exit codes:**
-  | Code | Behavior |
-  |------|----------|
-  | `0` | Success, continue to next action |
-  | `2` | Blocking error, stop remaining actions in this hook |
-  | Other | Non-blocking error, log warning and continue |
+**Environment Variables:**
 
-  **Result feedback:**
-  Bash hook results are automatically sent back to your session, so you can see what happened:
-  ```
-  [BASH HOOK ✓] npm run lint
-  Exit: 0 | Duration: 1234ms
-  Stdout: All files passed linting
-  ```
-  The feedback includes a status icon (✓ success, ✗ failure), exit code, execution duration, and stdout/stderr output (truncated to 500 characters). This message appears in your session but does not trigger a response from the assistant.
+The plugin injects these variables into the child process environment:
 
-#### Execution behavior
+| Variable | Value | Use case |
+|----------|-------|----------|
+| `OPENCODE_PROJECT_DIR` | Absolute path to the project (e.g., `/home/user/project`) | Reference project files from scripts located elsewhere |
+| `OPENCODE_SESSION_ID` | The OpenCode session identifier | Logging, tracing, or conditioning actions based on session |
 
-- Action errors are logged and do not stop later actions.
-- `session.idle` only fires if files were modified via `write` or `edit`; the session's modified file list is cleared after the hook runs.
-- The main session is set on `session.created` with no parent, or on the first `session.idle` if needed.
+**Stdin JSON Context:**
 
-Example with multiple hooks:
+The command receives a JSON object via stdin with session context:
+
+```json
+{
+  "session_id": "abc123",
+  "event": "session.idle",
+  "cwd": "/path/to/project",
+  "files": ["src/index.ts", "src/utils.ts"]
+}
+```
+
+The `files` array is only present for `session.idle` events and contains paths modified via `write` or `edit`.
+
+For tool hooks (`tool.before.*`, `tool.after.*`), additional fields are provided:
+
+```json
+{
+  "session_id": "abc123",
+  "event": "tool.before.write",
+  "cwd": "/path/to/project",
+  "tool_name": "write",
+  "tool_args": { "filePath": "src/index.ts", "content": "..." }
+}
+```
+
+**Environment Variables vs Stdin JSON:**
+
+- **Environment variables**: Direct access via `$VAR`, convenient for simple values like paths and IDs
+- **Stdin JSON**: Contains richer context (event type, working directory, modified files), requires parsing with `jq` or similar
+
+Both mechanisms are complementary. Use environment variables for quick access to project path and session ID; use stdin JSON when you need event details or the list of modified files.
+
+**Exit Codes:**
+
+| Code | Behavior |
+|------|----------|
+| `0` | Success, continue to next action |
+| `2` | Blocking error, stop remaining actions in this hook |
+| Other | Non-blocking error, log warning and continue |
+
+**Result Feedback:**
+
+Bash hook results are automatically sent back to your session:
+
+```
+[BASH HOOK ✓] npm run lint
+Exit: 0 | Duration: 1234ms
+Stdout: All files passed linting
+```
+
+The feedback includes a status icon (✓ success, ✗ failure), exit code, execution duration, and stdout/stderr output (truncated to 500 characters). This message appears in your session but does not trigger a response from the assistant.
+
+### Execution Behavior
+
+- Action errors are logged and do not stop later actions
+- `session.idle` only fires if files were modified via `write` or `edit`; the session's modified file list is cleared after the hook runs
+- The main session is set on `session.created` with no parent, or on the first `session.idle` if needed
+
+### Example Hook Configurations
+
+#### Basic Multi-Hook Setup
 
 ```markdown
 ---
@@ -323,9 +419,8 @@ hooks:
 ---
 ```
 
-#### Example bash hook scripts
+#### Simple Lint-on-Idle Hook
 
-**Simple lint-on-idle hook:**
 ```yaml
 hooks:
   - event: session.idle
@@ -334,7 +429,10 @@ hooks:
       - bash: "npm run lint --fix"
 ```
 
-**Custom initialization script (`.opencode/hooks/init.sh`):**
+#### Custom Initialization Script
+
+`.opencode/hooks/init.sh`:
+
 ```bash
 #!/bin/bash
 set -e
@@ -354,7 +452,8 @@ echo "Project: $OPENCODE_PROJECT_DIR"
 exit 0
 ```
 
-**Conditional blocking based on lint errors:**
+#### Conditional Blocking Based on Lint Errors
+
 ```bash
 #!/bin/bash
 # Run linter and block if critical errors found
@@ -366,9 +465,8 @@ else
 fi
 ```
 
-#### Example tool hooks
+#### Block Modifications to Sensitive Files
 
-**Block modifications to sensitive files:**
 ```yaml
 hooks:
   - event: tool.before.write
@@ -390,7 +488,8 @@ hooks:
           fi
 ```
 
-**Auto-format TypeScript files after write:**
+#### Auto-Format TypeScript Files After Write
+
 ```yaml
 hooks:
   - event: tool.after.write
@@ -402,7 +501,8 @@ hooks:
           fi
 ```
 
-**Log all tool executions:**
+#### Log All Tool Executions
+
 ```yaml
 hooks:
   - event: tool.before.*
@@ -413,81 +513,17 @@ hooks:
           echo "[$(date)] Tool: $tool" >> /tmp/opencode-tools.log
 ```
 
-## Installation
-
-Add the plugin to your OpenCode configuration file at `~/.config/opencode/opencode.json`:
-
-```json
-{
-  "plugin": {
-    "froggy": {
-      "module": "opencode-froggy"
-    }
-  }
-}
-```
-
-Or from source (for development):
-
-```json
-{
-  "plugin": {
-    "froggy": {
-      "path": "/path/to/opencode-froggy"
-    }
-  }
-}
-```
-
-## Usage
-
-### Review uncommitted changes
-
-```
-/review-changes
-```
-
-Reviews all staged, unstaged, and untracked changes in the working tree.
-
-### Review a pull request
-
-```
-/review-pr feature-branch main
-```
-
-Fetches and reviews changes from `origin/feature-branch` into `origin/main`.
-
-### Simplify uncommitted changes
-
-```
-/simplify-changes
-```
-
-Analyzes and simplifies all uncommitted changes while preserving behavior.
-
-### Commit and push
-
-```
-/commit
-```
-
-Creates a branch (if on main/master), commits with an appropriate message, and pushes.
-
-### Run tests with coverage
-
-```
-/tests-coverage
-```
-
-Runs the test suite with coverage and suggests fixes for failures.
+---
 
 ## Configuration Options
 
-The plugin does not require additional configuration. Agents, commands, and skills are loaded automatically from the `agent/`, `command/`, and `skill/` directories within the plugin. Hooks are loaded from the standard OpenCode configuration directories (see Hooks section above).
+The plugin does not require additional configuration. Agents, commands, and skills are loaded automatically from the `agent/`, `command/`, and `skill/` directories within the plugin. Hooks are loaded from the standard OpenCode configuration directories (see [Hooks](#hooks) section).
 
 ### Supported Code File Extensions
 
-The `hasCodeChange` condition checks file extensions against the default set listed in the Hooks section. Hooks without any conditions still trigger on any modified file paths tracked via `write` or `edit` in the current session.
+The `hasCodeChange` condition checks file extensions against the default set listed in the [Conditions](#conditions) section. Hooks without any conditions still trigger on any modified file paths tracked via `write` or `edit` in the current session.
+
+---
 
 ## Development
 
@@ -508,17 +544,19 @@ npm install
 npm run build
 ```
 
-### Run tests
+### Run Tests
 
 ```bash
 npm test
 ```
 
-### Type checking
+### Type Checking
 
 ```bash
 npm run typecheck
 ```
+
+---
 
 ## License
 
