@@ -4,8 +4,7 @@
 
 opencode-froggy is an OpenCode plugin that adds agents, commands, skills, and a hook system.
 It can automatically simplify changes when the session becomes idle, if files were modified
-via `write` or `edit`. Resources are loaded automatically from `agent/`, `command/`, and `skill/`.
-Hooks are loaded from OpenCode configuration directories (global and project-level).
+via `write` or `edit`. Hooks are loaded from OpenCode configuration directories (global and project-level).
 
 ## Features
 
@@ -26,20 +25,6 @@ Hooks are loaded from OpenCode configuration directories (global and project-lev
 | `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
 | `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
-
-### Skills
-
-The plugin supports skills loaded from `skill/<name>/SKILL.md` within the plugin directory. No skills are included by default. The plugin exposes a `skill` tool that lists available skills and returns their instructions.
-
-To add your own skills, create a directory structure like:
-
-```
-skill/
-  my-skill/
-    SKILL.md
-```
-
-The `SKILL.md` file supports YAML frontmatter with `name` and `description` fields. The name defaults to the directory name if not specified.
 
 ### Hooks
 
@@ -120,9 +105,6 @@ Code extensions treated as "code" by default:
       - `name: review-pr`
       - `args: "main feature"`
   - If the command exists in config, the plugin reuses its `agent` and `model`.
-- **Skill**
-  - `skill: my-skill`
-  - The name must match a loaded skill. The plugin prompts the session to call the `skill` tool for that skill.
 - **Tool**
   - `tool:`
     - `name: bash`
