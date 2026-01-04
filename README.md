@@ -12,9 +12,11 @@ via `write` or `edit`. Hooks are loaded from OpenCode configuration directories 
 
 | Agent | Mode | Description |
 |-------|------|-------------|
+| `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
 | `code-reviewer` | subagent | Reviews code for quality, correctness, and security. Read-only with restricted git access. |
 | `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
+| `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 
 ### Commands
 
