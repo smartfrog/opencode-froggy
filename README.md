@@ -336,19 +336,19 @@ Add the plugin to your OpenCode configuration file at `~/.config/opencode/openco
 {
   "plugin": {
     "froggy": {
-      "path": "/path/to/opencode-froggy"
+      "module": "opencode-froggy"
     }
   }
 }
 ```
 
-Or if published to npm:
+Or from source (for development):
 
 ```json
 {
   "plugin": {
     "froggy": {
-      "module": "opencode-froggy"
+      "path": "/path/to/opencode-froggy"
     }
   }
 }
