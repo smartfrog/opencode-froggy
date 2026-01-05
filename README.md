@@ -12,6 +12,8 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [diff-summary](#diff-summary)
+  - [prompt-session](#prompt-session)
+  - [list-child-sessions](#list-child-sessions)
 - [Hooks](#hooks)
   - [Configuration Locations](#configuration-locations)
   - [Configuration File Format](#configuration-file-format)
@@ -55,6 +57,7 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
 | `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
+| `/send-to [agent] <message>` | Send a message to a child session (subagent) to continue the conversation | - |
 | `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
 
@@ -176,6 +179,73 @@ diffSummary({
 
 - When comparing branches, the tool fetches from the remote before generating the diff
 - Diffs include 5 lines of context and function context for better readability
+
+---
+
+### prompt-session
+
+Send a message to a child session (subagent) to continue the conversation. Useful for iterating with subagents without creating new sessions.
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `message` | `string` | Yes | - | The message to send to the child session |
+| `sessionId` | `string` | No | - | The child session ID to target. If omitted, targets the last child session. |
+
+#### Usage Examples
+
+```typescript
+// Send a message to the last child session
+promptSession({ message: "Please also add unit tests for the new function" })
+
+// Send a message to a specific child session
+promptSession({
+  message: "Can you clarify the error handling approach?",
+  sessionId: "abc123"
+})
+```
+
+#### Behavior
+
+- If `sessionId` is not provided, the tool automatically targets the most recently created child session
+- Returns the text response from the child session
+- Returns an error message if no child session exists for the current session
+
+---
+
+### list-child-sessions
+
+List all child sessions (subagents) of the current session. Useful for finding specific sessions to target with `prompt-session`.
+
+#### Parameters
+
+This tool takes no parameters.
+
+#### Usage Examples
+
+```typescript
+// List all child sessions
+listChildSessions()
+```
+
+#### Output
+
+Returns a formatted list of child sessions with:
+- Session ID
+- Session title
+- Created and updated timestamps
+
+Example output:
+```
+Child sessions (2):
+
+1. [abc123] Code Review Session
+   Created: 2024-01-15T10:30:00Z | Updated: 2024-01-15T10:35:00Z
+
+2. [def456] Architecture Discussion
+   Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
+```
 
 ---
 

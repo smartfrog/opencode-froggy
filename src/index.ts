@@ -20,6 +20,8 @@ import {
 import {
   gitingestTool,
   createDiffSummaryTool,
+  createPromptSessionTool,
+  createListChildSessionsTool,
 } from "./tools"
 
 export { parseFrontmatter, loadAgents, loadCommands } from "./loaders"
@@ -80,7 +82,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
   const modifiedCodeFiles = new Map<string, Set<string>>()
   const pendingToolArgs = new Map<string, Record<string, unknown>>()
-  let mainSessionID: string | undefined
 
   log("[init] Plugin loaded", { 
     agents: Object.keys(agents), 
@@ -101,9 +102,12 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     const conditions = hook.conditions ?? []
 
     for (const condition of conditions) {
-      if (condition === "isMainSession" && sessionID !== mainSessionID) {
-        log(`${prefix} condition not met, skipping`, { sessionID, condition })
-        return { blocked: false }
+      if (condition === "isMainSession") {
+        const sessionInfo = await ctx.client.session.get({ path: { id: sessionID } })
+        if (sessionInfo.data?.parentID) {
+          log(`${prefix} condition not met, skipping`, { sessionID, condition })
+          return { blocked: false }
+        }
       }
 
       if (condition === "hasCodeChange") {
@@ -260,6 +264,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     tool: {
       gitingest: gitingestTool,
       "diff-summary": createDiffSummaryTool(ctx.directory),
+      "prompt-session": createPromptSessionTool(ctx.client),
+      "list-child-sessions": createListChildSessionsTool(ctx.client),
     },
 
     "tool.execute.before": async (
@@ -316,7 +322,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
         if (!sessionID) return
 
         if (!info.parentID) {
-          mainSessionID = sessionID
           log("[event] session.created - main session", { sessionID })
         }
 
@@ -332,24 +337,15 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
         await triggerHooks("session.deleted", sessionID)
 
         modifiedCodeFiles.delete(sessionID)
-        if (sessionID === mainSessionID) {
-          mainSessionID = undefined
-        }
       }
 
       if (event.type === "session.idle") {
         const sessionID = props?.sessionID as string | undefined
-        log("[event] session.idle", { sessionID, mainSessionID })
-
         if (!sessionID) return
 
-        if (!mainSessionID) {
-          mainSessionID = sessionID
-          log("[event] session.idle - setting mainSessionID from idle event", { sessionID })
-        }
+        log("[event] session.idle", { sessionID })
 
-        const eventHooks = hooks.get("session.idle")
-        if (!eventHooks || eventHooks.length === 0) {
+        if (!hooks.has("session.idle")) {
           log("[event] session.idle - no hooks defined, skipping")
           return
         }
