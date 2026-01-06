@@ -1,11 +1,11 @@
-<div align="center">
-  <img src="images/logo.png" alt="opencode-froggy logo" width="200">
-</div>
+<p align="center">
+  <img src="images/logo.png" alt="opencode-froggy logo" width="300">
+</p>
 
-<div align="center">
-  ![CI](https://github.com/smartfrog/opencode-froggy/workflows/CI/badge.svg)
-  ![npm version](https://badge.fury.io/js/opencode-froggy.svg)
-</div>
+<p align="center">
+  <a href="https://github.com/smartfrog/opencode-froggy/actions"><img src="https://github.com/smartfrog/opencode-froggy/workflows/CI/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
+</p>
 
 Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code reviewer, architect, partner, etc.), dedicated commands such as simplify-code and review-pr, and tools such as gitingest.
 
