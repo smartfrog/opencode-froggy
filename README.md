@@ -1,4 +1,11 @@
-# opencode-froggy
+<div align="center">
+  <img src="images/logo.png" alt="opencode-froggy logo" width="200">
+</div>
+
+<div align="center">
+  ![CI](https://github.com/smartfrog/opencode-froggy/workflows/CI/badge.svg)
+  ![npm version](https://badge.fury.io/js/opencode-froggy.svg)
+</div>
 
 Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code reviewer, architect, partner, etc.), dedicated commands such as simplify-code and review-pr, and tools such as gitingest.
 
