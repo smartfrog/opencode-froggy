@@ -3,7 +3,7 @@
  */
 
 import { tool, type ToolContext } from "@opencode-ai/plugin"
-import { EtherscanClient, EtherscanClientError } from "./etherscan-client"
+import { EtherscanClient, EtherscanClientError, validateAddress } from "./etherscan-client"
 import { formatTokenTransferList } from "./formatters"
 import { DEFAULT_TRANSACTION_LIMIT, CHAIN_ID_DESCRIPTION } from "./types"
 
@@ -18,6 +18,7 @@ export async function getTokenTransfers(
   limit: number = DEFAULT_TRANSACTION_LIMIT,
   chainId?: string
 ): Promise<string> {
+  validateAddress(address)
   const client = new EtherscanClient(undefined, chainId)
   
   const transfers = await client.getTokenTransfers(address, limit)

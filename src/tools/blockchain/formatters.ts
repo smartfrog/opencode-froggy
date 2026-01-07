@@ -46,7 +46,7 @@ export function formatTransactionReceipt(
 export function formatTransaction(tx: EthTransaction, address: string): string {
   const isOutgoing = tx.from.toLowerCase() === address.toLowerCase()
   const direction = isOutgoing ? "OUT" : "IN"
-  const counterparty = isOutgoing ? tx.to : tx.from
+  const counterparty = isOutgoing ? (tx.to ?? "Contract Creation") : tx.from
   const status = tx.isError === "0" ? "OK" : "FAIL"
   const value = weiToEth(tx.value)
   const date = formatTimestamp(tx.timeStamp)
@@ -70,7 +70,7 @@ export function formatTransactionList(
   }
 
   const addressLower = address.toLowerCase()
-  const inCount = transactions.filter(tx => tx.to.toLowerCase() === addressLower).length
+  const inCount = transactions.filter(tx => tx.to?.toLowerCase() === addressLower).length
   const outCount = transactions.length - inCount
 
   const lines = [
@@ -120,7 +120,7 @@ function formatTokenValue(value: string, decimals: string): string {
 export function formatTokenTransfer(transfer: EthTokenTransfer, address: string): string {
   const isOutgoing = transfer.from.toLowerCase() === address.toLowerCase()
   const direction = isOutgoing ? "OUT" : "IN"
-  const counterparty = isOutgoing ? transfer.to : transfer.from
+  const counterparty = isOutgoing ? (transfer.to ?? "Unknown") : transfer.from
   const value = formatTokenValue(transfer.value, transfer.tokenDecimal)
   const date = formatTimestamp(transfer.timeStamp)
 

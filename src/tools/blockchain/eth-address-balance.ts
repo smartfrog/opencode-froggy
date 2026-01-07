@@ -3,7 +3,7 @@
  */
 
 import { tool, type ToolContext } from "@opencode-ai/plugin"
-import { EtherscanClient, EtherscanClientError } from "./etherscan-client"
+import { EtherscanClient, EtherscanClientError, validateAddress } from "./etherscan-client"
 import { formatBalance } from "./formatters"
 import { CHAIN_ID_DESCRIPTION } from "./types"
 
@@ -16,6 +16,7 @@ export async function getAddressBalance(
   address: string,
   chainId?: string
 ): Promise<string> {
+  validateAddress(address)
   const client = new EtherscanClient(undefined, chainId)
   
   const balanceWei = await client.getBalance(address)

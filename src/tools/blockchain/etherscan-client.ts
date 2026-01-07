@@ -198,3 +198,15 @@ export function shortenAddress(address: string): string {
   if (address.length < 12) return address
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
+
+export function validateAddress(address: string): void {
+  if (!address?.startsWith("0x") || address.length !== 42) {
+    throw new EtherscanClientError("Invalid Ethereum address format")
+  }
+}
+
+export function validateTxHash(hash: string): void {
+  if (!hash?.startsWith("0x") || hash.length !== 66) {
+    throw new EtherscanClientError("Invalid transaction hash format")
+  }
+}

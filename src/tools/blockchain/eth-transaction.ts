@@ -3,7 +3,7 @@
  */
 
 import { tool, type ToolContext } from "@opencode-ai/plugin"
-import { EtherscanClient, EtherscanClientError } from "./etherscan-client"
+import { EtherscanClient, EtherscanClientError, validateTxHash } from "./etherscan-client"
 import { formatTransactionReceipt } from "./formatters"
 import { CHAIN_ID_DESCRIPTION } from "./types"
 
@@ -16,6 +16,7 @@ export async function getTransactionDetails(
   hash: string,
   chainId?: string
 ): Promise<string> {
+  validateTxHash(hash)
   const client = new EtherscanClient(undefined, chainId)
   
   const receipt = await client.getTransactionReceipt(hash)
