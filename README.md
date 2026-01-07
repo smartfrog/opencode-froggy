@@ -22,6 +22,7 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
   - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
   - [Blockchain](#blockchain)
+    - [Configuration](#configuration)
     - [eth-transaction](#eth-transaction)
     - [eth-address-balance](#eth-address-balance)
     - [eth-address-txs](#eth-address-txs)
@@ -278,6 +279,34 @@ All blockchain tools support multiple chains via the `chainId` parameter:
 | `43114` | Avalanche |
 | `250` | Fantom |
 | `324` | zkSync |
+
+#### Configuration
+
+The blockchain tools use Etherscan-compatible APIs. An API key is optional but recommended.
+
+**Environment Variable:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ETHERSCAN_API_KEY` | No | API key for Etherscan and compatible explorers |
+
+**Without an API key:** Requests are rate-limited (typically 1 request per 5 seconds).
+
+**With an API key:** Higher rate limits and more reliable access.
+
+**Getting an API key:**
+
+1. Create a free account at [etherscan.io](https://etherscan.io/register)
+2. Navigate to API Keys in your account settings
+3. Generate a new API key
+
+**Setting the environment variable:**
+
+```bash
+export ETHERSCAN_API_KEY="your-api-key-here"
+```
+
+Add this to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence.
 
 #### eth-transaction
 
