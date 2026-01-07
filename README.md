@@ -21,6 +21,11 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
   - [diff-summary](#diff-summary)
   - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
+  - [Blockchain](#blockchain)
+    - [eth-transaction](#eth-transaction)
+    - [eth-address-balance](#eth-address-balance)
+    - [eth-address-txs](#eth-address-txs)
+    - [eth-token-transfers](#eth-token-transfers)
 - [Hooks](#hooks)
   - [Configuration Locations](#configuration-locations)
   - [Configuration File Format](#configuration-file-format)
@@ -252,6 +257,126 @@ Child sessions (2):
 
 2. [def456] Architecture Discussion
    Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
+```
+
+---
+
+### Blockchain
+
+Tools for querying Ethereum and EVM-compatible blockchains via Etherscan APIs.
+
+All blockchain tools support multiple chains via the `chainId` parameter:
+
+| Chain ID | Network |
+|----------|---------|
+| `1` | Ethereum (default) |
+| `137` | Polygon |
+| `56` | BSC |
+| `42161` | Arbitrum |
+| `10` | Optimism |
+| `8453` | Base |
+| `43114` | Avalanche |
+| `250` | Fantom |
+| `324` | zkSync |
+
+#### eth-transaction
+
+Get Ethereum transaction details by transaction hash. Returns status, block, addresses, gas costs, and log count.
+
+##### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `hash` | `string` | Yes | - | Transaction hash (0x...) |
+| `chainId` | `string` | No | `"1"` | Chain ID (see table above) |
+
+##### Usage Examples
+
+```typescript
+// Get transaction on Ethereum mainnet
+ethTransaction({ hash: "0x123abc..." })
+
+// Get transaction on Polygon
+ethTransaction({ 
+  hash: "0x123abc...",
+  chainId: "137"
+})
+```
+
+#### eth-address-balance
+
+Get the ETH balance of an Ethereum address. Returns balance in both ETH and Wei.
+
+##### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `address` | `string` | Yes | - | Ethereum address (0x...) |
+| `chainId` | `string` | No | `"1"` | Chain ID (see table above) |
+
+##### Usage Examples
+
+```typescript
+// Get balance on Ethereum mainnet
+ethAddressBalance({ address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" })
+
+// Get balance on Arbitrum
+ethAddressBalance({ 
+  address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  chainId: "42161"
+})
+```
+
+#### eth-address-txs
+
+List Ethereum transactions for an address. Shows incoming and outgoing transactions with values, timestamps, and status.
+
+##### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `address` | `string` | Yes | - | Ethereum address (0x...) |
+| `limit` | `number` | No | `20` | Maximum number of transactions to return |
+| `chainId` | `string` | No | `"1"` | Chain ID (see table above) |
+
+##### Usage Examples
+
+```typescript
+// List recent transactions on Ethereum mainnet
+ethAddressTxs({ address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" })
+
+// List last 50 transactions on Base
+ethAddressTxs({ 
+  address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  limit: 50,
+  chainId: "8453"
+})
+```
+
+#### eth-token-transfers
+
+List ERC-20 token transfers for an Ethereum address. Shows token names, symbols, values, and transaction details.
+
+##### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `address` | `string` | Yes | - | Ethereum address (0x...) |
+| `limit` | `number` | No | `20` | Maximum number of transfers to return |
+| `chainId` | `string` | No | `"1"` | Chain ID (see table above) |
+
+##### Usage Examples
+
+```typescript
+// List recent token transfers on Ethereum mainnet
+ethTokenTransfers({ address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" })
+
+// List last 100 token transfers on Optimism
+ethTokenTransfers({ 
+  address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  limit: 100,
+  chainId: "10"
+})
 ```
 
 ---
