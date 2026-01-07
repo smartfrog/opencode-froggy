@@ -22,6 +22,10 @@ import {
   createDiffSummaryTool,
   createPromptSessionTool,
   createListChildSessionsTool,
+  ethTransactionTool,
+  ethAddressTxsTool,
+  ethAddressBalanceTool,
+  ethTokenTransfersTool,
 } from "./tools"
 
 export { parseFrontmatter, loadAgents, loadCommands } from "./loaders"
@@ -87,7 +91,14 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     agents: Object.keys(agents), 
     commands: Object.keys(commands),
     hooks: Array.from(hooks.keys()),
-    tools: ["gitingest", "diff-summary"],
+    tools: [
+      "gitingest",
+      "diff-summary",
+      "eth-transaction",
+      "eth-address-txs",
+      "eth-address-balance",
+      "eth-token-transfers",
+    ],
   })
 
   async function executeHookActions(
@@ -266,6 +277,10 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       "diff-summary": createDiffSummaryTool(ctx.directory),
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
+      "eth-transaction": ethTransactionTool,
+      "eth-address-txs": ethAddressTxsTool,
+      "eth-address-balance": ethAddressBalanceTool,
+      "eth-token-transfers": ethTokenTransfersTool,
     },
 
     "tool.execute.before": async (
