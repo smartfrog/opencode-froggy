@@ -306,8 +306,6 @@ The blockchain tools use Etherscan-compatible APIs. An API key is optional but r
 export ETHERSCAN_API_KEY="your-api-key-here"
 ```
 
-Add this to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence.
-
 #### eth-transaction
 
 Get Ethereum transaction details by transaction hash. Returns status, block, addresses, gas costs, and log count.
