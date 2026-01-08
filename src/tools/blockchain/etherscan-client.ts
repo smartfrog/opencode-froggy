@@ -7,6 +7,7 @@ import {
   type EthTransaction,
   type EthTokenTransfer,
   type EthInternalTransaction,
+  type ContractInfo,
   DEFAULT_TRANSACTION_LIMIT,
   DEFAULT_CHAIN_ID,
 } from "./types"
@@ -117,6 +118,20 @@ export class EtherscanClient {
     return result
   }
 
+  async getInternalTransactionsByHash(txhash: string): Promise<EthInternalTransaction[]> {
+    const result = await this.request<EthInternalTransaction[] | string>({
+      module: "account",
+      action: "txlistinternal",
+      txhash,
+    })
+
+    if (typeof result === "string") {
+      return []
+    }
+
+    return result
+  }
+
   async getTokenTransfers(
     address: string,
     limit: number = DEFAULT_TRANSACTION_LIMIT
@@ -130,6 +145,20 @@ export class EtherscanClient {
       page: "1",
       offset: String(limit),
       sort: "desc",
+    })
+
+    if (typeof result === "string") {
+      return []
+    }
+
+    return result
+  }
+
+  async getTokenTransfersByHash(txhash: string): Promise<EthTokenTransfer[]> {
+    const result = await this.request<EthTokenTransfer[] | string>({
+      module: "account",
+      action: "tokentx",
+      txhash,
     })
 
     if (typeof result === "string") {
@@ -171,6 +200,25 @@ export class EtherscanClient {
     })
 
     return result
+  }
+
+  async getContractInfo(address: string): Promise<ContractInfo | null> {
+    const result = await this.request<ContractInfo[] | string>({
+      module: "contract",
+      action: "getsourcecode",
+      address,
+    })
+
+    if (typeof result === "string" || result.length === 0) {
+      return null
+    }
+
+    const info = result[0]
+    if (!info.ContractName || info.ContractName === "") {
+      return null
+    }
+
+    return info
   }
 }
 

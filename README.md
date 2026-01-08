@@ -308,7 +308,7 @@ export ETHERSCAN_API_KEY="your-api-key-here"
 
 #### eth-transaction
 
-Get Ethereum transaction details by transaction hash. Returns status, block, addresses, gas costs, and log count.
+Get Ethereum transaction details by transaction hash. Returns status, block, addresses, gas costs in JSON format. Use optional parameters to include internal transactions, token transfers, and decoded event logs.
 
 ##### Parameters
 
@@ -316,11 +316,14 @@ Get Ethereum transaction details by transaction hash. Returns status, block, add
 |-----------|------|----------|---------|-------------|
 | `hash` | `string` | Yes | - | Transaction hash (0x...) |
 | `chainId` | `string` | No | `"1"` | Chain ID (see table above) |
+| `includeInternalTxs` | `boolean` | No | `false` | Include internal transactions (ETH transfers between contracts) |
+| `includeTokenTransfers` | `boolean` | No | `false` | Include ERC-20 token transfers |
+| `decodeLogs` | `boolean` | No | `false` | Decode event logs (Transfer, Approval, Deposit, Withdrawal) |
 
 ##### Usage Examples
 
 ```typescript
-// Get transaction on Ethereum mainnet
+// Get basic transaction details on Ethereum mainnet
 ethTransaction({ hash: "0x123abc..." })
 
 // Get transaction on Polygon
@@ -328,7 +331,89 @@ ethTransaction({
   hash: "0x123abc...",
   chainId: "137"
 })
+
+// Get transaction with internal transactions and token transfers
+ethTransaction({ 
+  hash: "0x123abc...",
+  includeInternalTxs: true,
+  includeTokenTransfers: true
+})
+
+// Get full transaction details with decoded event logs
+ethTransaction({ 
+  hash: "0x123abc...",
+  includeInternalTxs: true,
+  includeTokenTransfers: true,
+  decodeLogs: true
+})
 ```
+
+##### Output Structure
+
+The tool returns JSON with labeled addresses (contract names resolved via Etherscan):
+
+```json
+{
+  "hash": "0x123...",
+  "status": "success",
+  "block": 12345678,
+  "from": { "address": "0xabc...", "label": "Uniswap V3: Router" },
+  "to": { "address": "0xdef...", "label": "WETH" },
+  "value": "0",
+  "gas": { "used": 150000, "price": "20000000000", "cost": "0.003" }
+}
+```
+
+With `includeInternalTxs: true`:
+```json
+{
+  "internalTransactions": [
+    {
+      "from": { "address": "0x...", "label": "Uniswap V3: Router" },
+      "to": { "address": "0x...", "label": null },
+      "value": "1.5",
+      "type": "call"
+    }
+  ]
+}
+```
+
+With `includeTokenTransfers: true`:
+```json
+{
+  "tokenTransfers": [
+    {
+      "token": { "address": "0x...", "name": "Wrapped Ether", "symbol": "WETH", "decimals": 18 },
+      "from": { "address": "0x...", "label": null },
+      "to": { "address": "0x...", "label": "Uniswap V3: Router" },
+      "value": "1.5"
+    }
+  ]
+}
+```
+
+With `decodeLogs: true`:
+```json
+{
+  "decodedEvents": [
+    {
+      "name": "Transfer",
+      "address": { "address": "0x...", "label": "WETH" },
+      "params": { "from": "0x...", "to": "0x...", "value": "1500000000000000000" }
+    }
+  ],
+  "undecodedEventsCount": 2
+}
+```
+
+##### Supported Decoded Events
+
+| Event | Description |
+|-------|-------------|
+| `Transfer` | ERC-20 token transfer |
+| `Approval` | ERC-20 approval for spending |
+| `Deposit` | WETH deposit (ETH → WETH) |
+| `Withdrawal` | WETH withdrawal (WETH → ETH) |
 
 #### eth-address-balance
 

@@ -92,6 +92,71 @@ export interface TransactionLog {
   removed: boolean
 }
 
+export interface ContractInfo {
+  SourceCode: string
+  ABI: string
+  ContractName: string
+  CompilerVersion: string
+  OptimizationUsed: string
+  Runs: string
+  ConstructorArguments: string
+  EVMVersion: string
+  Library: string
+  LicenseType: string
+  Proxy: string
+  Implementation: string
+  SwarmSource: string
+}
+
+export interface LabeledAddress {
+  address: string
+  label: string | null
+}
+
+export interface DecodedEvent {
+  name: string
+  address: LabeledAddress
+  params: Record<string, string>
+}
+
+export interface TransactionDetails {
+  hash: string
+  status: "success" | "failed"
+  block: number
+  timestamp: string | null
+  from: LabeledAddress
+  to: LabeledAddress | null
+  value: string
+  gas: {
+    used: number
+    price: string
+    cost: string
+  }
+  internalTransactions?: InternalTransactionDetails[]
+  tokenTransfers?: TokenTransferDetails[]
+  decodedEvents?: DecodedEvent[]
+  undecodedEventsCount?: number
+}
+
+export interface InternalTransactionDetails {
+  from: LabeledAddress
+  to: LabeledAddress
+  value: string
+  type: string
+}
+
+export interface TokenTransferDetails {
+  token: {
+    address: string
+    name: string
+    symbol: string
+    decimals: number
+  }
+  from: LabeledAddress
+  to: LabeledAddress
+  value: string
+}
+
 export const DEFAULT_TRANSACTION_LIMIT = 20
 
 export const DEFAULT_CHAIN_ID = "1"
