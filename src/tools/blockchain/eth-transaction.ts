@@ -4,15 +4,76 @@
 
 import { tool, type ToolContext } from "@opencode-ai/plugin"
 import { EtherscanClient, EtherscanClientError, validateTxHash, weiToEth } from "./etherscan-client"
+import { getTransactionReceipt, getBlock, getTokenMetadata } from "./viem-client"
 import {
   CHAIN_ID_DESCRIPTION,
+  DEFAULT_CHAIN_ID,
   type TransactionDetails,
   type LabeledAddress,
   type InternalTransactionDetails,
   type TokenTransferDetails,
   type TransactionLog,
+  type TokenMetadata,
 } from "./types"
 import { decodeEvents, type AddressResolver } from "./event-decoder"
+
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+interface RawTokenTransfer {
+  contractAddress: string
+  from: string
+  to: string
+  value: string
+}
+
+function decodeAddress(topic: string): string {
+  if (!topic || topic.length < 66) return "0x0000000000000000000000000000000000000000"
+  return "0x" + topic.slice(26).toLowerCase()
+}
+
+function decodeUint256(data: string): string {
+  if (!data) return "0"
+  const hex = data.startsWith("0x") ? data.slice(2) : data
+  if (hex === "" || !/^[0-9a-fA-F]+$/.test(hex)) return "0"
+  return BigInt("0x" + hex).toString()
+}
+
+function extractTransfersFromLogs(logs: TransactionLog[]): RawTokenTransfer[] {
+  return logs
+    .filter((log) => log.topics[0] === TRANSFER_TOPIC && log.topics.length === 3)
+    .map((log) => ({
+      contractAddress: log.address.toLowerCase(),
+      from: decodeAddress(log.topics[1]),
+      to: decodeAddress(log.topics[2]),
+      value: decodeUint256(log.data),
+    }))
+}
+
+interface ViemLog {
+  address: string
+  topics: readonly string[]
+  data: string
+  blockNumber?: bigint
+  transactionHash?: string
+  transactionIndex?: number
+  blockHash?: string
+  logIndex?: number
+  removed?: boolean
+}
+
+function mapViemLogsToTransactionLogs(logs: ViemLog[]): TransactionLog[] {
+  return logs.map((log) => ({
+    address: log.address,
+    topics: log.topics as string[],
+    data: log.data,
+    blockNumber: log.blockNumber?.toString() ?? "",
+    transactionHash: log.transactionHash ?? "",
+    transactionIndex: log.transactionIndex?.toString() ?? "",
+    blockHash: log.blockHash ?? "",
+    logIndex: log.logIndex?.toString() ?? "",
+    removed: log.removed ?? false,
+  }))
+}
 
 export interface EthTransactionArgs {
   hash: string
@@ -39,31 +100,36 @@ function formatTokenValue(value: string, decimals: number): string {
 }
 
 class ContractLabelResolver implements AddressResolver {
-  private client: EtherscanClient
-  private cache: Map<string, LabeledAddress> = new Map()
+  private addressCache: Map<string, LabeledAddress> = new Map()
+  private tokenCache: Map<string, TokenMetadata> = new Map()
+  private chainId: string
 
-  constructor(client: EtherscanClient) {
-    this.client = client
+  constructor(chainId: string) {
+    this.chainId = chainId
   }
 
   async resolve(address: string): Promise<LabeledAddress> {
     const lowerAddress = address.toLowerCase()
-    const cached = this.cache.get(lowerAddress)
+    const cached = this.addressCache.get(lowerAddress)
     if (cached) {
       return cached
     }
 
-    const info = await this.client.getContractInfo(address).catch(() => null)
-    const result: LabeledAddress = { address, label: info?.ContractName ?? null }
-    this.cache.set(lowerAddress, result)
+    const result: LabeledAddress = { address, label: null }
+    this.addressCache.set(lowerAddress, result)
     return result
   }
 
-  addFromTokenTransfer(address: string, tokenName: string): void {
-    const lowerAddress = address.toLowerCase()
-    if (!this.cache.has(lowerAddress)) {
-      this.cache.set(lowerAddress, { address, label: tokenName })
+  async resolveToken(contractAddress: string): Promise<TokenMetadata> {
+    const lowerAddress = contractAddress.toLowerCase()
+    const cached = this.tokenCache.get(lowerAddress)
+    if (cached) {
+      return cached
     }
+
+    const metadata = await getTokenMetadata(contractAddress, this.chainId)
+    this.tokenCache.set(lowerAddress, metadata)
+    return metadata
   }
 }
 
@@ -77,34 +143,35 @@ export async function getTransactionDetails(
   } = {}
 ): Promise<TransactionDetails> {
   validateTxHash(hash)
-  const client = new EtherscanClient(undefined, chainId)
-  const resolver = new ContractLabelResolver(client)
+  const resolvedChainId = chainId ?? DEFAULT_CHAIN_ID
+  const resolver = new ContractLabelResolver(resolvedChainId)
 
-  const receipt = await client.getTransactionReceipt(hash)
+  const receipt = await getTransactionReceipt(hash, resolvedChainId)
 
   if (!receipt) {
     throw new EtherscanClientError(`Transaction not found: ${hash}`)
   }
 
-  const status = receipt.status === "0x1" ? "success" : "failed"
-  const gasUsed = receipt.gasUsed ? parseInt(String(receipt.gasUsed), 16) : 0
-  const effectiveGasPrice = receipt.effectiveGasPrice
-    ? parseInt(String(receipt.effectiveGasPrice), 16).toString()
-    : "0"
-  const gasCostWei =
-    receipt.gasUsed && receipt.effectiveGasPrice
-      ? (BigInt(String(receipt.gasUsed)) * BigInt(String(receipt.effectiveGasPrice))).toString()
-      : "0"
-  const block = receipt.blockNumber ? parseInt(String(receipt.blockNumber), 16) : 0
+  const status = receipt.status === "success" ? "success" : "failed"
+  const gasUsed = Number(receipt.gasUsed)
+  const effectiveGasPrice = receipt.effectiveGasPrice?.toString() ?? "0"
+  const gasCostWei = (receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)).toString()
+  const blockNumber = Number(receipt.blockNumber)
 
-  const fromAddress = await resolver.resolve(String(receipt.from))
-  const toAddress = receipt.to ? await resolver.resolve(String(receipt.to)) : null
+  let timestamp: string | null = null
+  const block = await getBlock(receipt.blockNumber, resolvedChainId)
+  if (block?.timestamp) {
+    timestamp = new Date(Number(block.timestamp) * 1000).toISOString()
+  }
+
+  const fromAddress = await resolver.resolve(receipt.from)
+  const toAddress = receipt.to ? await resolver.resolve(receipt.to) : null
 
   const result: TransactionDetails = {
     hash,
     status,
-    block,
-    timestamp: null,
+    block: blockNumber,
+    timestamp,
     from: fromAddress,
     to: toAddress,
     value: "0",
@@ -116,6 +183,7 @@ export async function getTransactionDetails(
   }
 
   if (options.includeInternalTxs) {
+    const client = new EtherscanClient(undefined, resolvedChainId)
     const internalTxs = await client.getInternalTransactionsByHash(hash)
     const internalDetails: InternalTransactionDetails[] = []
 
@@ -133,35 +201,37 @@ export async function getTransactionDetails(
     result.internalTransactions = internalDetails
   }
 
-  if (options.includeTokenTransfers) {
-    const tokenTxs = await client.getTokenTransfersByHash(hash)
+  const mappedLogs = Array.isArray(receipt.logs)
+    ? mapViemLogsToTransactionLogs(receipt.logs as ViemLog[])
+    : []
+
+  if (options.includeTokenTransfers && mappedLogs.length > 0) {
+    const rawTransfers = extractTransfersFromLogs(mappedLogs)
     const tokenDetails: TokenTransferDetails[] = []
 
-    for (const tx of tokenTxs) {
-      resolver.addFromTokenTransfer(tx.contractAddress, tx.tokenName)
-
-      const from = await resolver.resolve(tx.from)
-      const to = await resolver.resolve(tx.to)
-      const decimals = parseInt(tx.tokenDecimal, 10) || 18
+    for (const transfer of rawTransfers) {
+      const from = await resolver.resolve(transfer.from)
+      const to = await resolver.resolve(transfer.to)
+      const tokenMetadata = await resolver.resolveToken(transfer.contractAddress)
 
       tokenDetails.push({
         token: {
-          address: tx.contractAddress,
-          name: tx.tokenName,
-          symbol: tx.tokenSymbol,
-          decimals,
+          address: transfer.contractAddress,
+          name: tokenMetadata.name,
+          symbol: tokenMetadata.symbol,
+          decimals: tokenMetadata.decimals,
         },
         from,
         to,
-        value: formatTokenValue(tx.value, decimals),
+        value: formatTokenValue(transfer.value, tokenMetadata.decimals),
       })
     }
 
     result.tokenTransfers = tokenDetails
   }
 
-  if (options.decodeLogs && Array.isArray(receipt.logs)) {
-    const { decoded, undecodedCount } = await decodeEvents(receipt.logs as TransactionLog[], resolver)
+  if (options.decodeLogs && mappedLogs.length > 0) {
+    const { decoded, undecodedCount } = await decodeEvents(mappedLogs, resolver)
     result.decodedEvents = decoded
     result.undecodedEventsCount = undecodedCount
   }

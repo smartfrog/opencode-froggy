@@ -38,7 +38,8 @@
     "url": "https://github.com/smartfrog/opencode-froggy"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "viem": "^2.44.1"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "latest",

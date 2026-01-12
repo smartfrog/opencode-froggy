@@ -113,6 +113,12 @@ export interface LabeledAddress {
   label: string | null
 }
 
+export interface TokenMetadata {
+  name: string
+  symbol: string
+  decimals: number
+}
+
 export interface DecodedEvent {
   name: string
   address: LabeledAddress

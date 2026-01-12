@@ -154,20 +154,6 @@ export class EtherscanClient {
     return result
   }
 
-  async getTokenTransfersByHash(txhash: string): Promise<EthTokenTransfer[]> {
-    const result = await this.request<EthTokenTransfer[] | string>({
-      module: "account",
-      action: "tokentx",
-      txhash,
-    })
-
-    if (typeof result === "string") {
-      return []
-    }
-
-    return result
-  }
-
   async getTransactionByHash(hash: string): Promise<EthTransaction | null> {
     const result = await this.request<EthTransaction[] | string>({
       module: "account",
@@ -190,16 +176,6 @@ export class EtherscanClient {
     }
 
     return result[0]
-  }
-
-  async getTransactionReceipt(hash: string): Promise<Record<string, unknown> | null> {
-    const result = await this.request<Record<string, unknown> | null>({
-      module: "proxy",
-      action: "eth_getTransactionReceipt",
-      txhash: hash,
-    })
-
-    return result
   }
 
   async getContractInfo(address: string): Promise<ContractInfo | null> {
