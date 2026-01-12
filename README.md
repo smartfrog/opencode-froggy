@@ -18,7 +18,6 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
 - [Agents](#agents)
 - [Tools](#tools)
   - [gitingest](#gitingest)
-  - [diff-summary](#diff-summary)
   - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
   - [Blockchain](#blockchain)
@@ -67,6 +66,7 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | Command | Description | Agent |
 |---------|-------------|-------|
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
+| `/diff-summary` | Show working tree changes (staged, unstaged, untracked) | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
 | `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
@@ -136,50 +136,6 @@ gitingest({
 - Content is truncated to 300k characters (server-side limit from gitingest.com)
 - For large repositories, use pattern filtering to focus on relevant files
 - The `maxFileSize` parameter controls individual file size, not total output size
-
----
-
-### diff-summary
-
-**Command** that displays a structured summary of git working tree changes (staged, unstaged, and untracked files). Injects git diff output directly into the prompt using bash commands.
-
-#### Usage
-
-```bash
-/diff-summary
-```
-
-#### What it shows
-
-- Git status (porcelain format)
-- Staged changes (stats and full diff)
-- Unstaged changes (stats and full diff)
-- Untracked files content (first 50 lines of each file)
-
-#### Implementation
-
-This command uses OpenCode's `!`\`...\`` syntax to inject bash command output directly into the prompt, avoiding the 2000-line truncation limit that affects tools.
-
-See `command/diff-summary.md` for the full implementation.
-
-#### Output Structure
-
-**For branch comparisons:**
-- Stats Overview: Summary of changes (insertions, deletions)
-- Commits to Review: List of commits in the range
-- Files Changed: List of modified files
-- Full Diff: Complete diff with context
-
-**For working tree changes:**
-- Status Overview: Git status output
-- Staged Changes: Stats, files, and diff for staged changes
-- Unstaged Changes: Stats, files, and diff for unstaged changes
-- Untracked Files: List and diffs for new untracked files
-
-#### Notes
-
-- When comparing branches, the tool fetches from the remote before generating the diff
-- Diffs include 5 lines of context and function context for better readability
 
 ---
 
