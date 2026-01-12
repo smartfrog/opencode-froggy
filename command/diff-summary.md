@@ -1,9 +1,8 @@
 ---
-description: Review uncommitted changes (staged + unstaged, incl. untracked diffs)
-agent: code-reviewer
+description: Show working tree changes (staged, unstaged, untracked)
 ---
 
-# Review: Working Tree → HEAD
+# Diff Summary: Working Tree → HEAD
 
 ## Status
 !`git status --porcelain`
@@ -18,5 +17,3 @@ agent: code-reviewer
 
 ## Untracked Files Content
 !`bash -c 'git ls-files --others --exclude-standard | while read f; do [ -f "$f" ] && echo "=== $f ===" && sed -n "1,50p" "$f" && sed -n "51p" "$f" | grep -q . && echo "... (truncated)"; done'`
-
-Review the above changes for quality, correctness, and adherence to project guidelines.

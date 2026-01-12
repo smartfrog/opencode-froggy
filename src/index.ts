@@ -19,7 +19,6 @@ import {
 } from "./bash-executor"
 import {
   gitingestTool,
-  createDiffSummaryTool,
   createPromptSessionTool,
   createListChildSessionsTool,
   ethTransactionTool,
@@ -93,7 +92,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     hooks: Array.from(hooks.keys()),
     tools: [
       "gitingest",
-      "diff-summary",
       "eth-transaction",
       "eth-address-txs",
       "eth-address-balance",
@@ -274,7 +272,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
     tool: {
       gitingest: gitingestTool,
-      "diff-summary": createDiffSummaryTool(ctx.directory),
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
       "eth-transaction": ethTransactionTool,

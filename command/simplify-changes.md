@@ -5,4 +5,4 @@ agent: code-simplifier
 
 # Simplify: Working Tree → HEAD
 
-Use the `diff-summary` tool (without parameters) to get the working tree changes, then simplify them.
+Run `/diff-summary` to get the working tree changes, then simplify them.

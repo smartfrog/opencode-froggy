@@ -141,38 +141,26 @@ gitingest({
 
 ### diff-summary
 
-Generate a structured summary of git diffs. Use for reviewing branch comparisons or working tree changes. Returns stats, commits, files changed, and full diff in a structured markdown format.
+**Command** that displays a structured summary of git working tree changes (staged, unstaged, and untracked files). Injects git diff output directly into the prompt using bash commands.
 
-#### Parameters
+#### Usage
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `source` | `string` | No | - | Source branch to compare (e.g., `feature-branch`). If omitted, analyzes working tree changes. |
-| `target` | `string` | No | `main` | Target branch to compare against |
-| `remote` | `string` | No | `origin` | Git remote name |
-
-#### Usage Examples
-
-```typescript
-// Analyze working tree changes (staged, unstaged, and untracked files)
-diffSummary({})
-
-// Compare feature branch against main
-diffSummary({ source: "feature-branch" })
-
-// Compare feature branch against develop
-diffSummary({ 
-  source: "feature-branch",
-  target: "develop"
-})
-
-// Compare branches on a different remote
-diffSummary({
-  source: "feature-branch",
-  target: "main",
-  remote: "upstream"
-})
+```bash
+/diff-summary
 ```
+
+#### What it shows
+
+- Git status (porcelain format)
+- Staged changes (stats and full diff)
+- Unstaged changes (stats and full diff)
+- Untracked files content (first 50 lines of each file)
+
+#### Implementation
+
+This command uses OpenCode's `!`\`...\`` syntax to inject bash command output directly into the prompt, avoiding the 2000-line truncation limit that affects tools.
+
+See `command/diff-summary.md` for the full implementation.
 
 #### Output Structure
 
