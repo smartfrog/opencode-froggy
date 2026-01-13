@@ -66,13 +66,35 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | Command | Description | Agent |
 |---------|-------------|-------|
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
-| `/diff-summary` | Show working tree changes (staged, unstaged, untracked) | - |
+| `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
 | `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
 | `/send-to [agent] <message>` | Send a message to a child session (subagent) to continue the conversation | - |
 | `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
+
+### /diff-summary
+
+The `/diff-summary` command supports two modes:
+
+**Working tree mode** (no parameters):
+```bash
+/diff-summary
+```
+Shows staged changes, unstaged changes, and untracked file contents.
+
+**Branch comparison mode** (with parameters):
+```bash
+# Compare a branch with the current branch (HEAD)
+/diff-summary feature-branch
+
+# Compare two specific branches
+/diff-summary feature-branch main
+```
+Shows stats overview, commits, files changed, and full diff between branches.
+
+> **Note:** The `/review-pr` command uses `/diff-summary` internally to generate the diff for code review.
 
 ---
 
