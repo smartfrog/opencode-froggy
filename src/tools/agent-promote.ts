@@ -1,17 +1,25 @@
 import { tool, type ToolContext } from "@opencode-ai/plugin"
 import type { createOpencodeClient } from "@opencode-ai/sdk"
 import { log } from "../logger"
+import {
+  type AgentMode,
+  VALID_GRADES,
+  getPromotedAgents,
+  setPromotedAgent,
+  validateGrade,
+  validateAgentName,
+} from "./agent-promote-core"
+
+export {
+  type AgentMode,
+  VALID_GRADES,
+  getPromotedAgents,
+  setPromotedAgent,
+  validateGrade,
+  validateAgentName,
+} from "./agent-promote-core"
 
 type Client = ReturnType<typeof createOpencodeClient>
-type AgentMode = "subagent" | "primary" | "all"
-
-const VALID_GRADES: AgentMode[] = ["subagent", "primary", "all"]
-
-const promotedAgents = new Map<string, AgentMode>()
-
-export function getPromotedAgents(): ReadonlyMap<string, AgentMode> {
-  return promotedAgents
-}
 
 export interface AgentPromoteArgs {
   name: string
@@ -28,11 +36,11 @@ export function createAgentPromoteTool(client: Client, pluginAgentNames: string[
     async execute(args: AgentPromoteArgs, _context: ToolContext) {
       const { name, grade } = args
 
-      if (!VALID_GRADES.includes(grade as AgentMode)) {
+      if (!validateGrade(grade)) {
         return `Invalid grade "${grade}". Valid grades: ${VALID_GRADES.join(", ")}`
       }
 
-      if (!pluginAgentNames.includes(name)) {
+      if (!validateAgentName(name, pluginAgentNames)) {
         return `Agent "${name}" not found in this plugin. Available: ${pluginAgentNames.join(", ")}`
       }
 
@@ -44,7 +52,7 @@ export function createAgentPromoteTool(client: Client, pluginAgentNames: string[
         return `Agent "${name}" is already of type "${grade}"`
       }
 
-      promotedAgents.set(name, grade as AgentMode)
+      setPromotedAgent(name, grade)
       log("[agent-promote] Agent type changed", { name, grade })
 
       await client.tui.showToast({
