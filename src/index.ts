@@ -21,8 +21,6 @@ import {
   gitingestTool,
   createPromptSessionTool,
   createListChildSessionsTool,
-  createAgentPromoteTool,
-  getPromotedAgents,
   ethTransactionTool,
   ethAddressTxsTool,
   ethAddressBalanceTool,
@@ -94,7 +92,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     hooks: Array.from(hooks.keys()),
     tools: [
       "gitingest",
-      "agent-promote",
       "eth-transaction",
       "eth-address-txs",
       "eth-address-balance",
@@ -265,16 +262,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
   return {
     config: async (config: Record<string, unknown>): Promise<void> => {
-      const loadedAgents = loadAgents(AGENT_DIR)
-
-      for (const [name, mode] of getPromotedAgents()) {
-        if (loadedAgents[name]) {
-          loadedAgents[name].mode = mode
-        }
-      }
-
-      if (Object.keys(loadedAgents).length > 0) {
-        config.agent = { ...(config.agent as Record<string, unknown> ?? {}), ...loadedAgents }
+      if (Object.keys(agents).length > 0) {
+        config.agent = { ...(config.agent as Record<string, unknown> ?? {}), ...agents }
       }
       if (Object.keys(commands).length > 0) {
         config.command = { ...(config.command as Record<string, unknown> ?? {}), ...commands }
@@ -285,7 +274,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       gitingest: gitingestTool,
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
-      "agent-promote": createAgentPromoteTool(ctx.client, Object.keys(agents)),
       "eth-transaction": ethTransactionTool,
       "eth-address-txs": ethAddressTxsTool,
       "eth-address-balance": ethAddressBalanceTool,

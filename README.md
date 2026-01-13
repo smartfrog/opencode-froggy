@@ -20,7 +20,6 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
-  - [agent-promote](#agent-promote)
   - [Blockchain](#blockchain)
     - [Configuration](#configuration)
     - [eth-transaction](#eth-transaction)
@@ -66,7 +65,6 @@ Alternatively, clone or copy the plugin files to one of these directories:
 
 | Command | Description | Agent |
 |---------|-------------|-------|
-| `/agent-promote <name> <grade>` | Change the type of a plugin agent at runtime. Grades: `subagent`, `primary`, `all` | - |
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
 | `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
@@ -227,46 +225,6 @@ Child sessions (2):
 2. [def456] Architecture Discussion
    Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
 ```
-
----
-
-### agent-promote
-
-Change the type of a plugin agent at runtime. Promotes subagents to primary agents (visible in Tab selection) or demotes them back.
-
-#### Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | `string` | Yes | Name of the plugin agent (e.g., `rubber-duck`, `architect`) |
-| `grade` | `string` | Yes | Target type: `subagent`, `primary`, or `all` |
-
-#### Grade Types
-
-| Grade | Effect |
-|-------|--------|
-| `subagent` | Available only as a subagent (default for most agents) |
-| `primary` | Appears in Tab selection for direct use |
-| `all` | Available both as primary and subagent |
-
-#### Usage Examples
-
-```bash
-# Promote rubber-duck to use it directly via Tab
-/agent-promote rubber-duck primary
-
-# Make architect available everywhere
-/agent-promote architect all
-
-# Revert code-reviewer to subagent only
-/agent-promote code-reviewer subagent
-```
-
-#### Notes
-
-- Only agents from this plugin can be promoted (see [Agents](#agents) table)
-- Changes persist in memory until OpenCode restarts
-- After promotion, use `Tab` or `<leader>a` to select the agent
 
 ---
 
