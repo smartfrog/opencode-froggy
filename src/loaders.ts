@@ -21,6 +21,7 @@ export interface AgentFrontmatter {
 export interface SkillFrontmatter {
   name: string
   description: string
+  use_when?: string
   license?: string
   compatibility?: string
   metadata?: Record<string, string>
@@ -44,6 +45,7 @@ export interface CommandConfig {
 export interface LoadedSkill {
   name: string
   description: string
+  useWhen?: string
   path: string
   body: string
 }
@@ -176,6 +178,7 @@ export function loadSkills(skillDir: string): LoadedSkill[] {
     skills.push({
       name: data.name || entry.name,
       description: data.description || "",
+      useWhen: data.use_when,
       path: skillPath,
       body: body.trim(),
     })

@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
     steps:
@@ -20,9 +20,11 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/claude-opus-4-5
+          model: openrouter/mistralai/devstral-2512:free
           prompt: |
             Review this pull request:
             - Check for code quality issues
             - Look for potential bugs
             - Suggest improvements
+            
+            Do NOT make any commits or modify files. Only post review comments.
