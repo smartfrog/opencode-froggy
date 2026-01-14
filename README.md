@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code reviewer, architect, partner, etc.), dedicated commands such as simplify-code and review-pr, and tools such as gitingest.
+Plugin providing Claude Code-style hooks, specialized agents, skills (code-review, code-simplify), and tools such as gitingest.
 
 ---
 
@@ -16,6 +16,7 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
 - [Installation](#installation)
 - [Commands](#commands)
 - [Agents](#agents)
+- [Skills](#skills)
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
@@ -104,6 +105,25 @@ Shows stats overview, commits, files changed, and full diff between branches.
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
+
+---
+
+## Skills
+
+Skills are loaded on-demand to provide specialized capabilities during a session.
+
+| Skill | Description | Activation |
+|-------|-------------|------------|
+| `code-review` | Review code changes for quality, correctness, and security | On user request or before merging |
+| `code-simplify` | Simplify recently modified code while preserving behavior | Automatically after code modifications |
+
+### Skills vs Agents
+
+- **Agents**: Run in isolated sub-sessions with their own context and permissions
+- **Skills**: Load instructions into the current session, inheriting its context
+
+Use skills for tasks that benefit from session context (like reviewing current changes).
+Use agents for autonomous, isolated tasks (like writing documentation).
 
 ---
 
