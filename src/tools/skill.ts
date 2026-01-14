@@ -127,7 +127,7 @@ export function createSkillTool(options: CreateSkillToolOptions) {
   const getSkills = (cwd: string): SkillInfo[] => {
     if (cachedSkills) return cachedSkills
 
-    // Priority order (lowest to highest): plugin < global < project
+    // Merge order: plugin defaults < global < project (later entries override earlier on name collision)
     const allSkills = [
       ...pluginSkillsToInfo(options.pluginSkills, options.pluginDir),
       ...discoverClaudeGlobalSkills(),
@@ -136,6 +136,7 @@ export function createSkillTool(options: CreateSkillToolOptions) {
       ...discoverOpencodeProjectSkills(cwd),
     ]
 
+    // Deduplicate by name - last definition wins (project > global > plugin)
     const skillMap = new Map<string, SkillInfo>()
     for (const skill of allSkills) {
       skillMap.set(skill.name, skill)

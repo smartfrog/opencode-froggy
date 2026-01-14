@@ -11,8 +11,10 @@ import {
   mergeHooks,
   type HookConfig,
   type HookEvent,
+  type LoadedSkill,
 } from "./loaders"
 import { executeBashAction, type BashContext } from "./bash-executor"
+import { buildSkillActivationBlock } from "./skill-activation"
 
 describe("parseFrontmatter", () => {
   it("should parse valid frontmatter", () => {
@@ -277,6 +279,45 @@ Content`
 
     expect(result).toHaveLength(1)
     expect(result[0].name).toBe("valid")
+  })
+
+  it("should load use_when field from frontmatter", () => {
+    const skillDir = join(testDir, "auto-skill")
+    mkdirSync(skillDir)
+
+    const skillContent = `---
+name: auto-skill
+description: An auto-triggered skill
+use_when: After completing a task, call this skill
+---
+
+Skill instructions here.`
+
+    writeFileSync(join(skillDir, "SKILL.md"), skillContent)
+
+    const result = loadSkills(testDir)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe("auto-skill")
+    expect(result[0].useWhen).toBe("After completing a task, call this skill")
+  })
+
+  it("should have undefined useWhen when not provided", () => {
+    const skillDir = join(testDir, "manual-skill")
+    mkdirSync(skillDir)
+
+    const skillContent = `---
+name: manual-skill
+description: A manual skill
+---
+
+Content`
+
+    writeFileSync(join(skillDir, "SKILL.md"), skillContent)
+
+    const result = loadSkills(testDir)
+
+    expect(result[0].useWhen).toBeUndefined()
   })
 })
 
@@ -981,6 +1022,93 @@ describe("executeBashAction", () => {
     const parsed = JSON.parse(result.stdout)
     expect(parsed.tool_name).toBeUndefined()
     expect(parsed.tool_args).toBeUndefined()
+  })
+})
+
+describe("buildSkillActivationBlock", () => {
+  it("should generate XML block with skill rules", () => {
+    const skills: LoadedSkill[] = [
+      {
+        name: "code-review",
+        description: "Review code",
+        useWhen: "After writing code",
+        path: "/path/to/skill",
+        body: "",
+      },
+    ]
+
+    const result = buildSkillActivationBlock(skills)
+
+    expect(result).toContain("<skill-activation-rules>")
+    expect(result).toContain("</skill-activation-rules>")
+    expect(result).toContain('skill="code-review"')
+    expect(result).toContain('trigger="After writing code"')
+    expect(result).toContain("MANDATORY")
+  })
+
+  it("should escape quotes in trigger text", () => {
+    const skills: LoadedSkill[] = [
+      {
+        name: "test-skill",
+        description: "Test",
+        useWhen: 'Call when user says "help"',
+        path: "/path",
+        body: "",
+      },
+    ]
+
+    const result = buildSkillActivationBlock(skills)
+
+    expect(result).toContain("&quot;help&quot;")
+    expect(result).not.toContain('"help"')
+  })
+
+  it("should replace newlines with spaces in trigger text", () => {
+    const skills: LoadedSkill[] = [
+      {
+        name: "multi-line",
+        description: "Test",
+        useWhen: "First line\nSecond line\nThird line",
+        path: "/path",
+        body: "",
+      },
+    ]
+
+    const result = buildSkillActivationBlock(skills)
+
+    expect(result).toContain("First line Second line Third line")
+    // The trigger attribute should not contain newlines (though the XML block itself does)
+    expect(result).toMatch(/trigger="[^"]*First line Second line Third line[^"]*"/)
+  })
+
+  it("should trim whitespace from trigger text", () => {
+    const skills: LoadedSkill[] = [
+      {
+        name: "whitespace",
+        description: "Test",
+        useWhen: "  padded trigger  ",
+        path: "/path",
+        body: "",
+      },
+    ]
+
+    const result = buildSkillActivationBlock(skills)
+
+    expect(result).toContain('trigger="padded trigger"')
+  })
+
+  it("should generate multiple rules for multiple skills", () => {
+    const skills: LoadedSkill[] = [
+      { name: "skill-a", description: "A", useWhen: "Trigger A", path: "/a", body: "" },
+      { name: "skill-b", description: "B", useWhen: "Trigger B", path: "/b", body: "" },
+    ]
+
+    const result = buildSkillActivationBlock(skills)
+
+    expect(result).toContain('skill="skill-a"')
+    expect(result).toContain('skill="skill-b"')
+    expect(result).toContain('trigger="Trigger A"')
+    expect(result).toContain('trigger="Trigger B"')
   })
 })
 

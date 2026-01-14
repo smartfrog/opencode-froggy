@@ -32,7 +32,10 @@ import {
   ethTokenTransfersTool,
 } from "./tools"
 
-export { parseFrontmatter, loadAgents, loadCommands } from "./loaders"
+export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
+export { buildSkillActivationBlock } from "./skill-activation"
+
+import { buildSkillActivationBlock } from "./skill-activation"
 
 // ============================================================================
 // TYPES
@@ -76,22 +79,6 @@ const PLUGIN_ROOT = join(__dirname, "..")
 const AGENT_DIR = join(PLUGIN_ROOT, "agent")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
 const SKILL_DIR = join(PLUGIN_ROOT, "skill")
-
-// ============================================================================
-// SKILL ACTIVATION
-// ============================================================================
-
-function buildSkillActivationBlock(skills: LoadedSkill[]): string {
-  const rules = skills
-    .map(s => `  <rule skill="${s.name}" trigger="${s.useWhen!.replace(/"/g, "&quot;").replace(/\n/g, " ").trim()}"/>`)
-    .join("\n")
-
-  return `<skill-activation-rules>
-MANDATORY: Call skill({ name }) BEFORE responding when trigger matches.
-
-${rules}
-</skill-activation-rules>`
-}
 
 // ============================================================================
 // PLUGIN
