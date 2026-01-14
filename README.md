@@ -17,6 +17,8 @@ OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubb
 - [Commands](#commands)
 - [Agents](#agents)
 - [Skills](#skills)
+  - [code-review](#code-review)
+  - [code-simplify](#code-simplify)
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
@@ -112,18 +114,31 @@ Shows stats overview, commits, files changed, and full diff between branches.
 
 Skills are loaded on-demand to provide specialized capabilities during a session.
 
-| Skill | Description | Activation |
-|-------|-------------|------------|
-| `code-review` | Review code changes for quality, correctness, and security | On user request or before merging |
-| `code-simplify` | Simplify recently modified code while preserving behavior | Automatically after code modifications |
+### code-review
 
-### Skills vs Agents
+Read-only code review skill that analyzes diffs for real problems.
 
-- **Agents**: Run in isolated sub-sessions with their own context and permissions
-- **Skills**: Load instructions into the current session, inheriting its context
+- **Purpose**: Provide actionable feedback on code changes without modifying files
+- **Activation**: On user request, or before committing/merging changes
+- **Focus areas**:
+  - Logic & stability (edge cases, race conditions, state transitions)
+  - Security (injection risks, validation, sensitive data exposure)
+  - Performance (resource leaks, O(n²) operations, unnecessary calls)
+  - Maintainability (SOLID violations, excessive complexity)
+- **Output**: Numbered blocking issues with evidence and fix suggestions, plus optional simplification candidates
 
-Use skills for tasks that benefit from session context (like reviewing current changes).
-Use agents for autonomous, isolated tasks (like writing documentation).
+### code-simplify
+
+Automatic simplification skill that improves code clarity while preserving behavior.
+
+- **Purpose**: Ensure newly written code enters the codebase at a high standard of clarity
+- **Activation**: Automatically after any code modification (new files, edits, refactors)
+- **Core principle**: Behavior preservation is absolute — no changes to APIs, return values, side effects, or execution order
+- **Focus areas**:
+  - Reduce unnecessary nesting and redundant checks
+  - Improve naming only when it prevents misunderstanding
+  - Consolidate related logic without merging concerns
+  - Remove comments that restate obvious code
 
 ---
 
