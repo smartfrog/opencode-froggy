@@ -5,9 +5,11 @@ import {
   loadAgents,
   loadCommands,
   loadHooks,
+  loadSkills,
   mergeHooks,
   type HookConfig,
   type HookEvent,
+  type LoadedSkill,
 } from "./loaders"
 import { getGlobalHookDir, getProjectHookDir } from "./config-paths"
 import { hasCodeExtension } from "./code-files"
@@ -22,6 +24,7 @@ import {
   createPromptSessionTool,
   createListChildSessionsTool,
   createAgentPromoteTool,
+  createSkillTool,
   getPromotedAgents,
   ethTransactionTool,
   ethAddressTxsTool,
@@ -29,7 +32,10 @@ import {
   ethTokenTransfersTool,
 } from "./tools"
 
-export { parseFrontmatter, loadAgents, loadCommands } from "./loaders"
+export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
+export { buildSkillActivationBlock } from "./skill-activation"
+
+import { buildSkillActivationBlock } from "./skill-activation"
 
 // ============================================================================
 // TYPES
@@ -72,6 +78,7 @@ const __dirname = dirname(__filename)
 const PLUGIN_ROOT = join(__dirname, "..")
 const AGENT_DIR = join(PLUGIN_ROOT, "agent")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
+const SKILL_DIR = join(PLUGIN_ROOT, "skill")
 
 // ============================================================================
 // PLUGIN
@@ -80,6 +87,7 @@ const COMMAND_DIR = join(PLUGIN_ROOT, "command")
 const SmartfrogPlugin: Plugin = async (ctx) => {
   const agents = loadAgents(AGENT_DIR)
   const commands = loadCommands(COMMAND_DIR)
+  const skills = loadSkills(SKILL_DIR)
 
   const globalHooks = loadHooks(getGlobalHookDir())
   const projectHooks = loadHooks(getProjectHookDir(ctx.directory))
@@ -88,12 +96,25 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   const modifiedCodeFiles = new Map<string, Set<string>>()
   const pendingToolArgs = new Map<string, Record<string, unknown>>()
 
+  const skillsWithTriggers = skills.filter(s => s.useWhen)
+  const skillActivationBlock = skillsWithTriggers.length > 0
+    ? buildSkillActivationBlock(skillsWithTriggers)
+    : null
+
+  const skillTool = createSkillTool({
+    pluginSkills: skills,
+    pluginDir: PLUGIN_ROOT,
+  })
+
   log("[init] Plugin loaded", { 
     agents: Object.keys(agents), 
     commands: Object.keys(commands),
+    skills: skills.map(s => s.name),
+    skillsWithTriggers: skillsWithTriggers.map(s => s.name),
     hooks: Array.from(hooks.keys()),
     tools: [
       "gitingest",
+      "skill",
       "agent-promote",
       "eth-transaction",
       "eth-address-txs",
@@ -283,6 +304,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
     tool: {
       gitingest: gitingestTool,
+      skill: skillTool,
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
       "agent-promote": createAgentPromoteTool(ctx.client, Object.keys(agents)),
@@ -379,6 +401,15 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
         await triggerHooks("session.idle", sessionID, { files: files ? Array.from(files) : [] })
       }
     },
+
+    "experimental.chat.system.transform": async (
+      _input: Record<string, unknown>,
+      output: { system: string[] }
+    ): Promise<void> => {
+      if (!skillActivationBlock) return
+      output.system.push(skillActivationBlock)
+    },
+
   }
 }
 
