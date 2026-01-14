@@ -3,9 +3,6 @@ name: code-review
 description: >
   Review code changes for quality, correctness, and security. Load after receiving 
   a diff or before merging changes.
-use_when: >
-  Use this skill when the user asks for a code review, or when you need to analyze
-  changes for quality and correctness before they are committed or merged.
 ---
 
 # Code Review Skill
