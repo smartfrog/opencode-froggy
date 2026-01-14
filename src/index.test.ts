@@ -1026,7 +1026,17 @@ describe("executeBashAction", () => {
 })
 
 describe("buildSkillActivationBlock", () => {
-  it("should generate XML block with skill rules", () => {
+  it("should return empty string for undefined input", () => {
+    const result = buildSkillActivationBlock(undefined as unknown as LoadedSkill[])
+    expect(result).toBe("")
+  })
+
+  it("should return empty string for empty array", () => {
+    const result = buildSkillActivationBlock([])
+    expect(result).toBe("")
+  })
+
+  it("should generate imperative instruction with skill name", () => {
     const skills: LoadedSkill[] = [
       {
         name: "code-review",
@@ -1039,14 +1049,12 @@ describe("buildSkillActivationBlock", () => {
 
     const result = buildSkillActivationBlock(skills)
 
-    expect(result).toContain("<skill-activation-rules>")
-    expect(result).toContain("</skill-activation-rules>")
-    expect(result).toContain('skill="code-review"')
-    expect(result).toContain('trigger="After writing code"')
     expect(result).toContain("MANDATORY")
+    expect(result).toContain('skill({ name: "code-review" })')
+    expect(result).toContain("After writing code")
   })
 
-  it("should escape quotes in trigger text", () => {
+  it("should preserve quotes in trigger text", () => {
     const skills: LoadedSkill[] = [
       {
         name: "test-skill",
@@ -1059,11 +1067,10 @@ describe("buildSkillActivationBlock", () => {
 
     const result = buildSkillActivationBlock(skills)
 
-    expect(result).toContain("&quot;help&quot;")
-    expect(result).not.toContain('"help"')
+    expect(result).toContain('"help"')
   })
 
-  it("should replace newlines with spaces in trigger text", () => {
+  it("should collapse whitespace in trigger text", () => {
     const skills: LoadedSkill[] = [
       {
         name: "multi-line",
@@ -1077,8 +1084,6 @@ describe("buildSkillActivationBlock", () => {
     const result = buildSkillActivationBlock(skills)
 
     expect(result).toContain("First line Second line Third line")
-    // The trigger attribute should not contain newlines (though the XML block itself does)
-    expect(result).toMatch(/trigger="[^"]*First line Second line Third line[^"]*"/)
   })
 
   it("should trim whitespace from trigger text", () => {
@@ -1094,10 +1099,11 @@ describe("buildSkillActivationBlock", () => {
 
     const result = buildSkillActivationBlock(skills)
 
-    expect(result).toContain('trigger="padded trigger"')
+    expect(result).toContain("padded trigger")
+    expect(result).not.toContain("  padded")
   })
 
-  it("should generate multiple rules for multiple skills", () => {
+  it("should generate separate instructions for multiple skills", () => {
     const skills: LoadedSkill[] = [
       { name: "skill-a", description: "A", useWhen: "Trigger A", path: "/a", body: "" },
       { name: "skill-b", description: "B", useWhen: "Trigger B", path: "/b", body: "" },
@@ -1105,10 +1111,11 @@ describe("buildSkillActivationBlock", () => {
 
     const result = buildSkillActivationBlock(skills)
 
-    expect(result).toContain('skill="skill-a"')
-    expect(result).toContain('skill="skill-b"')
-    expect(result).toContain('trigger="Trigger A"')
-    expect(result).toContain('trigger="Trigger B"')
+    expect(result).toContain('skill({ name: "skill-a" })')
+    expect(result).toContain('skill({ name: "skill-b" })')
+    expect(result).toContain("Trigger A")
+    expect(result).toContain("Trigger B")
+    expect(result.match(/MANDATORY/g)).toHaveLength(2)
   })
 })
 
