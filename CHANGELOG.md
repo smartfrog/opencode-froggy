@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2
+- Document code-simplifier agent and command
+- Align command docs with new instructions
+- Move code-simplify guidance into agent docs
+
 ## 0.7.1
 - Add code review agent commands
 - Update code-reviewer docs and skills list
