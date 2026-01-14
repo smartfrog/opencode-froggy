@@ -1,7 +1,7 @@
 ---
 name: code-release
 description: >
-  Prepare and execute a release with version bumping, changelog updates, tags, and GitHub release creation.
+  Prepare and execute a release with version bumping, changelog updates, and tags.
 ---
 
 # Code Release Skill
@@ -13,7 +13,6 @@ Any destructive or remote action requires confirmation, including:
 - `git commit`
 - `git tag`
 - `git push`
-- `gh release create`
 
 ## Step 1: Determine last released version
 
@@ -42,10 +41,9 @@ Present the recommendation and ask the user to confirm before changing any files
 - Commit release changes with a clear release message.
 - Create an annotated tag (for example, `vX.Y.Z`).
 - Push commits, then push tags.
-- Create a GitHub release using `gh release create` with the changelog section as the body.
 
 ## Output format
 
 - Summary of the last version, commit range, and recommended bump.
 - Explicit confirmation request before making changes.
-- After completion, list commands run and the release URL.
+- After completion, list commands run.

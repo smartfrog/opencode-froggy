@@ -35,12 +35,10 @@ jobs:
       - run: npm test
       - run: npm publish --access public
 
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build release notes
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          NOTES_FILE=$(mktemp)
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
           {
             echo "## ${TAG_VERSION}"
             awk "/^## ${TAG_VERSION}/{flag=1;next}/^## /{flag=0}flag" CHANGELOG.md
@@ -49,4 +47,10 @@ jobs:
             echo "No changelog entry for ${TAG_VERSION}"
             exit 1
           fi
-          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file "${NOTES_FILE}"
+          echo "notes_path=${NOTES_FILE}" >> "${GITHUB_OUTPUT}"
+        id: release_notes
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: ${{ steps.release_notes.outputs.notes_path }}
