@@ -23,7 +23,7 @@ type Client = ReturnType<typeof createOpencodeClient>
 
 export interface AgentPromoteArgs {
   name: string
-  grade: string
+  grade?: string
 }
 
 export function createAgentPromoteTool(client: Client, pluginAgentNames: string[]) {
@@ -31,10 +31,11 @@ export function createAgentPromoteTool(client: Client, pluginAgentNames: string[
     description: "Change the type of an agent to primary, subagent or all",
     args: {
       name: tool.schema.string().describe("Name of the agent"),
-      grade: tool.schema.string().describe("Target type: 'subagent', 'primary', or 'all'"),
+      grade: tool.schema.string().optional().describe("Target type: 'subagent', 'primary', or 'all' (default: primary)"),
     },
     async execute(args: AgentPromoteArgs, _context: ToolContext) {
-      const { name, grade } = args
+      const { name } = args
+      const grade = args.grade?.trim() || "primary"
 
       if (!validateGrade(grade)) {
         return `Invalid grade "${grade}". Valid grades: ${VALID_GRADES.join(", ")}`
