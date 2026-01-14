@@ -5,7 +5,7 @@ agent: doc-writer
 
 ## Analysis Phase
 
-Run `/diff-summary` to get the working tree changes, then:
+/diff-summary to get the working tree changes, then:
 
 1. **Identify new features** in the changes:
    - New public APIs, functions, or methods

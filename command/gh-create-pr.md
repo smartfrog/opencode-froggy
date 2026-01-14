@@ -10,7 +10,7 @@ agent: build
 
 ## Your task
 
-1. Execute `/commit-push` to commit and push all changes
+1. /commit-push to commit and push all changes
 2. Once the push is complete, create a PR using `gh pr create`:
    - Use the commit message as PR title
    - Generate a brief PR description summarizing the changes
