@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code reviewer, architect, partner, etc.), dedicated commands such as simplify-code and review-pr, and tools such as gitingest.
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner), skills (code-review, code-simplify), and tools (gitingest, blockchain queries, agent-promote).
 
 ---
 
@@ -16,6 +16,7 @@ Plugin providing Claude Code–style hooks, specialized agents (doc-writer, code
 - [Installation](#installation)
 - [Commands](#commands)
 - [Agents](#agents)
+- [Skills](#skills)
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
@@ -71,10 +72,7 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
 | `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
-| `/review-changes` | Review uncommitted changes (staged + unstaged, including untracked files) | `code-reviewer` |
-| `/review-pr <source> <target>` | Review changes from source branch into target branch | `code-reviewer` |
 | `/send-to [agent] <message>` | Send a message to a child session (subagent) to continue the conversation | - |
-| `/simplify-changes` | Simplify uncommitted changes (staged + unstaged, including untracked files) | `code-simplifier` |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
 
 ### /diff-summary
@@ -97,8 +95,6 @@ Shows staged changes, unstaged changes, and untracked file contents.
 ```
 Shows stats overview, commits, files changed, and full diff between branches.
 
-> **Note:** The `/review-pr` command uses `/diff-summary` internally to generate the diff for code review.
-
 ---
 
 ## Agents
@@ -106,11 +102,28 @@ Shows stats overview, commits, files changed, and full diff between branches.
 | Agent | Mode | Description |
 |-------|------|-------------|
 | `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
-| `code-reviewer` | subagent | Reviews code for quality, correctness, and security. Read-only with restricted git access. |
-| `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
+
+---
+
+## Skills
+
+Skills are loaded on-demand to provide specialized capabilities during a session.
+
+| Skill | Description | Activation |
+|-------|-------------|------------|
+| `code-review` | Review code changes for quality, correctness, and security | On user request or before merging |
+| `code-simplify` | Simplify recently modified code while preserving behavior | Automatically after code modifications |
+
+### Skills vs Agents
+
+- **Agents**: Run in isolated sub-sessions with their own context and permissions
+- **Skills**: Load instructions into the current session, inheriting its context
+
+Use skills for tasks that benefit from session context (like reviewing current changes).
+Use agents for autonomous, isolated tasks (like writing documentation).
 
 ---
 
