@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-Plugin providing Claude Code-style hooks, specialized agents, skills (code-review, code-simplify), and tools such as gitingest.
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner), skills (code-review, code-simplify), and tools (gitingest, blockchain queries, agent-promote).
 
 ---
 
