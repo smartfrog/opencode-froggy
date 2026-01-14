@@ -22,6 +22,13 @@ jobs:
           cache: npm
 
       - run: npm install -g npm@11.5.1
+      - run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json ($PACKAGE_VERSION)"
+            exit 1
+          fi
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
