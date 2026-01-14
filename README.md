@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner), skills (code-review, code-simplify), and tools (gitingest, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer), skills (code-simplify, code-release), and tools (gitingest, blockchain queries, agent-promote).
 
 ---
 
@@ -17,8 +17,8 @@ OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubb
 - [Commands](#commands)
 - [Agents](#agents)
 - [Skills](#skills)
-  - [code-review](#code-review)
   - [code-simplify](#code-simplify)
+  - [code-release](#code-release)
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
@@ -74,6 +74,8 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
 | `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
+| `/review-changes` | Review uncommitted changes (staged, unstaged, untracked) | `code-reviewer` |
+| `/review-pr <source> <target>` | Review diff from source branch into target branch | `code-reviewer` |
 | `/send-to [agent] <message>` | Send a message to a child session (subagent) to continue the conversation | - |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
 
@@ -105,6 +107,7 @@ Shows stats overview, commits, files changed, and full diff between branches.
 |-------|------|-------------|
 | `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
+| `code-reviewer` | subagent | Read-only code review agent for quality, correctness, security, and maintainability feedback. |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
 
@@ -114,18 +117,13 @@ Shows stats overview, commits, files changed, and full diff between branches.
 
 Skills are loaded on-demand to provide specialized capabilities during a session.
 
-### code-review
+### code-release
 
-Read-only code review skill that analyzes diffs for real problems.
+Prepare releases with version bumps, changelog updates, and tags.
 
-- **Purpose**: Provide actionable feedback on code changes without modifying files
-- **Activation**: On user request, or before committing/merging changes
-- **Focus areas**:
-  - Logic & stability (edge cases, race conditions, state transitions)
-  - Security (injection risks, validation, sensitive data exposure)
-  - Performance (resource leaks, O(n²) operations, unnecessary calls)
-  - Maintainability (SOLID violations, excessive complexity)
-- **Output**: Numbered blocking issues with evidence and fix suggestions, plus optional simplification candidates
+- **Purpose**: Guide release preparation steps and require confirmation before changing release artifacts
+- **Activation**: On user request to prepare or perform a release
+- **Constraints**: Avoid changing versions, tags, or changelogs without explicit confirmation
 
 ### code-simplify
 

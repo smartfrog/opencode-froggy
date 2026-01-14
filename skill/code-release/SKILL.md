@@ -2,6 +2,9 @@
 name: code-release
 description: >
   Prepare and execute a release with version bumping, changelog updates, and tags.
+use_when: >
+  REQUIRED: When the user asks to prepare or perform a release,
+  call skill({ name: "code-release" }) before changing any release artifacts.
 ---
 
 # Code Release Skill
