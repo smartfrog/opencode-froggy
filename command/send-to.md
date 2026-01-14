@@ -5,7 +5,7 @@ description: Send a message to a child session (subagent) to continue the conver
 Send a message to a child session using the `prompt-session` tool.
 
 Parse the input:
-- If the first word matches a known agent type (e.g., `rubber-duck`, `explore`, `code-simplifier`, `general`, `architect`, `code-reviewer`, `doc-writer`, `partner`), use it to find the matching session and send the rest as the message
+- If the first word matches a known agent type (e.g., `rubber-duck`, `explore`, `general`, `architect`, `doc-writer`, `partner`), use it to find the matching session and send the rest as the message
 - Otherwise, send the entire input to the most recent child session
 
 Steps:
