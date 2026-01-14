@@ -66,7 +66,8 @@ Alternatively, clone or copy the plugin files to one of these directories:
 
 | Command | Description | Agent |
 |---------|-------------|-------|
-| `/agent-promote <name> <grade>` | Change the type of a plugin agent at runtime. Grades: `subagent`, `primary`, `all` | - |
+| `/agent-promote <name> [grade]` | Promote an agent to primary (default) or specify grade: `subagent`, `primary`, `all` | - |
+| `/agent-demote <name>` | Demote an agent to subagent | - |
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
 | `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
@@ -232,34 +233,34 @@ Child sessions (2):
 
 ### agent-promote
 
-Change the type of a plugin agent at runtime. Promotes subagents to primary agents (visible in Tab selection) or demotes them back.
+Promote an agent to primary (default) or specify a grade.
 
 #### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the plugin agent (e.g., `rubber-duck`, `architect`) |
-| `grade` | `string` | Yes | Target type: `subagent`, `primary`, or `all` |
+| `grade` | `string` | No | Target type: `subagent`, `primary`, or `all` (default: `primary`) |
 
 #### Grade Types
 
 | Grade | Effect |
 |-------|--------|
-| `subagent` | Available only as a subagent (default for most agents) |
+| `subagent` | Available only as a subagent |
 | `primary` | Appears in Tab selection for direct use |
 | `all` | Available both as primary and subagent |
 
 #### Usage Examples
 
 ```bash
-# Promote rubber-duck to use it directly via Tab
-/agent-promote rubber-duck primary
+# Promote rubber-duck to primary (default)
+/agent-promote rubber-duck
 
-# Make architect available everywhere
+# Promote with explicit grade
 /agent-promote architect all
 
-# Revert code-reviewer to subagent only
-/agent-promote code-reviewer subagent
+# Demote back to subagent
+/agent-demote rubber-duck
 ```
 
 #### Notes
