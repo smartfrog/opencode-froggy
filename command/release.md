@@ -1,13 +1,12 @@
 ---
-name: code-release
-description: >
-  Prepare and execute a release with version bumping, changelog updates, and tags.
-use_when: >
-  REQUIRED: When the user asks to prepare or perform a release,
-  call skill({ name: "code-release" }) before changing any release artifacts.
+description: Prepare and execute a release with version bumping, changelog updates, and tags
 ---
 
-# Code Release Skill
+## Context
+
+- Current version: !`node -p "require('./package.json').version"`
+- Latest tag: !`git describe --tags --abbrev=0 2>/dev/null || echo "none"`
+- Commits since last tag: !`git log $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD --oneline 2>/dev/null || git log --oneline -10`
 
 ## CRITICAL CONSTRAINT
 
@@ -17,13 +16,15 @@ Any destructive or remote action requires confirmation, including:
 - `git tag`
 - `git push`
 
-## Step 1: Determine last released version
+## Your task
+
+### Step 1: Determine last released version
 
 1. Prefer the latest Git tag that matches `v<semver>`.
 2. If no matching tag exists, use the version in `package.json`.
 3. Collect commits since the last version (tag to `HEAD`).
 
-## Step 2: Propose version bump
+### Step 2: Propose version bump
 
 Analyze commits since the last version and recommend a semver bump:
 - **major**: breaking changes or incompatible behavior changes.
@@ -32,14 +33,14 @@ Analyze commits since the last version and recommend a semver bump:
 
 Present the recommendation and ask the user to confirm before changing any files.
 
-## Step 3: Update release artifacts (after confirmation)
+### Step 3: Update release artifacts (after confirmation)
 
 - Update the version in `package.json`.
 - Update `CHANGELOG` with a new section for the version.
 - Summarize changes based on the commit range.
 - Preserve the existing changelog format.
 
-## Step 4: Tag and publish (after confirmation)
+### Step 4: Tag and publish (after confirmation)
 
 - Commit release changes with a clear release message.
 - Create an annotated tag (for example, `vX.Y.Z`).

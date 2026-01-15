@@ -105,6 +105,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   const skillTool = createSkillTool({
     pluginSkills: skills,
     pluginDir: PLUGIN_ROOT,
+    client: ctx.client,
   })
 
   log("[init] Plugin loaded", { 

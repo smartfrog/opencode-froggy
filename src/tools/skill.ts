@@ -2,7 +2,11 @@ import { tool, type ToolContext } from "@opencode-ai/plugin"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { homedir } from "node:os"
+import type { createOpencodeClient } from "@opencode-ai/sdk"
 import { parseFrontmatter, type LoadedSkill } from "../loaders"
+import { log } from "../logger"
+
+type Client = ReturnType<typeof createOpencodeClient>
 
 export interface SkillInfo {
   name: string
@@ -118,18 +122,20 @@ function loadSkillContent(location: string): string {
 export interface CreateSkillToolOptions {
   pluginSkills: LoadedSkill[]
   pluginDir: string
+  client: Client
 }
 
 export function createSkillTool(options: CreateSkillToolOptions) {
   let cachedSkills: SkillInfo[] | null = null
   let cachedDescription: string | null = null
+  const { client, pluginDir, pluginSkills } = options
 
   const getSkills = (cwd: string): SkillInfo[] => {
     if (cachedSkills) return cachedSkills
 
     // Merge order: plugin defaults < global < project (later entries override earlier on name collision)
     const allSkills = [
-      ...pluginSkillsToInfo(options.pluginSkills, options.pluginDir),
+      ...pluginSkillsToInfo(pluginSkills, pluginDir),
       ...discoverClaudeGlobalSkills(),
       ...discoverOpencodeGlobalSkills(),
       ...discoverClaudeProjectSkills(cwd),
@@ -182,6 +188,18 @@ export function createSkillTool(options: CreateSkillToolOptions) {
 
       const body = loadSkillContent(skill.location)
       const dir = dirname(skill.location)
+
+      try {
+        await client.tui.showToast({
+          body: {
+            message: `Skill "${skill.name}" loaded`,
+            variant: "info",
+            duration: 3000,
+          },
+        })
+      } catch (error) {
+        log("[skill] Failed to show toast", { error: String(error) })
+      }
 
       return [
         `## Skill: ${skill.name}`,
