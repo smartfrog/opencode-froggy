@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.0
+- Add pdf-to-markdown tool for PDF conversion
+
 ## 0.7.2
 - Document code-simplifier agent and command
 - Align command docs with new instructions
