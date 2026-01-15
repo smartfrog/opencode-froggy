@@ -21,6 +21,7 @@ import {
 } from "./bash-executor"
 import {
   gitingestTool,
+  pdfToMarkdownTool,
   createPromptSessionTool,
   createListChildSessionsTool,
   createAgentPromoteTool,
@@ -114,6 +115,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     hooks: Array.from(hooks.keys()),
     tools: [
       "gitingest",
+      "pdf-to-markdown",
       "skill",
       "agent-promote",
       "eth-transaction",
@@ -304,6 +306,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
 
     tool: {
       gitingest: gitingestTool,
+      "pdf-to-markdown": pdfToMarkdownTool,
       skill: skillTool,
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
