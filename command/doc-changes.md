@@ -26,7 +26,6 @@ Automatically detect documentation files in the project:
 - Look for `README.md` at project root
 - Look for `docs/` or `documentation/` directories
 - Look for other `.md` files that describe usage, API, or features
-- Check if `CHANGELOG.md` exists (do NOT create it if missing)
 
 ## Update Phase
 

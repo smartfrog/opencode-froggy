@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (code-release), and tools (gitingest, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (code-release), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
 
 ---
 
@@ -22,6 +22,7 @@ OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubb
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
+  - [pdf-to-markdown](#pdf-to-markdown)
   - [agent-promote](#agent-promote)
   - [Blockchain](#blockchain)
     - [Configuration](#configuration)
@@ -242,6 +243,37 @@ Child sessions (2):
 2. [def456] Architecture Discussion
    Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
 ```
+
+---
+
+### pdf-to-markdown
+
+Convert a text-based PDF into enriched Markdown (headings, paragraphs, lists). Returns Markdown as plain text.
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `filePath` | `string` | Yes | - | Absolute path to the PDF file to convert |
+| `maxPages` | `number` | No | All pages | Maximum number of pages to convert (positive integer) |
+
+#### Usage Examples
+
+```typescript
+// Convert an entire PDF
+pdfToMarkdown({ filePath: "/path/to/file.pdf" })
+
+// Convert the first 3 pages
+pdfToMarkdown({
+  filePath: "/path/to/file.pdf",
+  maxPages: 3
+})
+```
+
+#### Notes
+
+- The conversion extracts text content; image-only PDFs may return empty output.
+- `maxPages` is capped at the document's total page count.
 
 ---
 

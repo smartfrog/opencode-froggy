@@ -39,12 +39,14 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
+    "pdfjs-dist": "^4.8.69",
     "viem": "^2.44.1"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "latest",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
+    "@vitest/coverage-v8": "^4.0.17",
     "typescript": "^5.7.0",
     "vitest": "^4.0.16"
   },
