@@ -9,7 +9,7 @@ agent: build
 
 ## Your task
 
-1. Run `/diff-summary` to analyze all working tree changes
+1. /diff-summary to analyze all working tree changes
 2. Present a summary to the user:
    - Files modified/added/deleted with stats
    - Proposed commit message based on the changes
