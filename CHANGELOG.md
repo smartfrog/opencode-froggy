@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+- Add /release command to guide release workflow
+- Replace code-release skill with ask-questions skill
+- Show a toast when loading a skill
+
 ## 0.8.0
 - Add pdf-to-markdown tool for PDF conversion
 
