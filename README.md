@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (code-release), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
 
 ---
 
@@ -17,7 +17,11 @@ OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubb
 - [Commands](#commands)
 - [Agents](#agents)
 - [Skills](#skills)
-  - [code-release](#code-release)
+  - [Overview](#overview)
+  - [Available Skills](#available-skills)
+  - [Discovery Locations](#discovery-locations)
+  - [Creating a Skill](#creating-a-skill)
+  - [Automatic Activation](#automatic-activation)
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
@@ -117,15 +121,84 @@ Shows stats overview, commits, files changed, and full diff between branches.
 
 ## Skills
 
-Skills are loaded on-demand to provide specialized capabilities during a session.
+Skills are contextual instructions loaded on demand via the `skill` tool. The agent invokes `skill({ name: "skill-name" })` to load the instructions when needed.
 
-### code-release
+### Overview
 
-Prepare releases with version bumps, changelog updates, and tags.
+- Skills provide specialized guidance for specific tasks
+- Instructions are loaded only when explicitly requested
+- Multiple skills can exist with the same name; the highest-priority location wins
 
-- **Purpose**: Guide release preparation steps and require confirmation before changing release artifacts
-- **Activation**: On user request to prepare or perform a release
-- **Constraints**: Avoid changing versions, tags, or changelogs without explicit confirmation
+### Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `ask-questions-if-underspecified` | Clarify requirements before implementing. Use when serious doubts arise. |
+
+### Discovery Locations
+
+Skills are discovered from the following locations, in order of increasing priority:
+
+| Priority | Scope | Location |
+|----------|-------|----------|
+| 1 (lowest) | plugin | `<plugin>/skill/` |
+| 2 | global | `~/.config/opencode/skill/` |
+| 3 (highest) | project | `<project>/.opencode/skill/` |
+
+If multiple skills share the same name, the one from the highest-priority location takes precedence.
+
+### Creating a Skill
+
+Each skill lives in its own directory with a `SKILL.md` file:
+
+```
+skill/
+└── my-skill/
+    └── SKILL.md
+```
+
+The `SKILL.md` file uses YAML frontmatter for metadata:
+
+```markdown
+---
+name: my-skill
+description: Short description of the skill (required)
+use_when: >
+  Condition for automatic activation (optional).
+---
+
+# Detailed Instructions
+
+Markdown content with step-by-step guidance...
+```
+
+#### Frontmatter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier for the skill |
+| `description` | Yes | Short description (displayed in skill listings) |
+| `use_when` | No | Condition for automatic activation |
+
+A skill without `name` or `description` will be ignored.
+
+### Automatic Activation
+
+If a skill defines `use_when`, a directive is injected into the system prompt:
+
+```
+MANDATORY: Call skill({ name: "my-skill" }) <use_when content>
+```
+
+This instructs the agent to load the skill when the specified condition is met.
+
+**What is injected:**
+- The skill `name`
+- The `use_when` text (normalized: multiple spaces collapsed to single space)
+
+**What is NOT injected:**
+- The `description`
+- The markdown content (loaded only when the skill is invoked)
 
 ---
 
