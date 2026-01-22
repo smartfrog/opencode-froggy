@@ -43,9 +43,8 @@ else
   git diff
 
   echo ""
-  echo "## Untracked Files Content"
-  git ls-files --others --exclude-standard | while read f; do
-    [ -f "$f" ] && echo "=== $f ===" && sed -n "1,50p" "$f" && sed -n "51p" "$f" | grep -q . && echo "... (truncated)"
-  done
+  echo "## Untracked Files (new)"
+  echo "These files are new and not yet tracked by git. Read them directly to see their content."
+  git ls-files --others --exclude-standard
 fi
 '`
