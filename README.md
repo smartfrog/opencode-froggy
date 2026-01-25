@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
 
 ---
 
@@ -134,6 +134,7 @@ Skills are contextual instructions loaded on demand via the `skill` tool. The ag
 | Skill | Description |
 |-------|-------------|
 | `ask-questions-if-underspecified` | Clarify requirements before implementing. Use when serious doubts arise. |
+| `tdd` | Apply Test-Driven Development workflow for new features and bugfixes. |
 
 #### Example: ask-questions-if-underspecified
 
@@ -163,6 +164,40 @@ After the user selects "JWT tokens", the agent confirms:
 > "I'll add JWT-based authentication to the API endpoints using the existing Express middleware pattern. Success = all `/api/*` routes require a valid token, with a `/auth/login` endpoint for token generation."
 
 Then implementation begins.
+
+#### Example: tdd
+
+**User request:**
+> "Add a function to calculate the total price with tax"
+
+**Agent response (after loading the skill):**
+
+The agent follows the TDD workflow:
+
+1. **Requirement Synthesis:**
+> "I'll create a function that calculates total price with tax. It should accept a price and tax rate, returning the total."
+
+2. **Test Specification:**
+```typescript
+describe("calculateTotalWithTax", () => {
+  it("should add tax to the base price", () => {
+    expect(calculateTotalWithTax(100, 0.2)).toBe(120)
+  })
+
+  it("should handle zero tax rate", () => {
+    expect(calculateTotalWithTax(100, 0)).toBe(100)
+  })
+})
+```
+
+3. **Implementation:**
+```typescript
+function calculateTotalWithTax(price: number, taxRate: number): number {
+  return price * (1 + taxRate)
+}
+```
+
+The tests are written first (red), then the minimal implementation to pass them (green).
 
 ### Discovery Locations
 
