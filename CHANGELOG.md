@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+- Allow code-simplifier to analyze untracked files
+- Add example for ask-questions-if-underspecified skill
+- Rewrite skills documentation with complete examples
+- Fix diff-summary to list untracked files
+- Fix commit-push command formatting
+
 ## 0.9.0
 - Add /release command to guide release workflow
 - Replace code-release skill with ask-questions skill
