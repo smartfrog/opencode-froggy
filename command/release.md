@@ -4,8 +4,7 @@ description: Prepare and execute a release with version bumping, changelog updat
 
 ## Context
 
-- Current version: !`node -p "require('./package.json').version"`
-- Latest tag: !`git describe --tags --abbrev=0 2>/dev/null || echo "none"`
+- Current version: !`git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0"`
 - Commits since last tag: !`git log $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD --oneline 2>/dev/null || git log --oneline -10`
 
 ## CRITICAL CONSTRAINT
@@ -20,8 +19,8 @@ Any destructive or remote action requires confirmation, including:
 
 ### Step 1: Determine last released version
 
-1. Prefer the latest Git tag that matches `v<semver>`.
-2. If no matching tag exists, use the version in `package.json`.
+1. Use the latest Git tag that matches `v<semver>` or `<semver>`.
+2. If no tag exists, consider this the first release (`0.0.0`).
 3. Collect commits since the last version (tag to `HEAD`).
 
 ### Step 2: Propose version bump
@@ -35,10 +34,16 @@ Present the recommendation and ask the user to confirm before changing any files
 
 ### Step 3: Update release artifacts (after confirmation)
 
-- Update the version in `package.json`.
 - Update `CHANGELOG` with a new section for the version.
 - Summarize changes based on the commit range.
 - Preserve the existing changelog format.
+- Auto-detect and update the version file if present:
+  - Node.js: `package.json`
+  - Python: `pyproject.toml` or `setup.py`
+  - Rust: `Cargo.toml`
+  - PHP: `composer.json`
+  - Ruby: `*.gemspec`
+  - Go: tags only (no version file)
 
 ### Step 4: Tag and publish (after confirmation)
 
