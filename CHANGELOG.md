@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+- Add `tdd` skill for Test-Driven Development workflow
+- Make release command language-agnostic (supports Python, Rust, Go, PHP, Ruby)
+- Release command now uses Git tags as source of truth
+
 ## 0.9.1
 - Allow code-simplifier to analyze untracked files
 - Add example for ask-questions-if-underspecified skill

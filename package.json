@@ -1,6 +1,6 @@
 {
   "name": "opencode-froggy",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "OpenCode plugin with a hook layer (tool.before.*, session.idle...), agents (code-reviewer, doc-writer), and commands (/review-pr, /commit)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
