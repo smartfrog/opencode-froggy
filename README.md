@@ -135,6 +135,35 @@ Skills are contextual instructions loaded on demand via the `skill` tool. The ag
 |-------|-------------|
 | `ask-questions-if-underspecified` | Clarify requirements before implementing. Use when serious doubts arise. |
 
+#### Example: ask-questions-if-underspecified
+
+**User request:**
+> "Add authentication to the API"
+
+**Agent response (after loading the skill):**
+
+The agent recognizes this request has multiple interpretations and uses the `question` tool:
+
+```
+┌─ Authentication Approach ────────────────────────────────────────┐
+│                                                                  │
+│  Which authentication method should be implemented?              │
+│                                                                  │
+│  ○ JWT tokens (Recommended)                                      │
+│  ○ Session-based with cookies                                    │
+│  ○ OAuth 2.0 / OpenID Connect                                    │
+│  ○ API keys                                                      │
+│  ○ Other                                                         │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+After the user selects "JWT tokens", the agent confirms:
+
+> "I'll add JWT-based authentication to the API endpoints using the existing Express middleware pattern. Success = all `/api/*` routes require a valid token, with a `/auth/login` endpoint for token generation."
+
+Then implementation begins.
+
 ### Discovery Locations
 
 Skills are discovered from the following locations, in order of increasing priority:
