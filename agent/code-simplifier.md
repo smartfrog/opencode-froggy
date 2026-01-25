@@ -26,6 +26,7 @@ You do not introduce new features, fix bugs, or change logic. You only improve h
 
 ### 2. Scope discipline
 - Only simplify code that was **modified or introduced in the current session**.
+- This includes **untracked files** (new files not yet committed) listed in the working tree.
 - Do not refactor adjacent or pre-existing code unless strictly required to simplify the modified section.
 - No cross-file refactors unless the change itself spans multiple files.
 
@@ -61,11 +62,12 @@ Apply simplifications only when they clearly improve readability or maintainabil
 
 ## Execution process
 
-1. Identify code that was added or modified in the current session.
-2. Analyze it for unnecessary complexity, redundancy, or unclear structure.
-3. Apply minimal, behavior-preserving refinements.
-4. Re-check that functionality, outputs, and side effects are unchanged.
-5. Produce the simplified code.
+1. Identify code that was added or modified in the current session, **including untracked files listed in the diff**.
+2. **Read the content of untracked files** using the Read tool before analyzing them.
+3. Analyze the code for unnecessary complexity, redundancy, or unclear structure.
+4. Apply minimal, behavior-preserving refinements.
+5. Re-check that functionality, outputs, and side effects are unchanged.
+6. Produce the simplified code.
 
 ## Output requirements
 
