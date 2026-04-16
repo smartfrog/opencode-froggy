@@ -43,7 +43,7 @@
     "viem": "^2.44.1"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "latest",
+    "@opencode-ai/plugin": "^1.4.6",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@vitest/coverage-v8": "^4.0.17",

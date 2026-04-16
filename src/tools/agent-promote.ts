@@ -64,7 +64,15 @@ export function createAgentPromoteTool(client: Client, pluginAgentNames: string[
         },
       })
 
-      await client.instance.dispose()
+      setTimeout(() => {
+        void client.instance.dispose().catch((error) => {
+          log("[agent-promote] Delayed dispose failed", {
+            name,
+            grade,
+            error: String(error),
+          })
+        })
+      }, 0)
 
       return `Agent "${name}" changed to type "${grade}". Use Tab or <leader>a to select it.`
     },

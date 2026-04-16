@@ -298,7 +298,7 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       }
 
       if (Object.keys(loadedAgents).length > 0) {
-        config.agent = { ...(config.agent as Record<string, unknown> ?? {}), ...loadedAgents }
+        config.agent = { ...loadedAgents, ...(config.agent as Record<string, unknown> ?? {}) }
       }
       if (Object.keys(commands).length > 0) {
         config.command = { ...(config.command as Record<string, unknown> ?? {}), ...commands }
