@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1
+- Fix `agent-promote` so it returns successfully before the instance reloads
+- Update the OpenCode plugin SDK to `1.4.6`
+- Ensure runtime agent config takes precedence over loaded agent definitions during reload
+
 ## 0.10.0
 - Add `tdd` skill for Test-Driven Development workflow
 - Make release command language-agnostic (supports Python, Rust, Go, PHP, Ruby)
