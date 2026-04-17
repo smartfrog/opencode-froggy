@@ -10,6 +10,10 @@ agent: build
 
 ## Your task
 
+**If the current branch is `master`, `main`, `develop`, or `dev`:**
+   - Warn the user that committing directly to this branch is discouraged
+   - Propose to create a new feature branch with a suggested name based on the changes
+
 1. /commit-push to commit and push all changes
 2. Once the push is complete, create a PR using `gh pr create`:
    - Use the commit message as PR title
