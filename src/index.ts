@@ -27,10 +27,6 @@ import {
   createAgentPromoteTool,
   createSkillTool,
   getPromotedAgents,
-  ethTransactionTool,
-  ethAddressTxsTool,
-  ethAddressBalanceTool,
-  ethTokenTransfersTool,
 } from "./tools"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
@@ -119,10 +115,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       "pdf-to-markdown",
       "skill",
       "agent-promote",
-      "eth-transaction",
-      "eth-address-txs",
-      "eth-address-balance",
-      "eth-token-transfers",
     ],
   })
 
@@ -312,10 +304,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
       "agent-promote": createAgentPromoteTool(ctx.client, Object.keys(agents)),
-      "eth-transaction": ethTransactionTool,
-      "eth-address-txs": ethAddressTxsTool,
-      "eth-address-balance": ethAddressBalanceTool,
-      "eth-token-transfers": ethTokenTransfersTool,
     },
 
     "tool.execute.before": async (
