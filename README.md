@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, agent-promote, and blockchain queries for Ethereum/EVM developers).
 
 ---
 
@@ -455,6 +455,8 @@ Promote an agent to primary (default) or specify a grade.
 ---
 
 ### Blockchain
+
+**Context:** This plugin is a general-purpose OpenCode coding assistant. The blockchain tools are included specifically to support developers building Ethereum and EVM-compatible applications. When working in a Web3 or smart-contract codebase, the AI can call these tools to look up live on-chain data (transaction details, wallet balances, token transfers) without leaving the coding session. If you are not building blockchain applications, these tools remain dormant and have no effect on the rest of the plugin's behavior.
 
 Tools for querying Ethereum and EVM-compatible blockchains via Etherscan APIs.
 
