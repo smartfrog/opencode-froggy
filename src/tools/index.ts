@@ -5,16 +5,6 @@ export { createPromptSessionTool, type PromptSessionArgs } from "./prompt-sessio
 export { createListChildSessionsTool } from "./list-child-sessions"
 export { createAgentPromoteTool, getPromotedAgents, type AgentPromoteArgs } from "./agent-promote"
 export {
-  createSkillTool,
-  discoverAllSkills,
-  formatPluginSkillsAsXmlItems,
-  type CreateSkillToolOptions,
-  type DiscoverAllSkillsOptions,
-  type SkillInfo,
-  type SkillScope,
-} from "./skill"
-
-export {
   ethTransactionTool,
   ethAddressTxsTool,
   ethAddressBalanceTool,

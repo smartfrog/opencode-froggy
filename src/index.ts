@@ -25,15 +25,12 @@ import {
   createPromptSessionTool,
   createListChildSessionsTool,
   createAgentPromoteTool,
-  createSkillTool,
-  formatPluginSkillsAsXmlItems,
   getPromotedAgents,
   ethTransactionTool,
   ethAddressTxsTool,
   ethAddressBalanceTool,
   ethTokenTransfersTool,
 } from "./tools"
-import { injectPluginSkillsIntoSystem } from "./skill-injection"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
 export { buildSkillActivationBlock } from "./skill-activation"
@@ -104,19 +101,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     ? buildSkillActivationBlock(skillsWithTriggers)
     : null
 
-  const skillTool = createSkillTool({
-    pluginSkills: skills,
-    pluginDir: PLUGIN_ROOT,
-    cwd: ctx.directory,
-    client: ctx.client,
-  })
-
-  const pluginSkillsXmlItems = skills.length > 0
-    ? formatPluginSkillsAsXmlItems(skills, PLUGIN_ROOT)
-    : null
-
-  log("[init] Plugin loaded", { 
-    agents: Object.keys(agents), 
+  log("[init] Plugin loaded", {
+    agents: Object.keys(agents),
     commands: Object.keys(commands),
     skills: skills.map(s => s.name),
     skillsWithTriggers: skillsWithTriggers.map(s => s.name),
@@ -124,7 +110,6 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
     tools: [
       "gitingest",
       "pdf-to-markdown",
-      "skill",
       "agent-promote",
       "eth-transaction",
       "eth-address-txs",
@@ -310,12 +295,23 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       if (Object.keys(commands).length > 0) {
         config.command = { ...(config.command as Record<string, unknown> ?? {}), ...commands }
       }
+
+      if (skills.length > 0) {
+        const existingSkills =
+          (config.skills as { paths?: string[]; urls?: string[] } | undefined) ?? {}
+        const existingPaths = Array.isArray(existingSkills.paths) ? existingSkills.paths : []
+        config.skills = {
+          ...existingSkills,
+          paths: existingPaths.includes(SKILL_DIR)
+            ? existingPaths
+            : [...existingPaths, SKILL_DIR],
+        }
+      }
     },
 
     tool: {
       gitingest: gitingestTool,
       "pdf-to-markdown": pdfToMarkdownTool,
-      skill: skillTool,
       "prompt-session": createPromptSessionTool(ctx.client),
       "list-child-sessions": createListChildSessionsTool(ctx.client),
       "agent-promote": createAgentPromoteTool(ctx.client, Object.keys(agents)),
@@ -417,8 +413,8 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       _input: Record<string, unknown>,
       output: { system: string[] }
     ): Promise<void> => {
-      injectPluginSkillsIntoSystem(output.system, pluginSkillsXmlItems)
-
+      // The activation block relies on OpenCode's native `skill` tool after we
+      // expose the plugin's bundled skills through `config.skills.paths`.
       if (skillActivationBlock) {
         output.system.push(skillActivationBlock)
       }
