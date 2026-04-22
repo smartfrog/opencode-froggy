@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2
+- Fix skill discovery paths to use plural `.opencode/skills` and `.config/opencode/skills` (matching OpenCode convention)
+- Replace `process.cwd()` with explicit `cwd` parameter sourced from `ctx.directory` so project skills are discovered regardless of launch directory
+- Inject plugin-bundled skills into the existing native `<available_skills>` block via a dedicated `skill-injection` helper
+- Improve `gh-create-pr` command
+
 ## 0.10.1
 - Fix `agent-promote` so it returns successfully before the instance reloads
 - Update the OpenCode plugin SDK to `1.4.6`
