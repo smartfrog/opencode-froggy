@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0
+- Rely on OpenCode's native skill discovery via `config.skills.paths` instead of the plugin's custom `skill` tool and XML injection path
+- Add bundled OpenSpec commands and skills under `.opencode/`
+- Add `openspec/config.yaml` for OpenSpec configuration
+
 ## 0.10.2
 - Fix skill discovery paths to use plural `.opencode/skills` and `.config/opencode/skills` (matching OpenCode convention)
 - Replace `process.cwd()` with explicit `cwd` parameter sourced from `ctx.directory` so project skills are discovered regardless of launch directory
