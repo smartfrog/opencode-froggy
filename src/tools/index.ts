@@ -4,7 +4,15 @@ export { pdfToMarkdownTool } from "./pdf-to-markdown"
 export { createPromptSessionTool, type PromptSessionArgs } from "./prompt-session"
 export { createListChildSessionsTool } from "./list-child-sessions"
 export { createAgentPromoteTool, getPromotedAgents, type AgentPromoteArgs } from "./agent-promote"
-export { createSkillTool, type CreateSkillToolOptions, type SkillInfo } from "./skill"
+export {
+  createSkillTool,
+  discoverAllSkills,
+  formatPluginSkillsAsXmlItems,
+  type CreateSkillToolOptions,
+  type DiscoverAllSkillsOptions,
+  type SkillInfo,
+  type SkillScope,
+} from "./skill"
 
 export {
   ethTransactionTool,

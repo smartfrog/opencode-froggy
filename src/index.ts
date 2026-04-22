@@ -26,12 +26,14 @@ import {
   createListChildSessionsTool,
   createAgentPromoteTool,
   createSkillTool,
+  formatPluginSkillsAsXmlItems,
   getPromotedAgents,
   ethTransactionTool,
   ethAddressTxsTool,
   ethAddressBalanceTool,
   ethTokenTransfersTool,
 } from "./tools"
+import { injectPluginSkillsIntoSystem } from "./skill-injection"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
 export { buildSkillActivationBlock } from "./skill-activation"
@@ -105,8 +107,13 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
   const skillTool = createSkillTool({
     pluginSkills: skills,
     pluginDir: PLUGIN_ROOT,
+    cwd: ctx.directory,
     client: ctx.client,
   })
+
+  const pluginSkillsXmlItems = skills.length > 0
+    ? formatPluginSkillsAsXmlItems(skills, PLUGIN_ROOT)
+    : null
 
   log("[init] Plugin loaded", { 
     agents: Object.keys(agents), 
@@ -410,8 +417,11 @@ const SmartfrogPlugin: Plugin = async (ctx) => {
       _input: Record<string, unknown>,
       output: { system: string[] }
     ): Promise<void> => {
-      if (!skillActivationBlock) return
-      output.system.push(skillActivationBlock)
+      injectPluginSkillsIntoSystem(output.system, pluginSkillsXmlItems)
+
+      if (skillActivationBlock) {
+        output.system.push(skillActivationBlock)
+      }
     },
 
   }

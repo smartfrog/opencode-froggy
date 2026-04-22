@@ -1,101 +1,58 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs"
+import { mkdirSync, writeFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { parseFrontmatter, type LoadedSkill } from "../loaders"
+import {
+  discoverAllSkills,
+  formatPluginSkillsAsXmlItems,
+  type SkillInfo,
+} from "./skill"
+import { type LoadedSkill } from "../loaders"
 
-/**
- * These tests verify the skill discovery and loading logic.
- * 
- * Note: We cannot directly test createSkillTool because it imports
- * @opencode-ai/plugin which is not available in the test environment.
- * Instead, we test the underlying helper functions and data structures.
- */
-
-interface SkillInfo {
-  name: string
-  description: string
-  location: string
-  scope: "plugin" | "opencode" | "opencode-project" | "claude" | "claude-project"
+function createSkillFile(dir: string, name: string, content: string): string {
+  const skillDir = join(dir, name)
+  mkdirSync(skillDir, { recursive: true })
+  const skillPath = join(skillDir, "SKILL.md")
+  writeFileSync(skillPath, content)
+  return skillPath
 }
 
-function discoverSkillsFromDir(
-  skillsDir: string,
-  scope: SkillInfo["scope"]
-): SkillInfo[] {
-  const { existsSync, readdirSync, readFileSync } = require("node:fs")
-  
-  if (!existsSync(skillsDir)) return []
+describe("formatPluginSkillsAsXmlItems", () => {
+  it("should return empty string for no skills", () => {
+    expect(formatPluginSkillsAsXmlItems([], "/plugin")).toBe("")
+  })
 
-  const skills: SkillInfo[] = []
+  it("should format skills without wrapping <available_skills> tags", () => {
+    const skills: LoadedSkill[] = [
+      { name: "tdd", description: "Apply TDD", path: "/p/SKILL.md", body: "" },
+    ]
 
-  try {
-    const entries = readdirSync(skillsDir, { withFileTypes: true })
+    const result = formatPluginSkillsAsXmlItems(skills, "/plugin")
 
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) continue
+    expect(result).toContain("<skill>")
+    expect(result).toContain("<name>tdd</name>")
+    expect(result).toContain("<description>Apply TDD</description>")
+    expect(result).not.toContain("<available_skills>")
+  })
 
-      const entryPath = join(skillsDir, entry.name)
+  it("should format multiple skills", () => {
+    const skills: LoadedSkill[] = [
+      { name: "a", description: "A", path: "/a", body: "" },
+      { name: "b", description: "B", path: "/b", body: "" },
+    ]
 
-      if (entry.isDirectory()) {
-        const skillMdPath = join(entryPath, "SKILL.md")
-        if (!existsSync(skillMdPath)) continue
+    const result = formatPluginSkillsAsXmlItems(skills, "/plugin")
 
-        try {
-          const content = readFileSync(skillMdPath, "utf-8")
-          const { data } = parseFrontmatter<{ name?: string; description?: string }>(content)
+    expect(result).toContain("<name>a</name>")
+    expect(result).toContain("<name>b</name>")
+  })
+})
 
-          if (data.name && data.description) {
-            skills.push({
-              name: data.name,
-              description: data.description,
-              location: skillMdPath,
-              scope,
-            })
-          }
-        } catch {
-          // Skip invalid skill files
-        }
-      }
-    }
-  } catch {
-    // Directory not accessible
-  }
-
-  return skills
-}
-
-function pluginSkillsToInfo(skills: LoadedSkill[], pluginDir: string): SkillInfo[] {
-  return skills.map(s => ({
-    name: s.name,
-    description: s.description,
-    location: s.path || join(pluginDir, "skill", s.name, "SKILL.md"),
-    scope: "plugin" as const,
-  }))
-}
-
-function formatSkillsXml(skills: SkillInfo[]): string {
-  if (skills.length === 0) return ""
-
-  const skillsXml = skills
-    .map(skill => {
-      return [
-        "  <skill>",
-        `    <name>${skill.name}</name>`,
-        `    <description>${skill.description}</description>`,
-        "  </skill>",
-      ].join("\n")
-    })
-    .join("\n")
-
-  return `\n\n<available_skills>\n${skillsXml}\n</available_skills>`
-}
-
-describe("skill discovery", () => {
+describe("discoverAllSkills", () => {
   let testDir: string
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `skill-test-${Date.now()}`)
+    testDir = join(tmpdir(), `skill-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     mkdirSync(testDir, { recursive: true })
   })
 
@@ -103,195 +60,207 @@ describe("skill discovery", () => {
     rmSync(testDir, { recursive: true, force: true })
   })
 
-  function createSkillFile(dir: string, name: string, content: string): string {
-    const skillDir = join(dir, name)
-    mkdirSync(skillDir, { recursive: true })
-    const skillPath = join(skillDir, "SKILL.md")
-    writeFileSync(skillPath, content)
-    return skillPath
-  }
+  it("should return empty array when no skills and no plugin skills", () => {
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
+    })
+    expect(result).toEqual([])
+  })
 
-  describe("discoverSkillsFromDir", () => {
-    it("should return empty array for non-existent directory", () => {
-      const result = discoverSkillsFromDir("/non/existent/path", "plugin")
-      expect(result).toEqual([])
+  it("should include plugin skills with scope=plugin", () => {
+    const pluginSkills: LoadedSkill[] = [
+      { name: "tdd", description: "TDD", path: "/plugin/skill/tdd/SKILL.md", body: "" },
+    ]
+
+    const result = discoverAllSkills({
+      pluginSkills,
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should discover valid skill with name and description", () => {
-      createSkillFile(testDir, "my-skill", `---
-name: my-skill
-description: A test skill
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe("tdd")
+    expect(result[0].scope).toBe("plugin")
+  })
+
+  it("should discover .opencode/skills/ in cwd", () => {
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    mkdirSync(opencodeDir, { recursive: true })
+    createSkillFile(opencodeDir, "project-skill", `---
+name: project-skill
+description: From project
 ---
+Body`)
 
-Skill content here.`)
-
-      const result = discoverSkillsFromDir(testDir, "opencode")
-
-      expect(result).toHaveLength(1)
-      expect(result[0].name).toBe("my-skill")
-      expect(result[0].description).toBe("A test skill")
-      expect(result[0].scope).toBe("opencode")
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should ignore directories without SKILL.md", () => {
-      const skillDir = join(testDir, "no-skill")
-      mkdirSync(skillDir)
-      writeFileSync(join(skillDir, "README.md"), "Not a skill")
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe("project-skill")
+    expect(result[0].scope).toBe("opencode-project")
+  })
 
-      const result = discoverSkillsFromDir(testDir, "plugin")
-
-      expect(result).toHaveLength(0)
-    })
-
-    it("should ignore skills without name", () => {
-      createSkillFile(testDir, "nameless", `---
-description: Has description but no name
+  it("should discover .claude/skills/ in cwd", () => {
+    const claudeDir = join(testDir, ".claude", "skills")
+    mkdirSync(claudeDir, { recursive: true })
+    createSkillFile(claudeDir, "claude-skill", `---
+name: claude-skill
+description: From claude
 ---
+Body`)
 
-Content`)
-
-      const result = discoverSkillsFromDir(testDir, "plugin")
-
-      expect(result).toHaveLength(0)
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should ignore skills without description", () => {
-      createSkillFile(testDir, "no-desc", `---
-name: no-desc-skill
+    expect(result).toHaveLength(1)
+    expect(result[0].scope).toBe("claude-project")
+  })
+
+  it("should let project skills override plugin skills with same name", () => {
+    const pluginSkills: LoadedSkill[] = [
+      { name: "shared", description: "Plugin version", path: "/p", body: "" },
+    ]
+
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    mkdirSync(opencodeDir, { recursive: true })
+    createSkillFile(opencodeDir, "shared", `---
+name: shared
+description: Project version
 ---
+Body`)
 
-Content`)
-
-      const result = discoverSkillsFromDir(testDir, "plugin")
-
-      expect(result).toHaveLength(0)
+    const result = discoverAllSkills({
+      pluginSkills,
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should ignore hidden directories", () => {
-      createSkillFile(testDir, ".hidden-skill", `---
+    expect(result).toHaveLength(1)
+    expect(result[0].description).toBe("Project version")
+    expect(result[0].scope).toBe("opencode-project")
+  })
+
+  it("should ignore directories without SKILL.md", () => {
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    const incompleteDir = join(opencodeDir, "no-skill")
+    mkdirSync(incompleteDir, { recursive: true })
+    writeFileSync(join(incompleteDir, "README.md"), "not a skill")
+
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
+    })
+
+    expect(result).toHaveLength(0)
+  })
+
+  it("should ignore skills missing name or description", () => {
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    mkdirSync(opencodeDir, { recursive: true })
+    createSkillFile(opencodeDir, "no-name", `---
+description: no name
+---
+Body`)
+    createSkillFile(opencodeDir, "no-desc", `---
+name: no-desc
+---
+Body`)
+
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
+    })
+
+    expect(result).toHaveLength(0)
+  })
+
+  it("should ignore hidden directories", () => {
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    mkdirSync(opencodeDir, { recursive: true })
+    createSkillFile(opencodeDir, ".hidden", `---
 name: hidden
-description: Hidden skill
+description: hidden skill
 ---
+Body`)
 
-Content`)
-
-      const result = discoverSkillsFromDir(testDir, "plugin")
-
-      expect(result).toHaveLength(0)
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should discover multiple skills", () => {
-      createSkillFile(testDir, "skill-a", `---
-name: skill-a
-description: First skill
----
-Content A`)
-
-      createSkillFile(testDir, "skill-b", `---
-name: skill-b
-description: Second skill
----
-Content B`)
-
-      const result = discoverSkillsFromDir(testDir, "opencode-project")
-
-      expect(result).toHaveLength(2)
-      expect(result.map(s => s.name).sort()).toEqual(["skill-a", "skill-b"])
-    })
+    expect(result).toHaveLength(0)
   })
 
-  describe("pluginSkillsToInfo", () => {
-    it("should convert LoadedSkill array to SkillInfo array", () => {
-      const pluginSkills: LoadedSkill[] = [
-        {
-          name: "test-skill",
-          description: "A test skill",
-          path: "/fake/path/SKILL.md",
-          body: "Test body",
-        },
-      ]
+  it("should let opencode-project override claude-project with same name", () => {
+    const claudeDir = join(testDir, ".claude", "skills")
+    mkdirSync(claudeDir, { recursive: true })
+    createSkillFile(claudeDir, "shared", `---
+name: shared
+description: Claude version
+---
+Body`)
 
-      const result = pluginSkillsToInfo(pluginSkills, "/plugin/dir")
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    mkdirSync(opencodeDir, { recursive: true })
+    createSkillFile(opencodeDir, "shared", `---
+name: shared
+description: Opencode version
+---
+Body`)
 
-      expect(result).toHaveLength(1)
-      expect(result[0].name).toBe("test-skill")
-      expect(result[0].description).toBe("A test skill")
-      expect(result[0].location).toBe("/fake/path/SKILL.md")
-      expect(result[0].scope).toBe("plugin")
+    const result = discoverAllSkills({
+      pluginSkills: [],
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should use default path when path not provided", () => {
-      const pluginSkills: LoadedSkill[] = [
-        {
-          name: "no-path-skill",
-          description: "Skill without path",
-          path: "",
-          body: "",
-        },
-      ]
-
-      const result = pluginSkillsToInfo(pluginSkills, "/my/plugin")
-
-      expect(result[0].location).toBe("/my/plugin/skill/no-path-skill/SKILL.md")
-    })
+    expect(result).toHaveLength(1)
+    expect(result[0].description).toBe("Opencode version")
+    expect(result[0].scope).toBe("opencode-project")
   })
 
-  describe("formatSkillsXml", () => {
-    it("should return empty string for no skills", () => {
-      const result = formatSkillsXml([])
-      expect(result).toBe("")
+  it("should aggregate multiple sources", () => {
+    const pluginSkills: LoadedSkill[] = [
+      { name: "plugin-only", description: "P", path: "/p", body: "" },
+    ]
+
+    const opencodeDir = join(testDir, ".opencode", "skills")
+    mkdirSync(opencodeDir, { recursive: true })
+    createSkillFile(opencodeDir, "opencode-only", `---
+name: opencode-only
+description: O
+---
+Body`)
+
+    const claudeDir = join(testDir, ".claude", "skills")
+    mkdirSync(claudeDir, { recursive: true })
+    createSkillFile(claudeDir, "claude-only", `---
+name: claude-only
+description: C
+---
+Body`)
+
+    const result = discoverAllSkills({
+      pluginSkills,
+      pluginDir: "/plugin",
+      cwd: testDir,
     })
 
-    it("should format single skill as XML", () => {
-      const skills: SkillInfo[] = [
-        {
-          name: "my-skill",
-          description: "My description",
-          location: "/path",
-          scope: "plugin",
-        },
-      ]
-
-      const result = formatSkillsXml(skills)
-
-      expect(result).toContain("<available_skills>")
-      expect(result).toContain("<name>my-skill</name>")
-      expect(result).toContain("<description>My description</description>")
-      expect(result).toContain("</available_skills>")
-    })
-
-    it("should format multiple skills", () => {
-      const skills: SkillInfo[] = [
-        { name: "skill-a", description: "Desc A", location: "/a", scope: "plugin" },
-        { name: "skill-b", description: "Desc B", location: "/b", scope: "opencode" },
-      ]
-
-      const result = formatSkillsXml(skills)
-
-      expect(result).toContain("<name>skill-a</name>")
-      expect(result).toContain("<name>skill-b</name>")
-    })
-  })
-
-  describe("skill deduplication", () => {
-    it("should demonstrate last-wins deduplication behavior", () => {
-      // This tests the expected behavior when skills are merged
-      const allSkills: SkillInfo[] = [
-        { name: "shared", description: "Plugin version", location: "/plugin", scope: "plugin" },
-        { name: "shared", description: "Global version", location: "/global", scope: "opencode" },
-        { name: "shared", description: "Project version", location: "/project", scope: "opencode-project" },
-      ]
-
-      // Simulate deduplication (last wins)
-      const skillMap = new Map<string, SkillInfo>()
-      for (const skill of allSkills) {
-        skillMap.set(skill.name, skill)
-      }
-      const deduplicated = Array.from(skillMap.values())
-
-      expect(deduplicated).toHaveLength(1)
-      expect(deduplicated[0].description).toBe("Project version")
-      expect(deduplicated[0].scope).toBe("opencode-project")
-    })
+    expect(result).toHaveLength(3)
+    const byName = new Map(result.map((s: SkillInfo) => [s.name, s]))
+    expect(byName.get("plugin-only")?.scope).toBe("plugin")
+    expect(byName.get("opencode-only")?.scope).toBe("opencode-project")
+    expect(byName.get("claude-only")?.scope).toBe("claude-project")
   })
 })

@@ -8,11 +8,18 @@ import { log } from "../logger"
 
 type Client = ReturnType<typeof createOpencodeClient>
 
+export type SkillScope =
+  | "plugin"
+  | "opencode"
+  | "opencode-project"
+  | "claude"
+  | "claude-project"
+
 export interface SkillInfo {
   name: string
   description: string
   location: string
-  scope: "plugin" | "opencode" | "opencode-project" | "claude" | "claude-project"
+  scope: SkillScope
 }
 
 interface SkillFrontmatter {
@@ -23,10 +30,7 @@ interface SkillFrontmatter {
 const TOOL_DESCRIPTION_PREFIX = `Load a skill to get detailed instructions for a specific task.`
 const TOOL_DESCRIPTION_NO_SKILLS = `${TOOL_DESCRIPTION_PREFIX} No skills are currently available.`
 
-function discoverSkillsFromDir(
-  skillsDir: string,
-  scope: SkillInfo["scope"]
-): SkillInfo[] {
+function discoverSkillsFromDir(skillsDir: string, scope: SkillScope): SkillInfo[] {
   if (!existsSync(skillsDir)) return []
 
   const skills: SkillInfo[] = []
@@ -36,28 +40,25 @@ function discoverSkillsFromDir(
 
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue
+      if (!entry.isDirectory()) continue
 
-      const entryPath = join(skillsDir, entry.name)
+      const skillMdPath = join(skillsDir, entry.name, "SKILL.md")
+      if (!existsSync(skillMdPath)) continue
 
-      if (entry.isDirectory()) {
-        const skillMdPath = join(entryPath, "SKILL.md")
-        if (!existsSync(skillMdPath)) continue
+      try {
+        const content = readFileSync(skillMdPath, "utf-8")
+        const { data } = parseFrontmatter<SkillFrontmatter>(content)
 
-        try {
-          const content = readFileSync(skillMdPath, "utf-8")
-          const { data } = parseFrontmatter<SkillFrontmatter>(content)
+        if (!data.name || !data.description) continue
 
-          if (data.name && data.description) {
-            skills.push({
-              name: data.name,
-              description: data.description,
-              location: skillMdPath,
-              scope,
-            })
-          }
-        } catch {
-          // Skip invalid skill files
-        }
+        skills.push({
+          name: data.name,
+          description: data.description,
+          location: skillMdPath,
+          scope,
+        })
+      } catch {
+        // Skip invalid skill files
       }
     }
   } catch {
@@ -65,26 +66,6 @@ function discoverSkillsFromDir(
   }
 
   return skills
-}
-
-function discoverOpencodeGlobalSkills(): SkillInfo[] {
-  const skillsDir = join(homedir(), ".config", "opencode", "skill")
-  return discoverSkillsFromDir(skillsDir, "opencode")
-}
-
-function discoverOpencodeProjectSkills(cwd: string): SkillInfo[] {
-  const skillsDir = join(cwd, ".opencode", "skill")
-  return discoverSkillsFromDir(skillsDir, "opencode-project")
-}
-
-function discoverClaudeGlobalSkills(): SkillInfo[] {
-  const skillsDir = join(homedir(), ".claude", "skills")
-  return discoverSkillsFromDir(skillsDir, "claude")
-}
-
-function discoverClaudeProjectSkills(cwd: string): SkillInfo[] {
-  const skillsDir = join(cwd, ".claude", "skills")
-  return discoverSkillsFromDir(skillsDir, "claude-project")
 }
 
 function pluginSkillsToInfo(skills: LoadedSkill[], pluginDir: string): SkillInfo[] {
@@ -96,21 +77,55 @@ function pluginSkillsToInfo(skills: LoadedSkill[], pluginDir: string): SkillInfo
   }))
 }
 
+function formatSkillItems(skills: SkillInfo[]): string {
+  return skills
+    .map(skill => [
+      "  <skill>",
+      `    <name>${skill.name}</name>`,
+      `    <description>${skill.description}</description>`,
+      "  </skill>",
+    ].join("\n"))
+    .join("\n")
+}
+
 function formatSkillsXml(skills: SkillInfo[]): string {
   if (skills.length === 0) return ""
+  return `<available_skills>\n${formatSkillItems(skills)}\n</available_skills>`
+}
 
-  const skillsXml = skills
-    .map(skill => {
-      return [
-        "  <skill>",
-        `    <name>${skill.name}</name>`,
-        `    <description>${skill.description}</description>`,
-        "  </skill>",
-      ].join("\n")
-    })
-    .join("\n")
+export interface DiscoverAllSkillsOptions {
+  pluginSkills: LoadedSkill[]
+  pluginDir: string
+  cwd: string
+}
 
-  return `\n\n<available_skills>\n${skillsXml}\n</available_skills>`
+export function discoverAllSkills(options: DiscoverAllSkillsOptions): SkillInfo[] {
+  const { pluginSkills, pluginDir, cwd } = options
+
+  // Merge order: plugin < claude global < opencode global < claude project < opencode project
+  // Later entries override earlier on name collision (project > global > plugin)
+  const allSkills = [
+    ...pluginSkillsToInfo(pluginSkills, pluginDir),
+    ...discoverSkillsFromDir(join(homedir(), ".claude", "skills"), "claude"),
+    ...discoverSkillsFromDir(join(homedir(), ".config", "opencode", "skills"), "opencode"),
+    ...discoverSkillsFromDir(join(cwd, ".claude", "skills"), "claude-project"),
+    ...discoverSkillsFromDir(join(cwd, ".opencode", "skills"), "opencode-project"),
+  ]
+
+  const skillMap = new Map<string, SkillInfo>()
+  for (const skill of allSkills) {
+    skillMap.set(skill.name, skill)
+  }
+
+  return Array.from(skillMap.values())
+}
+
+export function formatPluginSkillsAsXmlItems(
+  skills: LoadedSkill[],
+  pluginDir: string
+): string {
+  if (skills.length === 0) return ""
+  return formatSkillItems(pluginSkillsToInfo(skills, pluginDir))
 }
 
 function loadSkillContent(location: string): string {
@@ -122,68 +137,33 @@ function loadSkillContent(location: string): string {
 export interface CreateSkillToolOptions {
   pluginSkills: LoadedSkill[]
   pluginDir: string
+  cwd: string
   client: Client
 }
 
 export function createSkillTool(options: CreateSkillToolOptions) {
-  let cachedSkills: SkillInfo[] | null = null
-  let cachedDescription: string | null = null
-  const { client, pluginDir, pluginSkills } = options
+  const { client, pluginDir, pluginSkills, cwd } = options
+  const skills = discoverAllSkills({ pluginSkills, pluginDir, cwd })
 
-  const getSkills = (cwd: string): SkillInfo[] => {
-    if (cachedSkills) return cachedSkills
-
-    // Merge order: plugin defaults < global < project (later entries override earlier on name collision)
-    const allSkills = [
-      ...pluginSkillsToInfo(pluginSkills, pluginDir),
-      ...discoverClaudeGlobalSkills(),
-      ...discoverOpencodeGlobalSkills(),
-      ...discoverClaudeProjectSkills(cwd),
-      ...discoverOpencodeProjectSkills(cwd),
-    ]
-
-    // Deduplicate by name - last definition wins (project > global > plugin)
-    const skillMap = new Map<string, SkillInfo>()
-    for (const skill of allSkills) {
-      skillMap.set(skill.name, skill)
-    }
-
-    cachedSkills = Array.from(skillMap.values())
-    return cachedSkills
-  }
-
-  const getDescription = (cwd: string): string => {
-    if (cachedDescription) return cachedDescription
-
-    const skills = getSkills(cwd)
-    cachedDescription =
-      skills.length === 0
-        ? TOOL_DESCRIPTION_NO_SKILLS
-        : TOOL_DESCRIPTION_PREFIX + formatSkillsXml(skills)
-
-    return cachedDescription
-  }
-
-  // Pre-compute with current working directory
-  const cwd = process.cwd()
-  getDescription(cwd)
+  const description = skills.length === 0
+    ? TOOL_DESCRIPTION_NO_SKILLS
+    : `${TOOL_DESCRIPTION_PREFIX}\n\n${formatSkillsXml(skills)}`
 
   return tool({
-    get description() {
-      return cachedDescription ?? TOOL_DESCRIPTION_PREFIX
-    },
+    description,
     args: {
       name: tool.schema
         .string()
-        .describe("The skill identifier from available_skills (e.g., 'code-review' or 'category/helper')"),
+        .describe("The skill identifier from available_skills (e.g., 'tdd', 'openspec-propose')"),
     },
     async execute(args: { name: string }, _context: ToolContext) {
-      const skills = getSkills(cwd)
       const skill = skills.find(s => s.name === args.name)
 
       if (!skill) {
         const available = skills.map(s => s.name).join(", ")
-        throw new Error(`Skill "${args.name}" not found. Available skills: ${available || "none"}`)
+        throw new Error(
+          `Skill "${args.name}" not found. Available skills: ${available || "none"}`
+        )
       }
 
       const body = loadSkillContent(skill.location)
