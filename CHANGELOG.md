@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.0
+- Add `/linear-stale-check` command to review open Linear issues and report likely active, uncertain, or obsolete work
+- Document `/linear-stale-check` usage in the README
+
 ## 0.11.0
 - Rely on OpenCode's native skill discovery via `config.skills.paths` instead of the plugin's custom `skill` tool and XML injection path
 - Add bundled OpenSpec commands and skills under `.opencode/`
