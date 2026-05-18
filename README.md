@@ -78,6 +78,7 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | `/commit-push` | Stage, commit, and push changes with user confirmation | `build` |
 | `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
+| `/linear-stale-check` | Review open Linear issues for the configured team and report whether they are likely active, uncertain, or obsolete | `plan` |
 | `/review-changes` | Review uncommitted changes (staged, unstaged, untracked) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review diff from source branch into target branch | `code-reviewer` |
 | `/send-to [agent] <message>` | Send a message to a child session (subagent) to continue the conversation | - |
@@ -103,6 +104,24 @@ Shows staged changes, unstaged changes, and untracked file contents.
 /diff-summary feature-branch main
 ```
 Shows stats overview, commits, files changed, and full diff between branches.
+
+### /linear-stale-check
+
+Analyzes open Linear issues for the team configured in `AGENTS.md` with:
+
+```text
+Linear team: <name>
+```
+
+If no team is configured, the command lists available Linear teams and asks which one to use for the current run.
+
+The command is read-only. It fetches open issues, investigates related code, skips code investigation for issues already `In Progress`, and outputs a single report grouped by verdict:
+
+- 🔴 Likely obsolete
+- 🟡 Uncertain
+- 🟢 Likely active
+
+It does not modify Linear issues, add comments, or update project files.
 
 ---
 
