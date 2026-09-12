@@ -1,55 +1,50 @@
-import { tool, type ToolContext } from "@opencode-ai/plugin"
-import type { createOpencodeClient } from "@opencode-ai/sdk"
 import { log } from "../logger"
-
-type Client = ReturnType<typeof createOpencodeClient>
+import type { ChildSessionTracker } from "../session-children"
 
 export interface PromptSessionArgs {
   message: string
   sessionId?: string
 }
 
-export function createPromptSessionTool(client: Client) {
-  return tool({
+interface SessionPrompter {
+  prompt(input: { sessionID: string; text: string }): Promise<unknown>
+}
+
+export function createPromptSessionTool(
+  session: SessionPrompter,
+  tracker: ChildSessionTracker
+) {
+  return {
+    name: "prompt-session",
     description: "Send a message to a child session (subagent) to continue the conversation",
-    args: {
-      message: tool.schema.string().describe("The message to send to the child session"),
-      sessionId: tool.schema.string().optional().describe("The child session ID to target (optional - uses last child if not provided)"),
+    input: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "The message to send to the child session" },
+        sessionId: {
+          type: "string",
+          description: "The child session ID to target (optional - uses last child if not provided)",
+        },
+      },
+      required: ["message"],
+      additionalProperties: false,
     },
-    async execute(args: PromptSessionArgs, context: ToolContext) {
-      let targetSessionId = args.sessionId
-
+    async execute(input: unknown, context: unknown) {
+      const args = input as PromptSessionArgs
+      const ctx = context as { sessionID: string }
+      const targetSessionId = args.sessionId ?? tracker.lastChild(ctx.sessionID)?.id
       if (!targetSessionId) {
-        const children = await client.session.children({
-          path: { id: context.sessionID },
-        })
-
-        const lastChild = (children.data ?? []).at(-1)
-        if (!lastChild) {
-          return "Error: No child session found for current session"
-        }
-
-        targetSessionId = lastChild.id
+        return { content: "Error: No child session found for current session" }
       }
 
       log("[prompt-session] Sending message to child session", {
-        parentSessionID: context.sessionID,
+        parentSessionID: ctx.sessionID,
         childSessionID: targetSessionId,
         messagePreview: args.message.slice(0, 100),
       })
 
-      const response = await client.session.prompt({
-        path: { id: targetSessionId },
-        body: { parts: [{ type: "text", text: args.message }] },
-      })
-
-      const parts = (response.data as { parts?: Array<{ type: string; text?: string }> })?.parts ?? []
-      const textContent = parts
-        .filter((p) => p.type === "text" && p.text)
-        .map((p) => p.text)
-        .join("\n")
-
-      return textContent || "Message sent to child session"
+      await session.prompt({ sessionID: targetSessionId, text: args.message })
+      return { content: `Message sent to child session ${targetSessionId}` }
     },
-  })
+  }
 }

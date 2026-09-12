@@ -38,3 +38,11 @@ export function getGlobalHookDir(): string {
 export function getProjectHookDir(directory: string): string {
   return join(directory, ".opencode", "hook")
 }
+
+export function getGlobalCommandDir(): string {
+  return join(getUserConfigDir(), "opencode", "commands")
+}
+
+export function getGlobalAgentDir(): string {
+  return join(getUserConfigDir(), "opencode", "agents")
+}

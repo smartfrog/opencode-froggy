@@ -56,16 +56,18 @@ Add the plugin to your OpenCode configuration file (`opencode.json`):
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-froggy"]
+  "plugins": ["opencode-froggy"]
 }
 ```
+
+Requires OpenCode V2.
 
 ### From local files
 
 Alternatively, clone or copy the plugin files to one of these directories:
 
-- **Project-local**: `.opencode/plugin/opencode-froggy/`
-- **Global**: `~/.config/opencode/plugin/opencode-froggy/`
+- **Project-local**: `.opencode/plugins/opencode-froggy/`
+- **Global**: `~/.config/opencode/plugins/opencode-froggy/`
 
 ---
 
@@ -140,7 +142,7 @@ It does not modify Linear issues, add comments, or update project files.
 
 ## Skills
 
-Skills are contextual instructions loaded on demand via the `skill` tool. The agent invokes `skill({ name: "skill-name" })` to load the instructions when needed.
+Skills are contextual instructions loaded on demand via the `skill` tool. The agent invokes `skill({ id: "skill-name" })` to load the instructions when needed.
 
 ### Overview
 
@@ -270,7 +272,7 @@ A skill without `name` or `description` will be ignored.
 If a skill defines `use_when`, a directive is injected into the system prompt:
 
 ```
-MANDATORY: Call skill({ name: "my-skill" }) <use_when content>
+MANDATORY: Call skill({ id: "my-skill" }) <use_when content>
 ```
 
 This instructs the agent to load the skill when the specified condition is met.
@@ -361,8 +363,8 @@ promptSession({
 
 #### Behavior
 
-- If `sessionId` is not provided, the tool automatically targets the most recently created child session
-- Returns the text response from the child session
+- If `sessionId` is not provided, the tool targets the most recently created child session tracked since the plugin loaded (pass `sessionId` explicitly for older sessions)
+- Returns a confirmation once the message is admitted to the child session
 - Returns an error message if no child session exists for the current session
 
 ---
@@ -468,8 +470,7 @@ Promote an agent to primary (default) or specify a grade.
 #### Notes
 
 - Only agents from this plugin can be promoted (see [Agents](#agents) table)
-- Changes persist in memory until OpenCode restarts
-- After promotion, use `Tab` or `<leader>a` to select the agent
+- Changes apply immediately and persist across restarts via plugin storage
 
 ---
 

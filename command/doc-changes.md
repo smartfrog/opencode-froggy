@@ -1,6 +1,7 @@
 ---
 description: Update documentation based on uncommitted changes (new features only)
 agent: doc-writer
+subagent: true
 ---
 
 ## Analysis Phase

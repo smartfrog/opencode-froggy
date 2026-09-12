@@ -31,6 +31,7 @@ export interface CommandFrontmatter {
   description: string
   agent?: string
   model?: string
+  subagent?: boolean
   subtask?: boolean
 }
 
@@ -39,6 +40,7 @@ export interface CommandConfig {
   description?: string
   agent?: string
   model?: string
+  subagent?: boolean
   subtask?: boolean
 }
 
@@ -205,6 +207,7 @@ export function loadCommands(commandDir: string): Record<string, CommandConfig> 
       description: data.description || "",
       agent: data.agent,
       model: data.model,
+      subagent: data.subagent,
       subtask: data.subtask,
       template: body.trim(),
     }

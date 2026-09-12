@@ -1,5 +1,3 @@
-import { tool, type ToolContext } from "@opencode-ai/plugin"
-import type { createOpencodeClient } from "@opencode-ai/sdk"
 import { log } from "../logger"
 import {
   type AgentMode,
@@ -19,62 +17,79 @@ export {
   validateAgentName,
 } from "./agent-promote-core"
 
-type Client = ReturnType<typeof createOpencodeClient>
-
 export interface AgentPromoteArgs {
   name: string
   grade?: string
 }
 
-export function createAgentPromoteTool(client: Client, pluginAgentNames: string[]) {
-  return tool({
+interface AgentReader {
+  get(input: { agentID: string }): Promise<{ data?: { mode?: string } } | { mode?: string }>
+}
+
+interface AgentReloader {
+  reload(): Promise<void>
+}
+
+interface PluginStorage {
+  set(key: string, value: unknown): Promise<void>
+}
+
+const STORAGE_KEY = "promoted-agents"
+
+export function createAgentPromoteTool(
+  agent: AgentReader,
+  reloader: AgentReloader,
+  storage: PluginStorage,
+  pluginAgentNames: string[]
+) {
+  return {
+    name: "agent-promote",
     description: "Change the type of an agent to primary, subagent or all",
-    args: {
-      name: tool.schema.string().describe("Name of the agent"),
-      grade: tool.schema.string().optional().describe("Target type: 'subagent', 'primary', or 'all' (default: primary)"),
+    input: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Name of the agent" },
+        grade: {
+          type: "string",
+          description: "Target type: 'subagent', 'primary', or 'all' (default: primary)",
+        },
+      },
+      required: ["name"],
+      additionalProperties: false,
     },
-    async execute(args: AgentPromoteArgs, _context: ToolContext) {
+    async execute(input: unknown) {
+      const args = input as AgentPromoteArgs
       const { name } = args
       const grade = args.grade?.trim() || "primary"
 
       if (!validateGrade(grade)) {
-        return `Invalid grade "${grade}". Valid grades: ${VALID_GRADES.join(", ")}`
+        return { content: `Invalid grade "${grade}". Valid grades: ${VALID_GRADES.join(", ")}` }
       }
 
       if (!validateAgentName(name, pluginAgentNames)) {
-        return `Agent "${name}" not found in this plugin. Available: ${pluginAgentNames.join(", ")}`
+        return {
+          content: `Agent "${name}" not found in this plugin. Available: ${pluginAgentNames.join(", ")}`,
+        }
       }
 
-      const agentsResp = await client.app.agents()
-      const agents = agentsResp.data ?? []
-      const existingAgent = agents.find((a) => a.name === name)
-
-      if (existingAgent && existingAgent.mode === grade) {
-        return `Agent "${name}" is already of type "${grade}"`
+      const existing = await agent.get({ agentID: name })
+      const currentMode = (existing as { data?: { mode?: string } }).data?.mode
+        ?? (existing as { mode?: string }).mode
+      if (currentMode === grade) {
+        return { content: `Agent "${name}" is already of type "${grade}"` }
       }
 
-      setPromotedAgent(name, grade)
+      setPromotedAgent(name, grade as AgentMode)
       log("[agent-promote] Agent type changed", { name, grade })
 
-      await client.tui.showToast({
-        body: {
-          message: `Promoting agent "${name}" to "${grade}"...`,
-          variant: "success",
-          duration: 3000,
-        },
-      })
+      const record: Record<string, AgentMode> = {}
+      for (const [key, value] of getPromotedAgents()) record[key] = value
+      await storage.set(STORAGE_KEY, record)
+      await reloader.reload()
 
-      setTimeout(() => {
-        void client.instance.dispose().catch((error) => {
-          log("[agent-promote] Delayed dispose failed", {
-            name,
-            grade,
-            error: String(error),
-          })
-        })
-      }, 0)
-
-      return `Agent "${name}" changed to type "${grade}". Use Tab or <leader>a to select it.`
+      return { content: `Agent "${name}" changed to type "${grade}".` }
     },
-  })
+  }
 }
+
+export { STORAGE_KEY as AGENT_PROMOTE_STORAGE_KEY }

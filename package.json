@@ -1,15 +1,26 @@
 {
   "name": "opencode-froggy",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "OpenCode plugin with a hook layer (tool.before.*, session.idle...), agents (code-reviewer, doc-writer), and commands (/review-pr, /commit)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./tui": {
+      "import": "./tui.ts",
+      "types": "./tui.ts"
+    }
+  },
   "type": "module",
   "files": [
     "dist",
     "agent",
     "command",
     "skill",
+    "tui.ts",
     "images",
     "README.md"
   ],
@@ -38,19 +49,16 @@
     "url": "https://github.com/smartfrog/opencode-froggy"
   },
   "dependencies": {
+    "@opencode/plugin": "^2.0.2",
     "js-yaml": "^4.1.0",
     "pdfjs-dist": "^4.8.69",
     "viem": "^2.44.1"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.4.6",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@vitest/coverage-v8": "^4.0.17",
     "typescript": "^5.7.0",
     "vitest": "^4.0.16"
-  },
-  "peerDependencies": {
-    "@opencode-ai/plugin": "*"
   }
 }

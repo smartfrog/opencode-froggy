@@ -1,6 +1,7 @@
 ---
 description: Review changes from source branch into target branch
 agent: code-reviewer
+subagent: true
 ---
 
 # Review: $1 → $2

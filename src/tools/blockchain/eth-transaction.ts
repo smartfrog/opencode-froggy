@@ -2,7 +2,6 @@
  * Tool to get Ethereum transaction details by hash
  */
 
-import { tool, type ToolContext } from "@opencode-ai/plugin"
 import { EtherscanClient, EtherscanClientError, validateTxHash, weiToEth } from "./etherscan-client"
 import { getTransactionReceipt, getBlock, getTokenMetadata } from "./viem-client"
 import {
@@ -239,40 +238,44 @@ export async function getTransactionDetails(
   return result
 }
 
-export const ethTransactionTool = tool({
+export const ethTransactionTool = {
+  name: "eth-transaction",
   description:
     "Get Ethereum transaction details by transaction hash. " +
     "Returns status, block, addresses, gas costs in JSON format. " +
     "Use optional parameters to include internal transactions, token transfers, and decoded event logs.",
-  args: {
-    hash: tool.schema.string().describe("Transaction hash (0x...)"),
-    chainId: tool.schema.string().optional().describe(CHAIN_ID_DESCRIPTION),
-    includeInternalTxs: tool.schema
-      .boolean()
-      .optional()
-      .describe("Include internal transactions (ETH transfers between contracts)"),
-    includeTokenTransfers: tool.schema
-      .boolean()
-      .optional()
-      .describe("Include ERC-20 token transfers"),
-    decodeLogs: tool.schema
-      .boolean()
-      .optional()
-      .describe("Decode event logs (Transfer, Approval, Deposit, Withdrawal)"),
+  input: {
+    type: "object",
+    properties: {
+      hash: { type: "string", description: "Transaction hash (0x...)" },
+      chainId: { type: "string", description: CHAIN_ID_DESCRIPTION },
+      includeInternalTxs: {
+        type: "boolean",
+        description: "Include internal transactions (ETH transfers between contracts)",
+      },
+      includeTokenTransfers: { type: "boolean", description: "Include ERC-20 token transfers" },
+      decodeLogs: {
+        type: "boolean",
+        description: "Decode event logs (Transfer, Approval, Deposit, Withdrawal)",
+      },
+    },
+    required: ["hash"],
+    additionalProperties: false,
   },
-  async execute(args: EthTransactionArgs, _context: ToolContext): Promise<string> {
+  async execute(input: unknown): Promise<{ content: string }> {
+    const args = input as EthTransactionArgs
     try {
       const result = await getTransactionDetails(args.hash, args.chainId, {
         includeInternalTxs: args.includeInternalTxs,
         includeTokenTransfers: args.includeTokenTransfers,
         decodeLogs: args.decodeLogs,
       })
-      return JSON.stringify(result, null, 2)
+      return { content: JSON.stringify(result, null, 2) }
     } catch (error) {
       if (error instanceof EtherscanClientError) {
-        return JSON.stringify({ error: error.message })
+        return { content: JSON.stringify({ error: error.message }) }
       }
       throw error
     }
   },
-})
+}

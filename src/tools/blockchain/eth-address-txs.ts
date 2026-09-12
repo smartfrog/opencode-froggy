@@ -2,7 +2,6 @@
  * Tool to list Ethereum transactions for an address
  */
 
-import { tool, type ToolContext } from "@opencode-ai/plugin"
 import { EtherscanClient, EtherscanClientError, validateAddress } from "./etherscan-client"
 import { formatTransactionList } from "./formatters"
 import { DEFAULT_TRANSACTION_LIMIT, CHAIN_ID_DESCRIPTION } from "./types"
@@ -26,31 +25,33 @@ export async function getAddressTransactions(
   return formatTransactionList(address, transactions)
 }
 
-export const ethAddressTxsTool = tool({
-  description: 
+export const ethAddressTxsTool = {
+  name: "eth-address-txs",
+  description:
     "List Ethereum transactions for an address. " +
     "Shows incoming and outgoing transactions with values, timestamps, and status.",
-  args: {
-    address: tool.schema
-      .string()
-      .describe("Ethereum address (0x...)"),
-    limit: tool.schema
-      .number()
-      .optional()
-      .describe(`Maximum number of transactions to return (default: ${DEFAULT_TRANSACTION_LIMIT})`),
-    chainId: tool.schema
-      .string()
-      .optional()
-      .describe(CHAIN_ID_DESCRIPTION),
+  input: {
+    type: "object",
+    properties: {
+      address: { type: "string", description: "Ethereum address (0x...)" },
+      limit: {
+        type: "number",
+        description: `Maximum number of transactions to return (default: ${DEFAULT_TRANSACTION_LIMIT})`,
+      },
+      chainId: { type: "string", description: CHAIN_ID_DESCRIPTION },
+    },
+    required: ["address"],
+    additionalProperties: false,
   },
-  async execute(args: EthAddressTxsArgs, _context: ToolContext): Promise<string> {
+  async execute(input: unknown): Promise<{ content: string }> {
+    const args = input as EthAddressTxsArgs
     try {
-      return await getAddressTransactions(args.address, args.limit, args.chainId)
+      return { content: await getAddressTransactions(args.address, args.limit, args.chainId) }
     } catch (error) {
       if (error instanceof EtherscanClientError) {
-        return `Error: ${error.message}`
+        return { content: `Error: ${error.message}` }
       }
       throw error
     }
   },
-})
+}

@@ -1,32 +1,34 @@
-import { tool, type ToolContext } from "@opencode-ai/plugin"
-import type { createOpencodeClient } from "@opencode-ai/sdk"
 import { log } from "../logger"
+import type { ChildSessionTracker } from "../session-children"
 
-type Client = ReturnType<typeof createOpencodeClient>
-
-export function createListChildSessionsTool(client: Client) {
-  return tool({
+export function createListChildSessionsTool(tracker: ChildSessionTracker) {
+  return {
+    name: "list-child-sessions",
     description: "List all child sessions (subagents) of the current session",
-    args: {},
-    async execute(_args: Record<string, never>, context: ToolContext) {
-      const children = await client.session.children({
-        path: { id: context.sessionID },
-      })
-
-      const childList = children.data ?? []
+    input: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+    async execute(_input: unknown, context: unknown) {
+      const ctx = context as { sessionID: string }
+      const childList = tracker.listChildren(ctx.sessionID)
       if (childList.length === 0) {
-        return "No child sessions found"
+        return { content: "No child sessions found" }
       }
 
       log("[list-child-sessions] Found child sessions", { count: childList.length })
 
-      const formatted = childList.map((child, index) => {
-        const created = new Date(child.time.created).toISOString()
-        const updated = new Date(child.time.updated).toISOString()
-        return `${index + 1}. [${child.id}] ${child.title}\n   Created: ${created} | Updated: ${updated}`
-      }).join("\n\n")
+      const formatted = childList
+        .map((child, index) => {
+          const created = new Date(child.created).toISOString()
+          const updated = new Date(child.updated).toISOString()
+          const title = child.title ? ` ${child.title}` : ""
+          return `${index + 1}. [${child.id}]${title}\n   Created: ${created} | Updated: ${updated}`
+        })
+        .join("\n\n")
 
-      return `Child sessions (${childList.length}):\n\n${formatted}`
+      return { content: `Child sessions (${childList.length}):\n\n${formatted}` }
     },
-  })
+  }
 }

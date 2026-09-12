@@ -113,6 +113,26 @@ describe("config-paths", () => {
     })
   })
 
+  describe("getGlobalCommandDir", () => {
+    it("should return correct path on Linux", async () => {
+      Object.defineProperty(process, "platform", { value: "linux" })
+      delete process.env.XDG_CONFIG_HOME
+
+      const { getGlobalCommandDir } = await import("./config-paths")
+      expect(getGlobalCommandDir()).toBe(join(homedir(), ".config", "opencode", "commands"))
+    })
+  })
+
+  describe("getGlobalAgentDir", () => {
+    it("should return correct path on Linux", async () => {
+      Object.defineProperty(process, "platform", { value: "linux" })
+      delete process.env.XDG_CONFIG_HOME
+
+      const { getGlobalAgentDir } = await import("./config-paths")
+      expect(getGlobalAgentDir()).toBe(join(homedir(), ".config", "opencode", "agents"))
+    })
+  })
+
   describe("getProjectHookDir", () => {
     it("should return correct path for project directory", async () => {
       const { getProjectHookDir } = await import("./config-paths")

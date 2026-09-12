@@ -3,7 +3,17 @@ export { convertPdfToMarkdown, type PdfToMarkdownArgs } from "./pdf-to-markdown-
 export { pdfToMarkdownTool } from "./pdf-to-markdown"
 export { createPromptSessionTool, type PromptSessionArgs } from "./prompt-session"
 export { createListChildSessionsTool } from "./list-child-sessions"
-export { createAgentPromoteTool, getPromotedAgents, type AgentPromoteArgs } from "./agent-promote"
+export {
+  createAgentPromoteTool,
+  getPromotedAgents,
+  setPromotedAgent,
+  validateGrade,
+  validateAgentName,
+  VALID_GRADES,
+  AGENT_PROMOTE_STORAGE_KEY,
+  type AgentMode,
+  type AgentPromoteArgs,
+} from "./agent-promote"
 export {
   ethTransactionTool,
   ethAddressTxsTool,

@@ -1,6 +1,7 @@
 ---
 description: Review uncommitted changes (staged + unstaged, incl. untracked diffs)
 agent: code-reviewer
+subagent: true
 ---
 
 # Review: Working Tree → HEAD

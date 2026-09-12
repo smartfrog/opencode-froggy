@@ -5,7 +5,7 @@ function formatTrigger(text: string): string {
 }
 
 function buildSkillInstruction(skill: LoadedSkill): string {
-  return `MANDATORY: Call skill({ name: "${skill.name}" }) ${formatTrigger(skill.useWhen!)}`
+  return `MANDATORY: Call skill({ id: "${skill.name}" }) ${formatTrigger(skill.useWhen!)}`
 }
 
 export function buildSkillActivationBlock(skills: LoadedSkill[]): string {

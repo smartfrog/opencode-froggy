@@ -1050,7 +1050,7 @@ describe("buildSkillActivationBlock", () => {
     const result = buildSkillActivationBlock(skills)
 
     expect(result).toContain("MANDATORY")
-    expect(result).toContain('skill({ name: "code-review" })')
+    expect(result).toContain('skill({ id: "code-review" })')
     expect(result).toContain("After writing code")
   })
 
@@ -1111,8 +1111,8 @@ describe("buildSkillActivationBlock", () => {
 
     const result = buildSkillActivationBlock(skills)
 
-    expect(result).toContain('skill({ name: "skill-a" })')
-    expect(result).toContain('skill({ name: "skill-b" })')
+    expect(result).toContain('skill({ id: "skill-a" })')
+    expect(result).toContain('skill({ id: "skill-b" })')
     expect(result).toContain("Trigger A")
     expect(result).toContain("Trigger B")
     expect(result.match(/MANDATORY/g)).toHaveLength(2)

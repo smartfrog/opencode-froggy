@@ -1,19 +1,26 @@
-import { tool, type ToolContext } from "@opencode-ai/plugin"
 import { convertPdfToMarkdown, type PdfToMarkdownArgs } from "./pdf-to-markdown-core"
 
-export const pdfToMarkdownTool = tool({
+export const pdfToMarkdownTool = {
+  name: "pdf-to-markdown",
   description:
     "Convert a text-based PDF into enriched Markdown (headings, paragraphs, lists). Returns Markdown as plain text.",
-  args: {
-    filePath: tool.schema.string().describe("Absolute path to the PDF file to convert"),
-    maxPages: tool.schema
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe("Limit the number of pages to convert"),
+  input: {
+    type: "object",
+    properties: {
+      filePath: {
+        type: "string",
+        description: "Absolute path to the PDF file to convert",
+      },
+      maxPages: {
+        type: "number",
+        description: "Limit the number of pages to convert",
+      },
+    },
+    required: ["filePath"],
+    additionalProperties: false,
   },
-  async execute(args: PdfToMarkdownArgs, _context: ToolContext) {
-    return convertPdfToMarkdown(args.filePath, { maxPages: args.maxPages })
+  async execute(input: unknown) {
+    const args = input as PdfToMarkdownArgs
+    return { content: await convertPdfToMarkdown(args.filePath, { maxPages: args.maxPages }) }
   },
-})
+}

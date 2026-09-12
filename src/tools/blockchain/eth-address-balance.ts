@@ -2,7 +2,6 @@
  * Tool to get Ethereum address balance
  */
 
-import { tool, type ToolContext } from "@opencode-ai/plugin"
 import { EtherscanClient, EtherscanClientError, validateAddress } from "./etherscan-client"
 import { formatBalance } from "./formatters"
 import { CHAIN_ID_DESCRIPTION } from "./types"
@@ -24,27 +23,29 @@ export async function getAddressBalance(
   return formatBalance(address, balanceWei)
 }
 
-export const ethAddressBalanceTool = tool({
-  description: 
+export const ethAddressBalanceTool = {
+  name: "eth-address-balance",
+  description:
     "Get the ETH balance of an Ethereum address. " +
     "Returns balance in both ETH and Wei.",
-  args: {
-    address: tool.schema
-      .string()
-      .describe("Ethereum address (0x...)"),
-    chainId: tool.schema
-      .string()
-      .optional()
-      .describe(CHAIN_ID_DESCRIPTION),
+  input: {
+    type: "object",
+    properties: {
+      address: { type: "string", description: "Ethereum address (0x...)" },
+      chainId: { type: "string", description: CHAIN_ID_DESCRIPTION },
+    },
+    required: ["address"],
+    additionalProperties: false,
   },
-  async execute(args: EthAddressBalanceArgs, _context: ToolContext): Promise<string> {
+  async execute(input: unknown): Promise<{ content: string }> {
+    const args = input as EthAddressBalanceArgs
     try {
-      return await getAddressBalance(args.address, args.chainId)
+      return { content: await getAddressBalance(args.address, args.chainId) }
     } catch (error) {
       if (error instanceof EtherscanClientError) {
-        return `Error: ${error.message}`
+        return { content: `Error: ${error.message}` }
       }
       throw error
     }
   },
-})
+}
