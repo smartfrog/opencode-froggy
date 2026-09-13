@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0
+- Migrate plugin to the OpenCode V2 API: `Plugin.define`/setup with ctx transforms, tool hooks, event subscription with cleanup, and storage persistence
+- Replace custom subagent delegation, command expansion, and agent mapping with native V2 behavior (subagent frontmatter, `$ARGUMENTS`, legacy frontmatter migration)
+- Install bundled commands and agents into the global config dir
+- Persist promoted agent modes via plugin storage
+- Rewrite tools as plain descriptors returning `{ content }`
+- **Breaking:** requires OpenCode V2 (dependency moved to `@opencode/plugin@^2.0.2`)
+
 ## 0.12.0
 - Add `/linear-stale-check` command to review open Linear issues and report likely active, uncertain, or obsolete work
 - Document `/linear-stale-check` usage in the README
