@@ -201,7 +201,7 @@ export default Plugin.define({
             const { name, args = "" } =
               typeof action.command === "string" ? { name: action.command } : action.command
             log(`${prefix} executing command`, { command: name, args })
-            await ctx.session.command({ sessionID, command: name, text: args })
+            await ctx.session.command({ sessionID, name, text: args })
           } else if ("tool" in action) {
             log(`${prefix} executing tool`, { tool: action.tool.name })
             await ctx.session.prompt({
@@ -328,15 +328,15 @@ export default Plugin.define({
     })
 
     await ctx.skill.transform((editor) => {
-      type SkillAdd = Parameters<typeof editor.add>[0]
+      type SkillInfo = Parameters<typeof editor.add>[0]
       for (const skill of skills) {
         editor.add({
-          id: skill.name,
-          name: skill.name,
+          id: skill.name as SkillInfo["id"],
+          name: skill.name as SkillInfo["name"],
           description: skill.description || undefined,
-          location: skill.path,
+          path: skill.path as SkillInfo["path"],
           content: skill.body,
-        } as unknown as SkillAdd)
+        })
       }
     })
 

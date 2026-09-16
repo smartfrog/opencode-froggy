@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+- Fix compatibility with OpenCode V2 >= 2.0.3: the skill schema renamed `location` to `path`, which made the host disable the whole plugin after a transform failure
+- Fix `session.command` input to use the renamed `name` field
+- Update `@opencode/plugin` to `^2.0.5` and drop the type-cast that masked schema drift in `skill.transform`
+
 ## 1.0.0
 - Migrate plugin to the OpenCode V2 API: `Plugin.define`/setup with ctx transforms, tool hooks, event subscription with cleanup, and storage persistence
 - Replace custom subagent delegation, command expansion, and agent mapping with native V2 behavior (subagent frontmatter, `$ARGUMENTS`, legacy frontmatter migration)
