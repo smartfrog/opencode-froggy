@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (architect, build-orchestrator, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
 
 ---
 
@@ -131,12 +131,39 @@ It does not modify Linear issues, add comments, or update project files.
 
 | Agent | Mode | Description |
 |-------|------|-------------|
+| `build-orchestrator` | primary | Decomposes work into isolated parallel tasks in separate git worktrees, assigns models by complexity, reviews every delivery, and simplifies the integrated result once. |
 | `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
 | `code-reviewer` | subagent | Read-only code review agent for quality, correctness, security, and maintainability feedback. |
 | `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction. Read-only. |
+
+### build-orchestrator
+
+A primary agent that delivers a development request end-to-end through coordinated sub-agents. It never edits code itself — it supervises and delegates. It runs five phases:
+
+1. **Decompose** — split the request into tasks of kind `implementation`, `research`, or `verification`, with disjoint file scopes for parallel implementation tasks (overlapping scopes are serialized through dependencies), each rated `complex` or `normal`, forming a dependency DAG. Exploration can go to `explore`, hard planning to `architect`.
+2. **Worktrees and snapshots** — verify the repo is clean, then capture the base branch and its commit. Each implementation task gets its own worktree and branch (per the environment's conventions), created only once all its prerequisites are validated, starting from the base commit plus its validated implementation ancestors merged in topological order (single ancestor: fast-path from its commit; transitive ancestors count even through research tasks). Verification tasks run in their own worktree at that same prepared snapshot and report the verified SHA and results. Research findings are passed in the prompt instead of merged. Comparison candidates share the same snapshot.
+3. **Dispatch** — after the user approves the decomposition, spawn a `general` sub-agent per ready task in the background, with the model picked from the pool matching its complexity. Sub-agents work inside their worktree (they move their session there so all their work stays isolated); the complete delivery commit is produced during the quality gate, after simplification. Comparison tasks run the same task on every model of the pool in parallel.
+4. **Quality gate** — on each implementation delivery, `code-reviewer` reviews all working-tree states; blocking issues go back by resuming the implementer's session (full context kept), optionally under a different model — escalate when stuck, downgrade when slow or costly. The implementer then commits exactly what was reviewed; the task is validated when build/tests pass at that exact commit in a clean worktree, recording its `validated_commit` SHA. Max 2 rework rounds; a failed task transitively fails its pending dependents while independent tasks continue.
+5. **Integration and simplification** — once **all** tasks are delivered, merge the `validated_commit` SHAs into the base branch in one topologically ordered pass. A conflicting merge is aborted in the base checkout first, then delegated: the implementer merges the current integration commit in its worktree, commits the resolution, re-passes the quality gate, and a replacement SHA is recorded before retrying. Dependent revalidation is bounded to one cascade. Never forced, never leaving an unfinished merge behind. After the final merge, a single `code-simplifier` pass refines the integrated changes, its edits get a focused review, build/tests re-run, and the result is committed. Then clean up worktrees and report a per-task summary.
+
+#### Model configuration
+
+Models are configured in a `## Build Orchestrator` section of the project's `AGENTS.md`:
+
+```markdown
+## Build Orchestrator
+
+complex: provider/model-a#max, provider/model-b#xhigh
+normal: provider/model-c
+```
+
+- A model reference is `provider/model`, optionally suffixed with a variant (`#max`, `#xhigh`).
+- Each level is a comma-separated **pool of models**, rotated round-robin across tasks (comparison tasks use the whole pool at once).
+- `complex` / `normal` apply to implementation, research, and verification tasks; the `code-reviewer` and `code-simplifier` sub-agents always run with the orchestrator's own session model.
+- Fallbacks: missing `complex` → `normal`; missing `normal` or no section → the session default model is used everywhere.
 
 ---
 
