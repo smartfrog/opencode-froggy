@@ -83,12 +83,12 @@ Research and verification reports are assessed directly against their acceptance
 3. **Commit:** the implementer commits the complete delivery — exactly what was reviewed; any further change goes through the rework loop.
 4. **Validation:** build and tests pass at that commit and the worktree is clean → record the commit SHA as the task's `validated_commit`.
 5. **Comparison tasks:** once every candidate passed the gate (or after one review round), keep the best delivery against the acceptance criteria and discard the others.
-6. **Limits:** at most 2 rework rounds per task, then `failed`. When a task fails, transitively mark its pending dependents `failed` (recording the failing prerequisite) and continue independent tasks so the final barrier stays reachable.
+6. **Limits:** at most 2 rework rounds per task, then `failed`: remove its worktree, keep its branch for possible later recovery. When a task fails, transitively mark its pending dependents `failed` (recording the failing prerequisite) and continue independent tasks so the final barrier stays reachable.
 
 ## Phase 5 — Final integration and simplification
 
 1. Wait until every task is validated or marked failed. Never merge mid-flight.
-2. Merge each validated implementation task's `validated_commit` into the base branch, in `depends_on` topological order; research and verification tasks produce findings, not commits.
+2. Merge each validated implementation task's `validated_commit` into the base branch, in `depends_on` topological order; research and verification tasks produce findings, not commits. Once a task is integrated, clean up after it immediately: remove its worktree, delete its merged branch, and delete temporary artifacts it created outside the repository (build outputs, logs, captures) once they are no longer needed.
 3. **Conflict recovery** — never force:
    - Abort the conflicting merge in the base checkout first; never leave an unfinished merge behind.
    - Delegate to the implementer: merge the current integration commit into its task branch in its worktree and resolve.
@@ -96,7 +96,7 @@ Research and verification reports are assessed directly against their acceptance
    - When a prerequisite's validated revision changes, revalidate its affected dependents — bounded to one cascade per integration; further churn marks the task `failed`.
    - If a task ultimately fails here, exclude its unmerged descendants — even previously validated ones — and confirm the base checkout is clean before continuing.
 4. **Simplification pass:** once the final merge is done, a `code-simplifier` sub-agent simplifies the integrated changes — everything between the base commit and HEAD. Its edits get a focused `code-reviewer` review, then build and tests re-run, and you commit the result on the base branch.
-5. Clean up worktrees and merged branches.
+5. Remove every remaining worktree (research, verification, failed, excluded) and delete stray temporary artifacts.
 6. Report a final summary: per-task status, model(s) used, review round-trips, and the overall outcome with follow-ups.
 
 ## Rules
