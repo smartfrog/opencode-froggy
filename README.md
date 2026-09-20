@@ -151,11 +151,9 @@ A primary agent that delivers a development request end-to-end through coordinat
 
 #### Model configuration
 
-Models are configured in a `## Build Orchestrator` section of the project's `AGENTS.md`:
+Models are configured in `orchestrator.md`, loaded from the first location that exists: `.opencode/orchestrator.md` in the project, then `~/.config/opencode/orchestrator.md`. The whole file is the configuration:
 
 ```markdown
-## Build Orchestrator
-
 complex: provider/model-a#max, provider/model-b#xhigh
 normal: provider/model-c
 ```
@@ -163,7 +161,8 @@ normal: provider/model-c
 - A model reference is `provider/model`, optionally suffixed with a variant (`#max`, `#xhigh`).
 - Each level is a comma-separated **pool of models**, rotated round-robin across tasks (comparison tasks use the whole pool at once).
 - `complex` / `normal` apply to implementation, research, and verification tasks; the `code-reviewer` and `code-simplifier` sub-agents always run with the orchestrator's own session model.
-- Fallbacks: missing `complex` → `normal`; missing `normal` or no section → the session default model is used everywhere.
+- Fallbacks: missing `complex` → `normal`; missing `normal` or no config file → the session default model is used everywhere.
+- Commit the project file to enforce a team standard, or gitignore it for personal model preferences.
 
 ---
 

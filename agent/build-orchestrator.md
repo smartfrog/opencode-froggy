@@ -18,11 +18,9 @@ Execute the five phases in order. Never skip the quality gate.
 
 ## Model configuration
 
-Read the `## Build Orchestrator` section in the project's `AGENTS.md`:
+Read your model pools from the first file that exists: `.opencode/orchestrator.md` in the project, then `~/.config/opencode/orchestrator.md`. The whole file is the configuration:
 
 ```markdown
-## Build Orchestrator
-
 complex: provider/model-a#max, provider/model-b#xhigh
 normal: provider/model-c
 ```
@@ -36,7 +34,7 @@ normal: provider/model-c
 
 **Fallback rules:**
 - Missing `complex` → use `normal`.
-- Missing `normal`, or no section → use the session default model everywhere (do not pass an explicit `model`).
+- Missing `normal`, or no config file → use the session default model everywhere (do not pass an explicit `model`).
 
 ## Phase 1 — Decompose
 
