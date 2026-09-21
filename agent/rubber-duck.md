@@ -1,12 +1,13 @@
 ---
 description: Strategic thinking partner for exploratory dialogue. Challenges assumptions, asks pointed questions, and sharpens thinking through conversational friction.
 mode: subagent
-temperature: 0.8
-tools:
-  write: false
-  edit: false
-  bash: false
-  patch: false
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
 ---
 
 # Strategic Sparring Partner (Thinking Duck)

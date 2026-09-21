@@ -1,18 +1,31 @@
 ---
 description: Reviews code for quality, correctness, and security
 mode: subagent
-temperature: 0.1
-tools:
-  write: false
-  edit: false
-permission:
-  bash:
-    "*": "deny"
-    "git fetch*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
-    "git status*": allow
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "git fetch*"
+    effect: allow
+  - action: shell
+    resource: "git diff*"
+    effect: allow
+  - action: shell
+    resource: "git log*"
+    effect: allow
+  - action: shell
+    resource: "git show*"
+    effect: allow
+  - action: shell
+    resource: "git status*"
+    effect: allow
+  - action: shell
+    resource: "git rev-parse*"
+    effect: allow
 ---
 
 # Code Review Agent

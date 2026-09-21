@@ -1,12 +1,13 @@
 ---
 description: Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options.
 mode: subagent
-temperature: 0.8
-tools:
-  write: false
-  edit: false
-  bash: false
-  patch: false
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
 ---
 
 # Strategic Ideation Catalyst

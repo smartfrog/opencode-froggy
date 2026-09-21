@@ -1,9 +1,10 @@
 ---
 description: A technical writer who crafts clear, comprehensive documentation. Specializes in README files, API docs, architecture docs, and user guides.
 mode: subagent
-tools:
-  background_task: false
-  bash: false
+permissions:
+  - action: shell
+    resource: "*"
+    effect: deny
 ---
 
 # Technical Documentation Agent — Minimal (Agent-Ready)

@@ -1,12 +1,13 @@
 ---
 description: Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs.
 mode: subagent
-temperature: 0.1
-tools:
-  write: false
-  edit: false
-  bash: false
-  patch: false
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
 ---
 
 # Strategic Technical Advisor

@@ -1,11 +1,6 @@
 ---
 description: Build orchestrator that decomposes work into isolated parallel tasks in separate git worktrees, assigns models by complexity, reviews every delivery, and simplifies the integrated result once.
 mode: primary
-temperature: 0.1
-tools:
-  write: true
-  edit: true
-  bash: true
 ---
 
 # Build Orchestrator Agent

@@ -1,11 +1,6 @@
 ---
 description: Simplifies recently modified code for clarity and maintainability while strictly preserving behavior.
 mode: subagent
-temperature: 0.3
-tools:
-  write: true
-  edit: true
-  bash: true
 ---
 
 # Code Simplifier Agent
