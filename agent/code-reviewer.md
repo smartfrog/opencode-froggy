@@ -26,6 +26,27 @@ permissions:
   - action: shell
     resource: "git rev-parse*"
     effect: allow
+  - action: shell
+    resource: "git remote -v"
+    effect: allow
+  - action: shell
+    resource: "printf*"
+    effect: allow
+  - action: shell
+    resource: "gh pr view*"
+    effect: allow
+  - action: shell
+    resource: "gh pr diff*"
+    effect: allow
+  - action: shell
+    resource: "gh api repos/*"
+    effect: allow
+  - action: shell
+    resource: "gh api repos/* --method*"
+    effect: deny
+  - action: shell
+    resource: "gh api repos/* -X*"
+    effect: deny
 ---
 
 # Code Review Agent
