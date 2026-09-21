@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+- Add a build-orchestrator agent for coordinating implementation tasks across isolated worktrees
+- Load the orchestrator model configuration from `.opencode/orchestrator.md`
+- Clean up worktrees and temporary artifacts as orchestrated tasks are integrated
+
 ## 1.0.1
 - Fix compatibility with OpenCode V2 >= 2.0.3: the skill schema renamed `location` to `path`, which made the host disable the whole plugin after a transform failure
 - Fix `session.command` input to use the renamed `name` field
