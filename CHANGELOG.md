@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2
+- Allow read-only GitHub CLI commands in code-reviewer (`gh pr view`, `gh pr diff`, `gh api repos/*`) with deny guards on mutation flags (`--method`, `-X`)
+- Allow `printf` and `git remote -v` in code-reviewer so compound inspection commands are not blocked
+
 ## 1.1.1
 - Fix agent permissions being ignored on OpenCode V2: migrate legacy `permission`/`tools`/`temperature` frontmatter to the V2 `permissions` rule format
 - Fix code-reviewer failing with "Permission denied: shell" by allowing read-only git commands (`fetch`, `diff`, `log`, `show`, `status`, `rev-parse`)
