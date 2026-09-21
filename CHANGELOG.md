@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+- Fix agent permissions being ignored on OpenCode V2: migrate legacy `permission`/`tools`/`temperature` frontmatter to the V2 `permissions` rule format
+- Fix code-reviewer failing with "Permission denied: shell" by allowing read-only git commands (`fetch`, `diff`, `log`, `show`, `status`, `rev-parse`)
+- Restore read-only enforcement on architect, partner, and rubber-duck (deny edit and shell) and deny shell on doc-writer
+
 ## 1.1.0
 - Add a build-orchestrator agent for coordinating implementation tasks across isolated worktrees
 - Load the orchestrator model configuration from `.opencode/orchestrator.md`
