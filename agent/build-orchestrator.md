@@ -40,7 +40,7 @@ normal: provider/model-c
    - `objective`: what to build, find, or verify, with acceptance criteria
    - `scope`: files or directories it may touch (empty for research and verification)
    - `complexity`: `complex` or `normal`
-   - `compare`: optional, `true` to run the task on every model of the pool and keep the best delivery
+   - `compare`: optional, `true` to run the task on every model of the pool and keep the best delivery, possibly with parts adopted from the others
    - `depends_on`: ids of tasks that must be validated before this one starts
 3. **Isolation rule:** implementation tasks running in parallel must have disjoint scopes; overlapping scopes are serialized through `depends_on`. Research and verification tasks touch no code but still wait for their prerequisites.
 4. If the request is ambiguous, ask the user before decomposing. Then present the plan (tasks, kinds, models, parallel groups) and get the user's approval before launching any task sub-agent. Read-only preparatory sub-agents (`explore`, `architect`) may run before approval — they build the plan, not code.
@@ -73,12 +73,13 @@ normal: provider/model-c
 
 Research and verification reports are assessed directly against their acceptance criteria.
 
-1. **Review:** a `code-reviewer` sub-agent reviews the delivered code in the worktree — committed, staged, unstaged, and untracked alike.
+1. **Review:** a `code-reviewer` sub-agent reviews the delivered code in the worktree — committed, staged, unstaged, and untracked alike. Comparison tasks use a single `code-reviewer` session for every candidate, in pool order — resume that session for each candidate and each rework round, so all candidates are judged against one baseline.
 2. **Rework loop:** blocking issues go back to the session that produced the delivery (resume it, full context kept), optionally under a different model — escalate when stuck, downgrade when slow or costly. Each round repeats review until no blocking issues remain.
 3. **Commit:** the implementer commits the complete delivery — exactly what was reviewed; any further change goes through the rework loop.
 4. **Validation:** build and tests pass at that commit and the worktree is clean → record the commit SHA as the task's `validated_commit`.
-5. **Comparison tasks:** once every candidate passed the gate (or after one review round), keep the best delivery against the acceptance criteria and discard the others.
-6. **Limits:** at most 2 rework rounds per task, then `failed`: remove its worktree, keep its branch for possible later recovery. When a task fails, transitively mark its pending dependents `failed` (recording the failing prerequisite) and continue independent tasks so the final barrier stays reachable.
+5. **Comparison tasks:** once every candidate passed the gate (or after one review round), the same reviewer session delivers a comparative verdict — each candidate against each acceptance criterion, a recommended winner, and optional partial-adoption suggestions (parts of a discarded candidate worth keeping). Keep discarded candidates' worktrees and branches until the winner is fully validated, then discard them.
+6. **Hybrid adoption:** when the verdict recommends adopting parts of a discarded candidate, resume the winning candidate's implementer session (full context kept) with the adoption instructions and a pointer to the discarded branch to borrow from. The reworked delivery re-passes the full gate — review by the same reviewer session, build, tests — before its commit is recorded as the `validated_commit`. At most one adoption round, then fall back to the winning candidate as delivered.
+7. **Limits:** at most 2 rework rounds per task, then `failed`: remove its worktree, keep its branch for possible later recovery. When a task fails, transitively mark its pending dependents `failed` (recording the failing prerequisite) and continue independent tasks so the final barrier stays reachable.
 
 ## Phase 5 — Final integration and simplification
 

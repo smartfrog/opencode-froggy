@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.3
+- Comparison tasks: review every candidate with a single `code-reviewer` session that ends with a comparative verdict, and adopt recommended parts of discarded candidates in one rework round on the winner's implementer
+
 ## 1.1.2
 - Allow read-only GitHub CLI commands in code-reviewer (`gh pr view`, `gh pr diff`, `gh api repos/*`) with deny guards on mutation flags (`--method`, `-X`)
 - Allow `printf` and `git remote -v` in code-reviewer so compound inspection commands are not blocked
