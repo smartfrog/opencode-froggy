@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+- Fix `prompt-session` attributing a completion report to the wrong turn: the watch now anchors on the inbox message id returned by the prompt (timestamp fallback) and reports only that turn's outcome
+- Make the `prompt-session` completion watch resilient: transient polling failures are retried (up to 3 in a row), the watch is capped at 30 minutes, and the parent gets an explicit abandonment notification instead of waiting forever
+- Escape the session title in the `<subagent>` notification attribute and deduplicate the `asRecord` helper
+- Rework build-orchestrator with durable run memory: a committable ledger and `learnings.md` under `.opencode/orchestrator/`, a startup protocol that reads them and reconciles with git, and retrospectives written even for failed or abandoned runs
+- Add an explicit decision policy to build-orchestrator: the orchestrator arbitrates and records decisions, with bounded escalation to the user and stop criteria
+- Add research-first uncertainty triage before implementation, adversarial plan review by `rubber-duck`, re-planning triggers, and an end-to-end verification of the integrated result
+
 ## 1.1.3
 - Comparison tasks: review every candidate with a single `code-reviewer` session that ends with a comparative verdict, and adopt recommended parts of discarded candidates in one rework round on the winner's implementer
 
