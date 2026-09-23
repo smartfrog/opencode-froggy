@@ -141,13 +141,29 @@ It does not modify Linear issues, add comments, or update project files.
 
 ### build-orchestrator
 
-A primary agent that delivers a development request end-to-end through coordinated sub-agents. It never edits code itself — it supervises and delegates. It runs five phases:
+A primary agent that delivers a development request end-to-end through coordinated sub-agents. It never edits code itself — it supervises, delegates, decides and records. It runs five phases:
 
-1. **Decompose** — split the request into tasks of kind `implementation`, `research`, or `verification`, with disjoint file scopes for parallel implementation tasks (overlapping scopes are serialized through dependencies), each rated `complex` or `normal`, forming a dependency DAG. Exploration can go to `explore`, hard planning to `architect`.
-2. **Worktrees and snapshots** — verify the repo is clean, then capture the base branch and its commit. Each implementation task gets its own worktree and branch (per the environment's conventions), created only once all its prerequisites are validated, starting from the base commit plus its validated implementation ancestors merged in topological order (single ancestor: fast-path from its commit; transitive ancestors count even through research tasks). Verification tasks run in their own worktree at that same prepared snapshot and report the verified SHA and results. Research findings are passed in the prompt instead of merged. Comparison candidates share the same snapshot.
-3. **Dispatch** — after the user approves the decomposition, spawn a `general` sub-agent per ready task in the background, with the model picked from the pool matching its complexity. Sub-agents work inside their worktree (they move their session there so all their work stays isolated); the complete delivery commit is produced during the quality gate, after simplification. Comparison tasks run the same task on every model of the pool in parallel.
-4. **Quality gate** — on each implementation delivery, `code-reviewer` reviews all working-tree states; blocking issues go back by resuming the implementer's session (full context kept), optionally under a different model — escalate when stuck, downgrade when slow or costly. The implementer then commits exactly what was reviewed; the task is validated when build/tests pass at that exact commit in a clean worktree, recording its `validated_commit` SHA. Max 2 rework rounds; a failed task transitively fails its pending dependents while independent tasks continue. Comparison tasks are reviewed by a single `code-reviewer` session across all candidates, which ends with a comparative verdict; recommended parts of discarded candidates are adopted by resuming the winner's implementer for one rework round, then re-gated.
-5. **Integration and simplification** — once **all** tasks are delivered, merge the `validated_commit` SHAs into the base branch in one topologically ordered pass, cleaning up after each integrated task (worktree, merged branch, temporary artifacts no longer needed). A conflicting merge is aborted in the base checkout first, then delegated: the implementer merges the current integration commit in its worktree, commits the resolution, re-passes the quality gate, and a replacement SHA is recorded before retrying. Dependent revalidation is bounded to one cascade. Never forced, never leaving an unfinished merge behind. After the final merge, a single `code-simplifier` pass refines the integrated changes, its edits get a focused review, build/tests re-run, and the result is committed. Then remove remaining worktrees (research, verification, failed, excluded) and stray temporary artifacts, and report a per-task summary.
+1. **Decompose** — read `learnings.md`, then split the request into tasks of kind `implementation`, `research`, or `verification`, with disjoint file scopes for parallel implementation tasks (overlapping scopes are serialized through dependencies), each rated `complex` or `normal`, forming a dependency DAG. Exploration can go to `explore`, hard planning to `architect`. A task with unresolved uncertainty (no existing pattern in the codebase, unfamiliar library or API, several plausible approaches with real trade-offs, acceptance criteria that cannot be turned into a concrete test, external integration, or a zone flagged by learnings) becomes a `research` task first — code, docs, web, external repositories and specs — and must end with findings, a recommendation, a confidence level and a decision. Before approval, the plan is attacked by a `rubber-duck` sub-agent: what is missing, what is unnecessary, what will fail.
+2. **Worktrees and snapshots** — verify the repo is clean outside `.opencode/orchestrator/`, capture the base branch and its commit, then create and commit the run ledger. Each implementation task gets its own worktree and branch (per the environment's conventions), created only once all its prerequisites are validated, starting from the base commit plus its validated implementation ancestors merged in topological order (single ancestor: fast-path from its commit; transitive ancestors count even through research tasks). Verification tasks run in their own worktree at that same prepared snapshot and report the verified SHA and results. Research findings are passed in the prompt instead of merged. Comparison candidates share the same snapshot.
+3. **Dispatch** — after the user approves the decomposition, spawn a sub-agent per ready task in the background, with the model picked from the pool matching its complexity (`general` for implementation and verification, `explore` for code-only research, `general` when research needs web or external sources). Sub-agents work inside their worktree (they move their session there so all their work stays isolated); the complete delivery commit is produced during the quality gate, after simplification. Comparison tasks run the same task on every model of the pool in parallel. Re-planning triggers (a contradictory finding, two task failures, a repeated integration conflict, a changed objective) pause dispatch and re-open the decomposition with `architect`; the user is only asked when scope or acceptance criteria change.
+4. **Quality gate** — on each implementation delivery, `code-reviewer` reviews all working-tree states; blocking issues go back by resuming the implementer's session (full context kept), with escalation to a stronger model from the `complex` pool after two rounds blocked on the same issue. The implementer then commits exactly what was reviewed; the task is validated when build/tests pass at that exact commit in a clean worktree, recording its `validated_commit` SHA. Max 2 rework rounds plus one escalated round; a failed task transitively fails its pending dependents while independent tasks continue. Comparison tasks are reviewed by a single `code-reviewer` session across all candidates, which ends with a comparative verdict; recommended parts of discarded candidates are adopted by resuming the winner's implementer for one rework round, then re-gated.
+5. **Integration, verification and simplification** — once **all** tasks are delivered, merge the `validated_commit` SHAs into the base branch in one topologically ordered pass, cleaning up after each integrated task (worktree, merged branch, temporary artifacts no longer needed). A conflicting merge is aborted in the base checkout first, then delegated: the implementer merges the current integration commit in its worktree, commits the resolution, re-passes the quality gate, and a replacement SHA is recorded before retrying. Dependent revalidation is bounded to one cascade. Never forced, never leaving an unfinished merge behind. Before simplification, an end-to-end verification checks the integrated result against the original request; a failure means the run is not done. Then a single `code-simplifier` pass refines the integrated changes — excluding `.opencode/orchestrator/` — its edits get a focused review, build/tests re-run, and the result is committed. Finally the ledger is closed, the run's retrospective is appended to `learnings.md`, the memory files are committed, and a per-task summary is reported.
+
+#### Decision policy
+
+The orchestrator decides; sub-agents advise and the comparative verdict is only a recommendation. It arbitrates by acceptance criteria met, then fewer blocking risks, then smaller diff. It asks the user only to approve the plan or a change to scope or acceptance criteria, for an irreversible or expensive choice with no defensible default, when the request contradicts itself, or to choose which active run to resume. It stops and reports options with a recommendation when two or more tasks fail, the same integration conflict repeats, or the base checkout cannot be restored clean.
+
+#### Memory
+
+Durable state lives in the repository and can be committed:
+
+```text
+.opencode/orchestrator/
+  learnings.md                  # durable lessons across runs
+  runs/<date>-<slug>.md         # one ledger per run
+```
+
+The **ledger** records the request and acceptance criteria, the base commit, the task table (status, model, session, worktree, `validated_commit`, rounds, dependencies), decisions with rationale, findings and risks. It is read before any decision, status answer, phase transition or dependent dispatch — the conversation context is compacted lossily, so it is never the source of truth. **`learnings.md`** collects at most 10 dated lines per run (repo facts, failed approaches, model performance, open questions), including failed or abandoned runs, and is consolidated when it exceeds ~200 lines. Every session starts by reading the memory files and reconciling them with git (`git worktree list`, branches, recorded SHAs); an active run is resumed or abandoned only by the user's choice. The ledger is committed at run start and run end, staging explicit paths; sub-agents never touch the memory directory.
 
 #### Model configuration
 
@@ -390,8 +406,30 @@ promptSession({
 #### Behavior
 
 - If `sessionId` is not provided, the tool targets the most recently created child session tracked since the plugin loaded (pass `sessionId` explicitly for older sessions)
+- Messages are sent with `queue` delivery, so each prompt gets its own turn
 - Returns a confirmation once the message is admitted to the child session
 - Returns an error message if no child session exists for the current session
+- The plugin then polls the child session until the turn triggered by the sent
+  message completes (checking `time.idle` and the message stream), reads that
+  turn's final assistant text, and injects a `<subagent sessionID="..." state="...">`
+  notification into the parent session through the durable session inbox, mirroring
+  the core's background subagent completion format
+- The report is scoped to the exact turn: the watch anchors on the inbox message id
+  returned by the prompt (falling back to send time), so queued messages to the same
+  child each get their own completion notification
+- Transient polling failures are retried (up to 3 in a row); the watch is capped at
+  30 minutes. If the watch dies or times out, the parent receives an explicit
+  abandonment notification instead of waiting forever
+
+#### Limitations
+
+- Completion watching is in-memory: if the server restarts between sending the
+  message and the child's completion, the watch stops; a best-effort abandonment
+  notification is sent when the parent session is still alive (same class of
+  limitation as core issue #36349)
+- This compensates for the upstream gap where turns resumed via `prompt-session`
+  do not notify the parent (anomalyco/opencode#50751, #35066); remove it once the
+  core notifies from the child session completion path
 
 ---
 
