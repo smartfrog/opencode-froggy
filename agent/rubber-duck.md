@@ -1,6 +1,6 @@
 ---
 description: Rubber duck for thinking out loud. Listens, reflects, and asks gentle, focused questions to help users clarify their own ideas.
-mode: primary
+mode: subagent
 permissions:
   - action: edit
     resource: "*"
