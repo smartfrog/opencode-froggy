@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0
 - Register bundled agents directly through `ctx.agent.transform()` and archive matching legacy global copies while preserving customized definitions
 - Make `agent-promote` and `agent-demote` temporary and location-scoped: verify the effective mode after reload, isolate projects, and reset on plugin/server restart without writing agent files
 - Consolidate agent instructions and backlog rules; make tickets the integration unit while internal steps use local validation, and use targeted reconciliation between full startup/resume/closure scans
