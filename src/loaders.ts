@@ -15,7 +15,11 @@ export interface AgentFrontmatter {
   disable?: boolean
   tools?: Record<string, boolean>
   permission?: Record<string, unknown>
-  permissions?: Record<string, unknown>
+  permissions?: Record<string, unknown> | Array<{
+    action: string
+    resource: string
+    effect: "allow" | "deny" | "ask"
+  }>
 }
 
 export interface SkillFrontmatter {
@@ -100,7 +104,7 @@ export interface AgentConfigOutput {
   maxSteps?: number
   disable?: boolean
   tools?: Record<string, boolean>
-  permissions?: Record<string, unknown>
+  permissions?: AgentFrontmatter["permissions"]
   prompt: string
   [key: string]: unknown
 }

@@ -31,6 +31,8 @@ import {
 import { buildSkillActivationBlock } from "./skill-activation"
 import { installBundledFiles } from "./command-installer"
 import { ChildSessionTracker } from "./session-children"
+import { applyAgents, createAgentModes } from "./agent-runtime"
+import { migrateAgentCopies } from "./agent-migration"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
 export { buildSkillActivationBlock } from "./skill-activation"
@@ -82,22 +84,15 @@ export default Plugin.define({
     const skills = loadSkills(SKILL_DIR)
     const emptyInstall = { installed: [] as string[], skipped: [] as string[], updated: [] as string[] }
     let installedCommands = { ...emptyInstall }
-    let installedAgents = { ...emptyInstall }
     try {
       installedCommands = installBundledFiles(COMMAND_DIR, getGlobalCommandDir())
     } catch (error) {
       log("[init] failed to install commands", { error: String(error) })
     }
-    try {
-      installedAgents = installBundledFiles(AGENT_DIR, getGlobalAgentDir())
-    } catch (error) {
-      log("[init] failed to install agents", { error: String(error) })
-    }
-    try {
-      await ctx.agent.reload()
-    } catch (error) {
-      log("[init] failed to reload agents", { error: String(error) })
-    }
+    const migration = migrateAgentCopies(AGENT_DIR, getGlobalAgentDir())
+    if (migration.backups.length || migration.conflicts.length) log("[agents] legacy migration", migration)
+    const modes = createAgentModes(Object.keys(agents), () => ctx.agent.reload())
+    await ctx.agent.transform((editor) => applyAgents(editor, agents, modes.values))
     try {
       await ctx.command.reload()
     } catch (error) {
@@ -119,8 +114,6 @@ export default Plugin.define({
       agents: Object.keys(agents),
       commandsInstalled: installedCommands.installed,
       commandsUpdated: installedCommands.updated,
-      agentsInstalled: installedAgents.installed,
-      agentsUpdated: installedAgents.updated,
       skills: skills.map((s) => s.name),
       skillsWithTriggers: skillsWithTriggers.map((s) => s.name),
       hooks: Array.from(hooks.keys()),
@@ -316,7 +309,7 @@ export default Plugin.define({
 
     const promptSessionTool = createPromptSessionTool(ctx.session, tracker)
     const listChildSessionsTool = createListChildSessionsTool(tracker)
-    const agentPromoteTool = createAgentPromoteTool(AGENT_DIR, getGlobalAgentDir(), Object.keys(agents))
+    const agentPromoteTool = createAgentPromoteTool(ctx.agent, modes.set, Object.keys(agents))
 
     await ctx.tool.transform((editor) => {
       editor.add(gitingestTool)

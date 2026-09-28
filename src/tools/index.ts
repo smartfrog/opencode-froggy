@@ -5,8 +5,6 @@ export { createPromptSessionTool, type PromptSessionArgs } from "./prompt-sessio
 export { createListChildSessionsTool } from "./list-child-sessions"
 export {
   createAgentPromoteTool,
-  updateFrontmatterMode,
-  readFrontmatterMode,
   validateGrade,
   validateAgentName,
   VALID_GRADES,

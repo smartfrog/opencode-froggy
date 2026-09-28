@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+- Register bundled agents directly through `ctx.agent.transform()` and archive matching legacy global copies while preserving customized definitions
+- Make `agent-promote` and `agent-demote` temporary and location-scoped: verify the effective mode after reload, isolate projects, and reset on plugin/server restart without writing agent files
+- Consolidate agent instructions and backlog rules; make tickets the integration unit while internal steps use local validation, and use targeted reconciliation between full startup/resume/closure scans
+- Apply shared XP principles to seven agents: product-owner-defined ticket granularity, explicit short TDD loops, evolving design, bounded research, and targeted refactoring; retain independent review without pair programming
+- Replace the orchestrator's final integration barrier with serialized incremental integration, current-head worktrees, stale-delivery revalidation, and priority recovery for failing integrated checks
+- Add a primary `product-owner` agent to challenge ideas, clarify needs, and publish an approved development plan and backlog
+- Rename `build-orchestrator` to `orchestrator` and add ticket creation, assignment, technical prioritization, and board reconciliation across development, research, analysis, and verification
+- Add shared `backlog-management` instructions: Linear/Trello MCP when accessible, Markdown fallback, and Todo → In progress → To review → To integrate → Done workflow with at most three active tasks (In progress + To review)
+- Keep validated code in To integrate until integration and checks pass; this state frees active capacity while remaining tracked
+
 ## 1.2.1
 - Fix `agent-promote` having no effect on OpenCode V2: user plugin transforms are replayed before the internal config-agent transform, which re-applies `mode` from the agent markdown files on every registry rebuild and silently overwrites runtime promotions. The tool now writes the target `mode` into the bundled `agent/<name>.md` and the installed global agent file, so OpenCode's native config watcher applies it; the promoted-agents map, plugin storage persistence, and agent transform are removed
 
