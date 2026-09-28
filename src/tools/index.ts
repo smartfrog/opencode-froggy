@@ -5,12 +5,11 @@ export { createPromptSessionTool, type PromptSessionArgs } from "./prompt-sessio
 export { createListChildSessionsTool } from "./list-child-sessions"
 export {
   createAgentPromoteTool,
-  getPromotedAgents,
-  setPromotedAgent,
+  updateFrontmatterMode,
+  readFrontmatterMode,
   validateGrade,
   validateAgentName,
   VALID_GRADES,
-  AGENT_PROMOTE_STORAGE_KEY,
   type AgentMode,
   type AgentPromoteArgs,
 } from "./agent-promote"

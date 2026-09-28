@@ -23,10 +23,6 @@ import {
   createPromptSessionTool,
   createListChildSessionsTool,
   createAgentPromoteTool,
-  setPromotedAgent,
-  getPromotedAgents,
-  AGENT_PROMOTE_STORAGE_KEY,
-  type AgentMode,
   ethTransactionTool,
   ethAddressTxsTool,
   ethAddressBalanceTool,
@@ -114,19 +110,6 @@ export default Plugin.define({
 
     const modifiedCodeFiles = new Map<string, Set<string>>()
     const tracker = new ChildSessionTracker()
-
-    try {
-      const stored = await ctx.storage.get(AGENT_PROMOTE_STORAGE_KEY)
-      if (stored && typeof stored === "object" && !Array.isArray(stored)) {
-        for (const [name, mode] of Object.entries(stored as Record<string, unknown>)) {
-          if (mode === "primary" || mode === "subagent" || mode === "all") {
-            setPromotedAgent(name, mode as AgentMode)
-          }
-        }
-      }
-    } catch (error) {
-      log("[init] failed to load promoted agents", { error: String(error) })
-    }
 
     const skillsWithTriggers = skills.filter((s) => s.useWhen)
     const skillActivationBlock =
@@ -318,15 +301,6 @@ export default Plugin.define({
       files.add(filePath)
     }
 
-    await ctx.agent.transform((editor) => {
-      for (const [name, mode] of getPromotedAgents()) {
-        if (!editor.get(name)) continue
-        editor.update(name, (agent) => {
-          agent.mode = mode
-        })
-      }
-    })
-
     await ctx.skill.transform((editor) => {
       type SkillInfo = Parameters<typeof editor.add>[0]
       for (const skill of skills) {
@@ -342,7 +316,7 @@ export default Plugin.define({
 
     const promptSessionTool = createPromptSessionTool(ctx.session, tracker)
     const listChildSessionsTool = createListChildSessionsTool(tracker)
-    const agentPromoteTool = createAgentPromoteTool(ctx.agent, ctx.agent, ctx.storage, Object.keys(agents))
+    const agentPromoteTool = createAgentPromoteTool(AGENT_DIR, getGlobalAgentDir(), Object.keys(agents))
 
     await ctx.tool.transform((editor) => {
       editor.add(gitingestTool)

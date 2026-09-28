@@ -1,9 +1,9 @@
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { log } from "../logger"
 import {
   type AgentMode,
   VALID_GRADES,
-  getPromotedAgents,
-  setPromotedAgent,
   validateGrade,
   validateAgentName,
 } from "./agent-promote-core"
@@ -11,8 +11,6 @@ import {
 export {
   type AgentMode,
   VALID_GRADES,
-  getPromotedAgents,
-  setPromotedAgent,
   validateGrade,
   validateAgentName,
 } from "./agent-promote-core"
@@ -22,24 +20,33 @@ export interface AgentPromoteArgs {
   grade?: string
 }
 
-interface AgentReader {
-  get(input: { agentID: string }): Promise<{ data?: { mode?: string } } | { mode?: string }>
+const MODE_LINE = /^mode:.*$/m
+
+export function updateFrontmatterMode(content: string, mode: AgentMode): string {
+  if (content.startsWith("---\n")) {
+    const end = content.indexOf("\n---", 3)
+    if (end !== -1) {
+      const head = content.slice(0, end)
+      const tail = content.slice(end)
+      return MODE_LINE.test(head)
+        ? head.replace(MODE_LINE, `mode: ${mode}`) + tail
+        : `${head}\nmode: ${mode}${tail}`
+    }
+  }
+  return `---\nmode: ${mode}\n---\n\n${content}`
 }
 
-interface AgentReloader {
-  reload(): Promise<void>
+export function readFrontmatterMode(content: string): AgentMode | undefined {
+  if (!content.startsWith("---\n")) return undefined
+  const end = content.indexOf("\n---", 3)
+  if (end === -1) return undefined
+  const match = content.slice(0, end).match(/^mode:[ \t]*(\S+)/m)
+  return match ? (match[1] as AgentMode) : undefined
 }
-
-interface PluginStorage {
-  set(key: string, value: unknown): Promise<void>
-}
-
-const STORAGE_KEY = "promoted-agents"
 
 export function createAgentPromoteTool(
-  agent: AgentReader,
-  reloader: AgentReloader,
-  storage: PluginStorage,
+  bundledAgentDir: string,
+  globalAgentDir: string,
   pluginAgentNames: string[]
 ) {
   return {
@@ -72,24 +79,39 @@ export function createAgentPromoteTool(
         }
       }
 
-      const existing = await agent.get({ agentID: name })
-      const currentMode = (existing as { data?: { mode?: string } }).data?.mode
-        ?? (existing as { mode?: string }).mode
-      if (currentMode === grade) {
+      const bundledPath = join(bundledAgentDir, `${name}.md`)
+      const globalPath = join(globalAgentDir, `${name}.md`)
+
+      let content: string
+      try {
+        content = readFileSync(bundledPath, "utf-8")
+      } catch (error) {
+        log("[agent-promote] failed to read bundled agent file", {
+          path: bundledPath,
+          error: String(error),
+        })
+        return { content: `Failed to read agent file: ${bundledPath}` }
+      }
+
+      if (readFrontmatterMode(content) === grade) {
         return { content: `Agent "${name}" is already of type "${grade}"` }
       }
 
-      setPromotedAgent(name, grade as AgentMode)
+      const updated = updateFrontmatterMode(content, grade as AgentMode)
+      try {
+        writeFileSync(bundledPath, updated)
+        writeFileSync(globalPath, updated)
+      } catch (error) {
+        log("[agent-promote] failed to write agent file", {
+          bundledPath,
+          globalPath,
+          error: String(error),
+        })
+        return { content: `Failed to update agent files for "${name}". Check plugin logs for details.` }
+      }
+
       log("[agent-promote] Agent type changed", { name, grade })
-
-      const record: Record<string, AgentMode> = {}
-      for (const [key, value] of getPromotedAgents()) record[key] = value
-      await storage.set(STORAGE_KEY, record)
-      await reloader.reload()
-
       return { content: `Agent "${name}" changed to type "${grade}".` }
     },
   }
 }
-
-export { STORAGE_KEY as AGENT_PROMOTE_STORAGE_KEY }

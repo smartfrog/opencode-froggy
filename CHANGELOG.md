@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.1
+- Fix `agent-promote` having no effect on OpenCode V2: user plugin transforms are replayed before the internal config-agent transform, which re-applies `mode` from the agent markdown files on every registry rebuild and silently overwrites runtime promotions. The tool now writes the target `mode` into the bundled `agent/<name>.md` and the installed global agent file, so OpenCode's native config watcher applies it; the promoted-agents map, plugin storage persistence, and agent transform are removed
+
 ## 1.2.0
 - Fix `prompt-session` attributing a completion report to the wrong turn: the watch now anchors on the inbox message id returned by the prompt (timestamp fallback) and reports only that turn's outcome
 - Make the `prompt-session` completion watch resilient: transient polling failures are retried (up to 3 in a row), the watch is capped at 30 minutes, and the parent gets an explicit abandonment notification instead of waiting forever
