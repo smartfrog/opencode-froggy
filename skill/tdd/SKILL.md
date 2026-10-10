@@ -3,46 +3,21 @@ name: tdd
 description: Apply Test-Driven Development workflow for new features and bugfixes.
 ---
 
-# TDD Protocol
+# Test-Driven Development
 
-## Core Principle
-
-- **TDD First**: Test-Driven Development is the default approach.
-- **Goal**: Prioritize behavioral correctness and regression safety over formal compliance.
+Use short test/code/refactor loops. Test-first is the default for features and bugfixes. When another form of verification is more appropriate, explain why and report the alternative check and its result; choose meaningful verification over formal compliance.
 
 ## Workflow
 
-1. **Requirement Synthesis**: Briefly summarize the requirements before coding.
-2. **Red**: Choose one observable behavior, write its test, and run it. Confirm it fails because that behavior is missing or incorrect, not because of a broken fixture or environment. For a bug, reproduce it before fixing it.
-3. **Green**: Write the minimum implementation that makes this test pass. Run relevant existing tests to detect regressions.
-4. **Refactor**: Improve the changed code and tests where useful without changing behavior; keep tests green. Make no refactor when none is justified.
-5. Repeat steps 2–4 for the next behavior. Keep this loop inside the implementing agent while the ticket is In progress; do not write the entire test suite first or delegate test, code, and refactor as separate tasks.
-6. Run the project's required checks before delivery. Report commands, results, the observed failure and subsequent success, and any justified exception. Never claim a red/green cycle that was not actually executed.
+1. Pick an observable behavior from the acceptance criteria. For a bug, reproduce the failure with a focused test or another reliable check.
+2. Before implementation, write or update a behavioral test, run it, and confirm the failure comes from the missing or incorrect behavior, not a broken fixture or environment.
+3. Implement the simplest correct change, run the relevant checks, and refactor only where useful. Keep the loop with the implementer rather than splitting test, code, and refactor across workers.
+4. Repeat as needed, then run the project's required checks. Report actual commands, results, and meaningful verification gaps. Never claim a red/green cycle or a passing check that did not happen.
 
-## Mandatory Rules
+## Adapt verification to the change
 
-- **No Test, No Code**: Every new feature or bugfix must include relevant test coverage.
-- **Black-Box Testing**: Validate observable behavior, not internal implementation details.
-- **Merge Requirement**: Tests are mandatory for completion unless an explicit exception is documented.
-
-## Preferred Practice
-
-- **Short feedback loops**: Use Red-Green-Refactor by default for features and bugfixes; exceptions below require a reason and an appropriate alternative verification.
-- **Right-Sized Testing**:
-  - **Unit Tests**: For pure logic and isolated functions.
-  - **Integration Tests**: For system interactions and API boundaries.
-  - **E2E Tests**: For critical user journeys and "happy paths."
-
-## Explicit Exceptions (Must be justified)
-
-- Pure refactoring: run existing behavior tests before and after; add characterization coverage first when necessary.
-- Documentation-only changes: check accuracy, links, or examples as appropriate rather than adding artificial unit tests.
-- Exploratory spikes or R&D: report findings and limitations; apply production checks before promoting experimental code.
-- UI/Styling iterations where unit tests offer diminishing returns: use visual or interaction verification.
-- Complex integrations where mocking is counterproductive: use integration or contract checks when feasible; document unavailable environments and do not claim unexecuted checks passed.
-- Emergency hotfixes (requires a follow-up ticket for test debt).
-
-## Quality Bar
-
-- **Readability**: Tests must serve as documentation for the feature.
-- **Reliability**: Tests must be deterministic (no flakes) and decoupled from implementation internals.
+- Test observable behavior and regressions, not implementation details. Prefer deterministic, readable tests; reuse existing coverage when it already proves the behavior.
+- Use unit tests for isolated logic, integration or contract checks for boundaries, and end-to-end checks for critical journeys where useful.
+- For refactoring, rely on existing behavior tests and add characterization coverage when needed. For documentation or small reversible low-impact changes, use direct checks rather than artificial tests.
+- For UI work, visual or interaction checks may be more useful than unit tests. For exploratory work, report findings and limitations before treating it as production-ready.
+- If an environment or test setup is unavailable, investigate or use an appropriate alternative check and state the remaining uncertainty. Keep independently verifiable work moving; track material verification debt when it remains.

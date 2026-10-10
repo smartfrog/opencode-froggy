@@ -7,7 +7,7 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (product-owner, orchestrator, architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (extreme-programming, backlog-management, ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
+OpenCode plugin providing hooks, specialized agents (product-owner, orchestrator, architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (extreme-programming, backlog-management, implementation-comparison, ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
 
 ---
 
@@ -131,8 +131,8 @@ It does not modify Linear issues, add comments, or update project files.
 
 | Agent | Mode | Description |
 |-------|------|-------------|
-| `product-owner` | primary | Challenges ideas, clarifies needs, defines scope and priorities, and publishes an approved development plan and backlog. |
-| `orchestrator` | primary | Manages backlog delivery and isolated sub-agents across development, research, and analysis, with at most three active tasks. |
+| `product-owner` | primary | Challenges ideas, clarifies scope and priorities, and turns the user's intent into an actionable backlog. |
+| `orchestrator` | primary | Autonomously coordinates sub-agents, adapts execution, and validates delivery against the user's objective. |
 | `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
 | `code-reviewer` | subagent | Read-only code review agent for quality, correctness, security, and maintainability feedback. |
@@ -142,36 +142,27 @@ It does not modify Linear issues, add comments, or update project files.
 
 ### product-owner
 
-A primary agent for turning an idea and existing analysis into a well-defined product need and actionable backlog. It challenges assumptions, investigates the existing project, asks focused questions until important ambiguities are resolved, and defines the MVP, exclusions, success criteria, priorities, and dependencies. It can consult `partner`, `architect`, or `explore` for focused read-only advice.
+A primary agent for turning ideas and existing analysis into useful product direction and an actionable backlog. It challenges unnecessary complexity, investigates known context, and keeps briefs and tickets proportionate to the work. Focused consultations with `explore` for discovery and `architect` for technical constraints help resolve consequential uncertainty when useful.
 
-It presents the product brief and development plan for approval before publishing tickets. Tickets describe the need, scope, observable acceptance criteria, priority rationale, and dependencies. Unknowns become research or analysis tickets rather than invented implementation requirements. It hands the approved backlog to `orchestrator`; it does not launch development itself.
-
-The product owner defines ticket granularity: coherent, executable objectives with enough context and concrete acceptance examples. Functional, technical, research, and analysis tickets are all valid; each ticket need not deliver an independent user feature. Tightly coupled changes stay together, with no arbitrary micro-ticket target. Upcoming work is refined as evidence and actual user feedback arrive. The orchestrator proposes changes to unsuitable ticket boundaries and may create necessary discovered work within approved scope.
+The product owner produces requested planning artifacts within the user's mandate, without a separate approval ceremony for already authorized work. It owns product intent and hands execution context to `orchestrator`, which may adjust technical ticket boundaries while preserving product commitments. See [product-owner](agent/product-owner.md) for guidance. Publishing a backlog does not itself authorize development.
 
 ### XP practices
 
 The seven agents other than `partner` use the shared `extreme-programming` skill according to their roles. It translates communication, simplicity, feedback, courage, and respect into practical rules. This adaptation uses independent implementation and review, without pair programming or a new developer agent.
 
-- The existing `general` implementation worker loads `tdd` and repeats **test → code → refactor** inside In progress. It checks that the test fails for the expected reason, implements the minimum behavior, keeps tests green through refactoring, and reports actual execution evidence or justified exceptions.
+- The existing `general` implementation worker uses **test → code → refactor** by default for features and bugfixes. When another verification is more appropriate, it reports the reason, alternative check, and result. The loop stays with the implementer.
 - `architect` supports evolving design and revisable decisions. Research spikes have a question, investigation budget, and decision criterion.
 - `code-reviewer` checks behavioral coverage and acceptance examples. `code-simplifier` provides targeted, tested improvements before delivery validation rather than mandatory final cleanup.
 - `doc-writer` updates useful documentation alongside the increment; `rubber-duck` supports concrete examples and explicit assumptions while preserving its listening role.
-- Integration is frequent and serialized, with combined-revision checks. A failing integrated build takes priority over new dispatch and further integrations. Product outcomes are shown for user feedback; integrated does not mean deployed.
+- Integration is frequent and serialized, with combined-revision checks. Recover a failing integration baseline before adding more changes to it, while continuing independent work. Product outcomes are shown for user feedback; integrated does not mean deployed.
 
 ### Shared backlog workflow
 
-Both primary agents load `backlog-management`. They use available **Linear or Trello MCP tools**, asking which backend to use when both are available and the project has no preference. Without an accessible MCP, they use an existing Markdown backlog or **`.opencode/backlog/<ticket-id>.md`**. Markdown tickets carry the same types, statuses, priorities, owners, dependencies, acceptance criteria, and evidence. Existing backlogs remain authoritative until an explicit migration; unavailable remote backlogs can have clearly identified local drafts, not a competing copy of their state.
+Both primary agents use [backlog-management](skill/backlog-management/SKILL.md) with the agreed **Linear/Trello MCP** or an existing Markdown backlog, defaulting to **`.opencode/backlog/<ticket-id>.md`**. Existing backlogs stay authoritative; unavailable trackers can have local notes pending reconciliation.
 
-Development follows **Todo → In progress → To review → To integrate → Done**:
+The suggested flow is **Todo → In progress → To review → To integrate → Done**, adapted to existing project statuses. Accepted reports bypass integration; Done reflects verified acceptance and, for code delivery, integrated results. Tickets contain only useful execution context and evidence.
 
-- **Todo** can remain without action indefinitely.
-- **In progress + To review** are limited to **3 active tickets total**, across development, research, analysis, and verification. Existing, blocked, resumed, and independent untracked work count; sequential internal steps share their ticket's slot. Concurrent workers and comparison candidates are also capped at 3.
-- **To integrate** frees a slot only after code is validated at an immutable commit. It remains tracked until integration and final checks succeed.
-- **Done** requires verified acceptance criteria and, for development, integrated code. Accepted research, analysis, and verification reports bypass To integrate.
-
-The orchestrator creates and assigns tickets according to the agreed assignment policy, updates technical priorities and dependencies, and records tests, reviews, findings, and integration evidence. Product priority trade-offs and scope changes remain with the product owner and user. Tracker assignees and executing sub-agent sessions are distinct.
-
-It reconciles every page of the agreed scope at startup, resume, and closure. Between transitions and before dispatch, it refreshes affected tickets, dependencies, and the active set needed to count capacity, checking pending integrations before starting more work. Inconsistencies or stale context trigger another full scan. It tracks stranded execution, unattended reviews/integrations, blockers, and completion evidence, including earlier sessions. Todo needs no next action; other unfinished states need a next step or explicit blocker.
+Start small, usually with up to three active tickets or workers, and adapt parallelism to resources, independence, and project limits. Real dependencies and explicit sequencing govern readiness; priority alone does not block independent work. Refresh relevant state as needed instead of auditing the whole backlog for every task.
 
 ### orchestrator
 
@@ -179,25 +170,25 @@ Renamed from `build-orchestrator`: update agent references to `orchestrator`. In
 
 Agents are registered directly from the plugin's `agent/` directory through `ctx.agent.transform()`. They are no longer copied into global configuration. On startup, matching legacy copies (including mode-only differences) are archived outside the agents directory in `~/.config/opencode/froggy-agent-backups/`. Different copies are left active and their paths reported in the plugin log: compare them and move obsolete copies out of the agents directory after preserving customizations. Global/project agent definitions take precedence over the plugin, including their modes and permissions.
 
-A primary agent that delivers approved tickets through coordinated sub-agents. It never edits implementation code itself — it supervises, delegates, decides and integrates. It follows KISS, YAGNI, and the shared XP principles. A ticket is the delivery unit, with one implementation worktree and branch (separate candidates for comparisons). Internal steps share that workspace and require local validation; dependencies between implementation tickets require verified integration. After preparation, dispatch, validation, and integration repeat as work becomes ready:
+A primary agent that owns execution decisions and delivers the user's objective through sub-agents. The [orchestrator guidance](agent/orchestrator.md) covers:
 
-1. **Prepare approved tickets** — preserve product-owner boundaries and define execution objectives, scopes, complexity, and dependencies. Parallel implementation scopes must be disjoint. Uncertainty becomes bounded research or analysis with evidence and a decision. Preflight for missing work, unnecessary work, and dependency cycles; obtain approval for an execution plan when not already approved.
-2. **Worktrees and snapshots** — verify baseline checks and Git cleanliness outside memory and selected backlog documents. Record the initial SHA and the current verified `integration_head`. Create task worktrees from that latest head only after implementation prerequisites are integrated and reports accepted. Existing workers keep their own snapshots until synchronization; comparison candidates share a starting SHA.
-3. **Dispatch** — service ready integrations first, reserve capacity, assign responsibility, move to In progress, and launch the appropriate worker. Implementation uses `general` with explicit XP/TDD instructions and relevant product context. Comparisons use waves within the worker limit. Accepted reports go to Done; validated code goes to To integrate, freeing capacity but not yet unblocking implementation dependents.
-4. **Quality gate** — verify acceptance and test evidence at a clean immutable commit. Implementers refactor throughout development; invoke `code-simplifier` only for a concrete improvement before final validation. Review material-risk, substantial, and comparison deliveries. Blocking feedback resumes the implementer's session with bounded rework. Failed prerequisites block dependents; independent work may continue within stop criteria.
-5. **Incremental integration** — integrate eligible deliveries one at a time while unrelated workers continue. Synchronize stale deliveries with the current target head through their implementer, reserving active capacity and repeating the quality gate. Fast-forward only the validated combined result and run checks on the actual integrated SHA before Done or dependent dispatch. If checks fail, prioritize repair or a non-destructive revert, preserving evidence and reopening affected tickets. Verify coherent product outcomes end-to-end and gather feedback. Clean up completed work only after verification; preserve recoverable unfinished work. Closure reconciles the board rather than waiting for a global integration barrier or running automatic final cleanup.
+1. **Organize** useful execution units from the request and real dependencies.
+2. **Prepare** suitable workspaces: isolation for parallel or conflicting work, a shared workspace when sequential execution preserves existing work.
+3. **Delegate** with clear objectives, context, and expected evidence. The initial prompt requires each worker to move its own session to the assigned workspace and verify the workspace and expected Git revision before editing, building, testing, or running other mutating commands. Optional model comparisons load [implementation-comparison](skill/implementation-comparison/SKILL.md) on demand.
+4. **Validate** proportionately, using tests, direct checks, and specialist review where they help. Checks attributed to a SHA require that exact revision without staged, unstaged, or untracked code, tests, or configuration affecting the result; verify the SHA and working-tree state before and after checks, using a clean validation worktree when needed. Reuse worker and reviewer context for corrections.
+5. **Integrate and finish** incrementally, tying check evidence to the exact delivery SHA and rerunning relevant checks after every synchronization, even without conflicts, before integration. Verify and record the integrated revision and its results. Preserve existing work and recover from regressions before adding changes to an affected baseline.
 
-#### Decision policy
+#### Autonomy and automatic mode
 
-The orchestrator decides execution details; sub-agents advise and the comparative verdict is only a recommendation. It arbitrates by acceptance criteria met, then fewer blocking risks, then smaller diff. It asks for approval of the plan or product priority, scope, or acceptance changes, and resolves ambiguous backlog destinations, workflow mappings, and assignment policies with the user. It escalates irreversible or expensive choices without a defensible default and contradictions. It stops and reports options with a recommendation when two or more tasks fail, the same integration conflict repeats, or the base checkout cannot be restored clean.
+Routine technical choices, ticket adjustments, scheduling, and recovery need no renewed approval. The orchestrator adapts after failures rather than stopping at a fixed retry count, and keeps independent work moving. Reviews, parallelism, and planning depth are chosen for their usefulness.
+
+Irreversible, destructive, or costly actions need clear authorization, even within the objective; existing authorization needs no repeated confirmation. See the [orchestrator's autonomy guidance](agent/orchestrator.md#autonomy) for handling unresolved authorization in each mode.
+
+With `orchestrator` selected, say **"Automatic mode"** to delegate remaining choices for the established objective without confirmation or clarification questions. This mode belongs only to the orchestrator; the product owner and workers do not inherit it. See the [automatic-mode guidance](agent/orchestrator.md#automatic-mode) for decision handling, scope, authorization, and blockers.
 
 #### Memory
 
-The only memory file is **`.opencode/orchestrator/learnings.md`**, read at session startup if it exists and created only when there is a useful learning to save. It contains short, confirmed discoveries that help future tasks avoid mistakes or costly rediscovery: non-obvious repo facts, constraints, and failed approaches with their causes. Only relevant learnings are passed to each sub-agent.
-
-Notes are updated instead of duplicated; false or obsolete information is removed when noticed, and observations retain their scope and uncertainty. Task status, run history, temporary results, model evaluations, and information already in project documentation or configuration are excluded. There is no required retrospective, template, quota, or automatic memory commit. Only the orchestrator edits the file; sub-agents never touch the memory directory.
-
-Ticket status and delivery evidence live in the selected backlog. Session IDs, worktrees, and execution details stay in the conversation and sub-agent sessions. Missing references are recovered from those sessions and relevant Git state is checked before resuming work. Task completions and useful discoveries get brief progress updates; no run ledger is maintained. Markdown backlog and memory edits are not automatically committed.
+**`.opencode/orchestrator/learnings.md`** holds useful repo facts and failed approaches with their causes. The coordinator maintains it only when there is something worth retaining. Status and delivery evidence live in the backlog. Active tickets also retain applicable execution references: worker session ID, branch/worktree, last validated SHA with check commands and results, and next step or blocker. On resume, verify these references against available sessions and Git state; `list-child-sessions` uses an in-memory registry that may be incomplete after a restart. There is no run ledger; backlog and memory edits are not automatically committed.
 
 #### Model configuration
 
@@ -209,9 +200,9 @@ normal: provider/model-c
 ```
 
 - A model reference is `provider/model`, optionally suffixed with a variant (`#max`, `#xhigh`).
-- Each level is a comma-separated **pool of models**, rotated round-robin across tasks (comparison tasks use the whole pool, in waves when needed to respect the concurrency limit).
-- `complex` / `normal` apply to implementation, research, analysis, and verification tasks; the `code-reviewer` and `code-simplifier` sub-agents always run with the orchestrator's own session model.
-- Fallbacks: missing `complex` → `normal`; missing `normal` or no config file → the session default model is used everywhere.
+- Each level is a comma-separated **pool of models**. Round-robin is the default; the orchestrator may choose another configured model when useful. See [implementation-comparison](skill/implementation-comparison/SKILL.md) for alternative evaluation.
+- `complex` / `normal` apply across ticket kinds; reviewers and simplifiers default to the orchestrator's session model.
+- Fallbacks: missing `complex` → `normal`; missing `normal` or no config file → the session model without an explicit override.
 - Commit the project file to enforce a team standard, or gitignore it for personal model preferences.
 
 ---
@@ -231,9 +222,10 @@ Skills are contextual instructions loaded on demand via the `skill` tool. The ag
 | Skill | Description |
 |-------|-------------|
 | `ask-questions-if-underspecified` | Clarify requirements before implementing. Use when serious doubts arise. |
-| `backlog-management` | Shared Linear/Trello MCP or Markdown backlog contract, five-stage workflow, reconciliation, and active-task limits. |
+| `backlog-management` | Ticket responsibilities, proportionate tracking, and adaptive workflow through Linear/Trello MCP or Markdown. |
 | `extreme-programming` | Shared XP values, simple evolving design, short feedback loops, and engineering responsibility. |
-| `tdd` | Apply Test-Driven Development workflow for new features and bugfixes. |
+| `implementation-comparison` | Compare candidate implementations when the decision benefits from alternatives. |
+| `tdd` | Short test/code/refactor loops and verification adapted to the change. |
 
 #### Example: ask-questions-if-underspecified
 

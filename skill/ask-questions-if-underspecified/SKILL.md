@@ -13,7 +13,7 @@ use_when: >
 
 ## Goal
 
-Ask the minimum set of clarifying questions needed to avoid wrong work; do not start implementing until the must-have questions are answered (or the user explicitly approves proceeding with stated assumptions).
+Ask the minimum set of clarifying questions needed to avoid wrong work; do not start dependent work until the must-have questions are answered (unless the user or caller explicitly authorizes proceeding without answers or delegates those decisions).
 
 ## Workflow
 
@@ -33,7 +33,9 @@ If multiple plausible interpretations exist, assume it is underspecified.
 
 Ask 1-5 questions in the first pass. Prefer questions that eliminate whole branches of work.
 
-Use the `question` tool to present structured choices:
+For a delegated task, return unresolved questions to the caller with context, options, and a recommendation when justified. Do not use `question` to ask the user directly.
+
+In a direct user conversation, use the `question` tool to present structured choices:
 - Offer multiple-choice options with clear labels
 - Mark recommended defaults with "(Recommended)" in the label
 - Use `multiple: true` when the user can select several options
@@ -41,17 +43,15 @@ Use the `question` tool to present structured choices:
 
 ### 3) Pause before acting
 
-Until must-have answers arrive:
-- Do not run commands, edit files, or produce a detailed plan that depends on unknowns
+When proceeding has not been authorized, pause only work that depends on the missing answers:
+- Continue independently actionable work within the assigned scope
 - Do perform a clearly labeled, low-risk discovery step only if it does not commit you to a direction (e.g., inspect repo structure, read relevant config files)
 
-If the user explicitly asks you to proceed without answers:
-- State your assumptions as a short numbered list
-- Ask for confirmation; proceed only after they confirm or correct them
+If the user or caller explicitly authorizes proceeding without answers or delegates the unresolved decisions, state your assumptions and proceed within that authorization and the assigned scope without requesting further confirmation.
 
 ### 4) Confirm interpretation, then proceed
 
-Once you have answers, restate the requirements in 1-3 sentences (including key constraints and what success looks like), then start work.
+Once the user or caller provides answers or delegates the decisions, restate the requirements in 1-3 sentences (including key constraints and what success looks like), then resume work.
 
 ## Anti-patterns
 

@@ -1,34 +1,37 @@
 ---
 name: backlog-management
-description: Manage ticket responsibilities, workflow, and capacity through Linear/Trello MCP tools or a Markdown fallback.
+description: Keep useful delivery tracking through Linear/Trello MCP or Markdown while adapting workflow to the work.
 ---
 
 # Backlog Management
 
+Use the backlog to support delivery, not as an approval queue. Keep enough context to coordinate, resume, and verify work; avoid administrative steps that do not help those goals.
+
 ## Source of truth
 
-Discover available MCP tools and the agreed backlog from project conventions and conversation. Use the selected accessible Linear or Trello MCP. If no choice exists, use the sole available backend or ask when both are available. Resolve project/board, statuses, priorities, and members from actual data; never invent tool names or destination IDs.
+Use the agreed backlog and project conventions. Discover actual MCP tools, destinations, statuses, and members before writing to Linear or Trello. Without an established choice, use a clearly identified project backend or the project's Markdown backlog, defaulting to `.opencode/backlog/`. State the choice. An unresolved requested destination blocks publication; retain pending local drafts until it is identified.
 
-Without an accessible MCP, use the project's Markdown backlog or `.opencode/backlog/`. State the backend. Keep an existing backlog authoritative until an agreed migration. If a remote backlog becomes inaccessible, local drafts must be marked pending reconciliation, not treated as a copy of remote state.
+Keep an existing backlog authoritative until an agreed migration. If it becomes inaccessible, continue independently actionable work and mark local notes pending reconciliation rather than treating them as remote state.
 
 Search before creating tickets. Preserve IDs, unrelated content, and concurrent human edits. Re-read affected tickets before writes and verify results. On uncertain or failed writes, report the error and read before retrying to avoid duplicates.
 
 ## Responsibilities and tickets
 
-The product owner defines ticket boundaries, product priorities, and acceptance with the user. Tickets may be functional, technical, research, analysis, or verification work; they need a coherent executable objective, not necessarily standalone user value. Keep tightly coupled changes together.
+The product owner clarifies product intent, priorities, acceptance, and initial scope with the user. The orchestrator owns execution: it may assign, sequence, split, regroup, or create necessary work within the mandate. Preserve product commitments and explicit user sequencing constraints; report meaningful adjustments. Keep proposed changes outside the mandate separate from committed scope until authorized.
 
-The orchestrator assigns under the agreed policy, orders execution, and may create necessary discovered work within approved scope. It proposes ticket splits or redefinition to the product owner; product scope/value changes require user agreement. Only the coordinating agent edits the backlog; workers return evidence. Distinguish tracker assignees from worker sessions. If no member is designated, record the orchestrator as execution coordinator without inventing a platform account.
+Create only the tickets needed to coordinate delivery. A ticket should have a coherent objective; keep tightly coupled changes together instead of turning test/code/refactor/review steps into separate tickets. Missing administrative fields do not make otherwise clear work unready.
 
-Each ticket records:
-- Stable ID, title, kind (`implementation`, `research`, `analysis`, `verification`), objective, and rationale.
-- Scope/exclusions, concrete acceptance examples or questions, priority with rationale, dependencies, and origin/parent if relevant.
-- Status, owner when known, evidence, blockers, and next steps as work progresses.
+Only the coordinator edits the backlog; workers return evidence. Distinguish tracker assignees from worker sessions and do not invent platform accounts. Retain existing ticket IDs and link successor work when regrouping.
 
-Research/analysis has a question, investigation budget, and expected decision. Research reports include sources, alternatives, recommendation, and confidence; analysis reports include evidence, conclusions, impacts or root cause, and unresolved questions. Stop when evidence suffices or the budget expires. Verification reports identify checks, results, and tested SHA where applicable.
+Keep tickets minimal: stable ID, title, objective, observable acceptance criteria or investigation question, and status. Add kind (`implementation`, `research`, `analysis`, `verification`), scope, priority, or rationale when useful. Record who is executing, evidence on delivery, and a next step or blocker for unfinished active work.
 
-A ticket is the delivery unit. Internal test/code/refactor/review steps do not become separate tickets automatically. Dependencies between implementation tickets require verified integration; steps within one ticket require local validation in its shared workspace.
+For active tickets, retain durable execution references where applicable: worker session ID, branch, worktree path, and last validated SHA with check commands and results. Keep these references and the next step current at handoffs and when the worker, workspace, or validated revision changes. Record missing references explicitly rather than inventing them or relying solely on conversation history.
 
-Use native platform fields and relations when available, descriptions otherwise. Map states to existing lists/statuses. Agree on missing stages such as To integrate before creating them or using an explicit marker. Preserve priority conventions; Trello ordering or labels may represent priority.
+For research, identify the question and decision it informs, and use a proportionate investigation budget. Report evidence, conclusions, and uncertainty; adapt or conclude when further investigation adds little value. Verification reports identify checks, results, and tested revision where applicable.
+
+Record real dependencies: what upstream code, report, or decision is needed and why. Verify prerequisites before relying on them, while continuing independent preparation or work. Priority orders ready work; it is not itself a dependency. Honor explicit sequencing constraints separately. Coordinate overlapping edits rather than giving multiple workers conflicting write ownership.
+
+Use native fields and existing statuses when practical, descriptions otherwise. Represent pending review or integration with a note when the board has no matching stage; do not require new columns to proceed.
 
 ## Markdown fallback
 
@@ -40,43 +43,27 @@ id: investigate-import-limits
 title: Investigate import limits
 kind: research
 status: todo
-priority: medium
-owner: null
-depends_on: []
-parent: null
-external_url: null
 ---
 
-## Need and objective
-## Scope and exclusions
-## Acceptance criteria
-## Priority rationale
-## Findings and evidence
-## Blockers and next steps
+## Objective
+Determine the supported import size before planning the importer.
+
+## Acceptance
+Check published limits and one representative import within 30 minutes; recommend a size limit and identify remaining uncertainty.
 ```
 
-Statuses: `todo`, `in-progress`, `to-review`, `to-integrate`, `done`. Priorities: `critical`, `high`, `medium`, `low`, unless existing conventions differ. Do not automatically commit backlog edits. Reconcile drafts before remote publication and retain external links when migrating.
+Suggested statuses: `todo`, `in-progress`, `to-review`, `to-integrate`, `done`; follow existing project conventions. Add fields and evidence as needed. Do not automatically commit backlog edits. Reconcile drafts before remote publication and retain external links when migrating.
 
 ## Workflow and capacity
 
-| State | Meaning |
-| --- | --- |
-| Todo | Reserve of work; may remain without owner, next action, or execution commitment. Unclear implementation is not ready to start. |
-| In progress | Work started with responsibility, criteria, and dependencies understood. |
-| To review | Delivery/report awaits validation with evidence. Rejection returns it to In progress. |
-| To integrate | Code passed its gate at an immutable SHA; record target, dependencies, and blockers. Frees an active slot but remains tracked. |
-| Done | Acceptance verified; development requires integrated code and passing checks. Accepted reports bypass To integrate. Failure/abandonment is not Done; integration is not deployment. |
+The usual flow is **Todo → In progress → To review → To integrate → Done**. Combine stages when useful, and let accepted reports bypass integration. Track actual execution: failed launches, rework, waiting deliveries, and deferred work should remain visible. Mark Done only when acceptance is verified; code delivery includes integration and relevant checks. Record pre-existing failures or unavailable checks explicitly rather than claiming they passed.
 
-At most **3 active tickets in In progress + To review**, including resumed or blocked work already in the agreed scope. Independent untracked work counts too; internal sequential steps share their ticket's slot. Also cap concurrent workers, including comparison candidates, at 3. Reviews/tests of an existing ticket do not create another ticket slot. Todo and To integrate do not count.
+Start with a small amount of parallel work, usually up to three active tickets or workers. Adjust to task independence, available resources, coordination cost, and project limits. Count review, recovery, and waiting work when choosing what to launch; do not create extra tasks merely to occupy workers.
 
-Prioritize ready integrations and finishing active work before pulling Todo. Integration rework returns to In progress only after capacity is reserved, then repeats validation. Do not hide ongoing development in To integrate or move blocked work to Todo merely to free capacity. Explicit deferral stops execution and records how to resume. If capacity already exceeds 3, start nothing new and resolve it without rewriting others' work.
-
-Integrate serially as dependencies permit, without a whole-scope barrier. Verify the combined revision. A failing integrated build takes priority over new dispatch and further integrations.
+Prefer finishing and integrating useful increments over starting more work. An isolated blocker should affect only dependent work. If shared assumptions or integration checks fail, diagnose and recover the affected baseline before stacking further changes onto it; continue safe independent work. Keep statuses honest rather than moving tickets to satisfy a quota.
 
 ## Reconciliation
 
-At startup, resume, and closure, read every page in the agreed scope, including work from earlier sessions. Compare statuses with execution, reports, reviews, Git evidence, and dependencies; inspect relevant Done evidence. Report inaccessible pages rather than claiming a complete scan.
+At startup or resume, read execution references from active tickets and verify them against available worker sessions and Git evidence. During execution, refresh affected tickets, dependencies, and ongoing work before decisions or writes. Broaden the scan when state is missing or inconsistent; a full backlog audit is not required for every task.
 
-Between transitions and before dispatch, refresh affected tickets, their dependencies, and the full active set needed to count capacity. Check pending integrations before selecting new work. Use a full reconciliation if state conflicts, missing work, or stale context prevents a reliable decision.
-
-Find stranded execution, unattended reviews/integrations, resolved blockers, duplicates, and false completion. Each unfinished non-Todo ticket needs a known next step or blocker. Correct only evidence-backed discrepancies within your authority. Report outcomes, active count, pending reviews/integrations, and unresolved blockers; Todo may remain untouched.
+Recover stranded work, stale statuses, unattended reviews, or pending integrations when relevant. Correct discrepancies using evidence and preserve concurrent human edits. At closure, report delivered outcomes, ongoing work, and real blockers or remaining gaps. State any unavailable evidence or inaccessible tracker scope honestly.

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+- Simplify product-owner and orchestrator prompts into outcome-driven guidance with autonomous technical decisions, adaptive parallelism, and recovery instead of fixed retry stops
+- Keep backlog tickets minimal and reuse project workflows, with targeted reconciliation and technical ticket adjustments within the user's mandate
+- Add orchestrator-only "Automatic mode" to continue toward the established objective without confirmation or clarification questions
+- Honor explicitly delegated decisions without repeated clarification and clarify authorization for irreversible, destructive, or costly orchestration actions
+- Extract optional model comparisons into the on-demand `implementation-comparison` skill
+- Keep durable execution references in active tickets for resuming work across sessions and restarts
+- Tie delivery evidence to exact revisions and require relevant checks after every synchronization, including conflict-free updates
+- Require revision-bound checks to exclude interfering uncommitted files and verify the SHA and working-tree state before and after validation
+- Require workers to move and verify their own workspace from the initial prompt before edits, builds, tests, or other mutating commands
+- Focus product-owner consultations on discovery with `explore` and technical constraints with `architect`
+- Clarify test-first as the default for features and bugfixes, with justified alternative verification
+
 ## 1.3.0
 - Register bundled agents directly through `ctx.agent.transform()` and archive matching legacy global copies while preserving customized definitions
 - Make `agent-promote` and `agent-demote` temporary and location-scoped: verify the effective mode after reload, isolate projects, and reset on plugin/server restart without writing agent files
