@@ -307,7 +307,8 @@ export default Plugin.define({
       }
     })
 
-    const promptSessionTool = createPromptSessionTool(ctx.session, tracker)
+    const controller = new AbortController()
+    const promptSessionTool = createPromptSessionTool(ctx.session, tracker, { signal: controller.signal })
     const listChildSessionsTool = createListChildSessionsTool(tracker)
     const agentPromoteTool = createAgentPromoteTool(ctx.agent, modes.set, Object.keys(agents))
 
@@ -345,7 +346,6 @@ export default Plugin.define({
       })
     }
 
-    const controller = new AbortController()
     void (async () => {
       try {
         for await (const event of ctx.event.subscribe({ signal: controller.signal })) {

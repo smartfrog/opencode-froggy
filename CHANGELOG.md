@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Share `prompt-session` completion watchers per parent/child pair, deduplicate by completion ID, wait for exact prompt anchors, and cancel watchers when the plugin unloads
 - Simplify product-owner and orchestrator prompts into outcome-driven guidance with autonomous technical decisions, adaptive parallelism, and recovery instead of fixed retry stops
 - Keep backlog tickets minimal and reuse project workflows, with targeted reconciliation and technical ticket adjustments within the user's mandate
 - Add orchestrator-only "Automatic mode" to continue toward the established objective without confirmation or clarification questions

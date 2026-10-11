@@ -13,6 +13,7 @@ const assistant = (text: string) => ({
 })
 
 const idle = (outcome?: string) => ({
+  id: "msg_done",
   type: "idle",
   ...(outcome ? { outcome } : {}),
 })
@@ -38,22 +39,22 @@ describe("resolveChildTurn", () => {
       user(1500),
       assistant("second turn in flight"),
     ]
-    expect(resolveChildTurn(messages, since)).toEqual({ state: "completed", text: "first report" })
+    expect(resolveChildTurn(messages, since)).toEqual({ completionID: "msg_done", state: "completed", text: "first report" })
   })
 
   it("should return the last assistant text of our turn", () => {
     const messages = [user(1200), assistant("first"), assistant("final report"), idle("succeeded")]
-    expect(resolveChildTurn(messages, since)).toEqual({ state: "completed", text: "final report" })
+    expect(resolveChildTurn(messages, since)).toEqual({ completionID: "msg_done", state: "completed", text: "final report" })
   })
 
   it("should return error state for a failed idle outcome", () => {
     const messages = [user(1200), assistant("partial"), idle("failed")]
-    expect(resolveChildTurn(messages, since)).toEqual({ state: "error", text: "partial" })
+    expect(resolveChildTurn(messages, since)).toEqual({ completionID: "msg_done", state: "error", text: "partial" })
   })
 
   it("should return error state for an interrupted idle outcome", () => {
     const messages = [user(1200), idle("interrupted")]
-    expect(resolveChildTurn(messages, since)).toEqual({ state: "error", text: "" })
+    expect(resolveChildTurn(messages, since)).toEqual({ completionID: "msg_done", state: "error", text: "" })
   })
 
   it("should return empty text when the last assistant message has no text part", () => {
@@ -63,7 +64,7 @@ describe("resolveChildTurn", () => {
       { type: "assistant", content: [{ type: "reasoning", text: "hmm" }] },
       idle("succeeded"),
     ]
-    expect(resolveChildTurn(messages, since)).toEqual({ state: "completed", text: "" })
+    expect(resolveChildTurn(messages, since)).toEqual({ completionID: "msg_done", state: "completed", text: "" })
   })
 
   it("should anchor on the exact message id when provided", () => {
@@ -75,10 +76,10 @@ describe("resolveChildTurn", () => {
       assistant("turn two"),
       idle("succeeded"),
     ]
-    expect(resolveChildTurn(messages, 50, "msg_2")).toEqual({ state: "completed", text: "turn two" })
+    expect(resolveChildTurn(messages, 50, "msg_2")).toEqual({ completionID: "msg_done", state: "completed", text: "turn two" })
   })
 
-  it("should fall back to the timestamp anchor when the message id is not found", () => {
+  it("should wait when the exact message id is not found", () => {
     const messages = [
       user(100, "msg_1"),
       assistant("turn one"),
@@ -87,7 +88,12 @@ describe("resolveChildTurn", () => {
       assistant("turn two"),
       idle("succeeded"),
     ]
-    expect(resolveChildTurn(messages, 50, "msg_missing")).toEqual({ state: "completed", text: "turn one" })
+    expect(resolveChildTurn(messages, 50, "msg_missing")).toBeNull()
+  })
+
+  it("should wait when the completion marker has no stable identity", () => {
+    const messages = [user(1200), assistant("done"), { type: "idle", outcome: "succeeded" }]
+    expect(resolveChildTurn(messages, since)).toBeNull()
   })
 
   it("should handle malformed input", () => {

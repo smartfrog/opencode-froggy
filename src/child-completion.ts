@@ -1,4 +1,5 @@
 export interface ChildTurnResult {
+  completionID: string
   state: "completed" | "error"
   text: string
 }
@@ -33,7 +34,7 @@ function findAnchorIndex(messages: unknown[], since: number, anchorID?: string):
     const created = asRecord(message.time).created
     if (typeof created === "number" && created >= since) return index
   }
-  return anchorID !== undefined ? findAnchorIndex(messages, since) : -1
+  return -1
 }
 
 export function resolveChildTurn(
@@ -52,7 +53,9 @@ export function resolveChildTurn(
       lastAssistant = message
     }
     if (message.type === "idle") {
+      if (typeof message.id !== "string" || !message.id) return null
       return {
+        completionID: message.id,
         state: message.outcome === undefined || message.outcome === "succeeded" ? "completed" : "error",
         text: lastTextPart(lastAssistant),
       }

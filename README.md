@@ -175,6 +175,7 @@ A primary agent that owns execution decisions and delivers the user's objective 
 1. **Organize** useful execution units from the request and real dependencies.
 2. **Prepare** suitable workspaces: isolation for parallel or conflicting work, a shared workspace when sequential execution preserves existing work.
 3. **Delegate** with clear objectives, context, and expected evidence. The initial prompt requires each worker to move its own session to the assigned workspace and verify the workspace and expected Git revision before editing, building, testing, or running other mutating commands. Optional model comparisons load [implementation-comparison](skill/implementation-comparison/SKILL.md) on demand.
+   - Start a new subagent session for each new subject or independent objective. Reuse a session only for follow-up work on the same subject, even when the agent role or model stays the same.
 4. **Validate** proportionately, using tests, direct checks, and specialist review where they help. Checks attributed to a SHA require that exact revision without staged, unstaged, or untracked code, tests, or configuration affecting the result; verify the SHA and working-tree state before and after checks, using a clean validation worktree when needed. Reuse worker and reviewer context for corrections.
 5. **Integrate and finish** incrementally, tying check evidence to the exact delivery SHA and rerunning relevant checks after every synchronization, even without conflicts, before integration. Verify and record the integrated revision and its results. Preserve existing work and recover from regressions before adding changes to an affected baseline.
 
@@ -430,7 +431,7 @@ promptSession({
 #### Behavior
 
 - If `sessionId` is not provided, the tool targets the most recently created child session tracked since the plugin loaded (pass `sessionId` explicitly for older sessions)
-- Messages are sent with `queue` delivery, so each prompt gets its own turn
+- Messages are sent with `queue` delivery
 - Returns a confirmation once the message is admitted to the child session
 - Returns an error message if no child session exists for the current session
 - The plugin then polls the child session until the turn triggered by the sent
@@ -438,19 +439,21 @@ promptSession({
   turn's final assistant text, and injects a `<subagent sessionID="..." state="...">`
   notification into the parent session through the durable session inbox, mirroring
   the core's background subagent completion format
-- The report is scoped to the exact turn: the watch anchors on the inbox message id
-  returned by the prompt (falling back to send time), so queued messages to the same
-  child each get their own completion notification
-- Transient polling failures are retried (up to 3 in a row); the watch is capped at
-  30 minutes. If the watch dies or times out, the parent receives an explicit
-  abandonment notification instead of waiting forever
+- One shared watcher per parent/child pair tracks pending messages. It anchors on
+  each inbox message ID and waits until that message appears in the child history;
+  send time is used only when admission returns no message ID
+- Notifications are deduplicated by the completion marker's ID. Messages completed
+  together produce one notification; distinct completed turns still produce their
+  own notifications, even when their reports have identical text
+- Transient polling failures are retried (up to 3 in a row); each admitted message
+  has a 30-minute completion budget. If watching fails or times out, the parent
+  receives an explicit abandonment notification instead of waiting forever
 
 #### Limitations
 
-- Completion watching is in-memory: if the server restarts between sending the
-  message and the child's completion, the watch stops; a best-effort abandonment
-  notification is sent when the parent session is still alive (same class of
-  limitation as core issue #36349)
+- Active watchers are cancelled when the plugin unloads. Watching is in-memory:
+  pending watches are not restored after a plugin reload or server restart, and an
+  abandonment notification is not guaranteed across shutdowns
 - This compensates for the upstream gap where turns resumed via `prompt-session`
   do not notify the parent (anomalyco/opencode#50751, #35066); remove it once the
   core notifies from the child session completion path
