@@ -55,11 +55,11 @@ describe("createPromptSessionTool", () => {
     expect(result).toEqual({ content: "Error: No child session found for current session" })
   })
 
-  it("should send the message to the explicit sessionId with queue delivery", async () => {
+  it("should send the message to the explicit sessionId with steer delivery by default", async () => {
     const { tracker, prompt, tool } = setup()
     tracker.trackChild({ id: "ses_other", parentID: "ses_parent", created: 1, updated: 1 })
     await tool.execute({ message: "apply the fixes", sessionId: "ses_child" }, { sessionID: "ses_parent" })
-    expect(prompt).toHaveBeenCalledWith({ sessionID: "ses_child", text: "apply the fixes", delivery: "queue" })
+    expect(prompt).toHaveBeenCalledWith({ sessionID: "ses_child", text: "apply the fixes", delivery: "steer" })
   })
 
   it("should fall back to the last child when sessionId is omitted", async () => {
@@ -67,7 +67,28 @@ describe("createPromptSessionTool", () => {
     tracker.trackChild({ id: "ses_first", parentID: "ses_parent", created: 1, updated: 1 })
     tracker.trackChild({ id: "ses_last", parentID: "ses_parent", created: 2, updated: 2 })
     await tool.execute({ message: "continue" }, { sessionID: "ses_parent" })
-    expect(prompt).toHaveBeenCalledWith({ sessionID: "ses_last", text: "continue", delivery: "queue" })
+    expect(prompt).toHaveBeenCalledWith({ sessionID: "ses_last", text: "continue", delivery: "steer" })
+  })
+
+  it.each(["steer", "queue"])("should honor explicit %s delivery", async (delivery) => {
+    const { prompt, tool } = setup()
+
+    await tool.execute({ message: "continue", sessionId: "ses_child", delivery }, { sessionID: "ses_parent" })
+
+    expect(prompt).toHaveBeenCalledWith({ sessionID: "ses_child", text: "continue", delivery })
+  })
+
+  it("should reject an unsupported delivery mode before sending a message", async () => {
+    const { prompt, get, synthetic, tool } = setup()
+
+    await expect(tool.execute({
+      message: "continue", sessionId: "ses_child", delivery: "invalid",
+    }, { sessionID: "ses_parent" })).rejects.toThrow("Invalid delivery mode")
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(prompt).not.toHaveBeenCalled()
+    expect(get).not.toHaveBeenCalled()
+    expect(synthetic).not.toHaveBeenCalled()
   })
 
   it("should not notify when the prompt fails", async () => {

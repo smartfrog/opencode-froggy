@@ -414,6 +414,7 @@ Send a message to a child session (subagent) to continue the conversation. Usefu
 |-----------|------|----------|---------|-------------|
 | `message` | `string` | Yes | - | The message to send to the child session |
 | `sessionId` | `string` | No | - | The child session ID to target. If omitted, targets the last child session. |
+| `delivery` | `string` | No | `steer` | `steer` guides ongoing work; `queue` defers the message until later. |
 
 #### Usage Examples
 
@@ -426,12 +427,22 @@ promptSession({
   message: "Can you clarify the error handling approach?",
   sessionId: "abc123"
 })
+
+// Defer a follow-up until after the current work
+promptSession({
+  message: "After your current task, summarize the changes",
+  sessionId: "abc123",
+  delivery: "queue"
+})
 ```
 
 #### Behavior
 
 - If `sessionId` is not provided, the tool targets the most recently created child session tracked since the plugin loaded (pass `sessionId` explicitly for older sessions)
-- Messages are sent with `queue` delivery
+- Messages default to `steer` delivery for answers, corrections, and clarifications
+  affecting ongoing work. Use `delivery: "queue"` for follow-up work intended to wait
+- Steering takes effect at the next step boundary; a running model request or tool
+  may delay delivery
 - Returns a confirmation once the message is admitted to the child session
 - Returns an error message if no child session exists for the current session
 - The plugin then polls the child session until the turn triggered by the sent

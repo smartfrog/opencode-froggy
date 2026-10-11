@@ -9,6 +9,7 @@ const MAX_CONSECUTIVE_FAILURES = 3
 export interface PromptSessionArgs {
   message: string
   sessionId?: string
+  delivery?: "steer" | "queue"
 }
 
 interface SessionClient {
@@ -210,6 +211,7 @@ export function createPromptSessionTool(
     name: "prompt-session",
     description:
       "Send a message to a child session (subagent) to continue the conversation. " +
+      "Defaults to steer for ongoing work; use queue to defer the message until later. " +
       "Returns immediately; when the child finishes its turn, this session receives " +
       "a task completion notification with the child's final report.",
     input: {
@@ -220,6 +222,12 @@ export function createPromptSessionTool(
           type: "string",
           description: "The child session ID to target (optional - uses last child if not provided)",
         },
+        delivery: {
+          type: "string",
+          enum: ["steer", "queue"],
+          default: "steer",
+          description: "steer guides ongoing work at the next step boundary; queue defers the message until later",
+        },
       },
       required: ["message"],
       additionalProperties: false,
@@ -227,6 +235,10 @@ export function createPromptSessionTool(
     async execute(input: unknown, context: unknown) {
       signal?.throwIfAborted()
       const args = input as PromptSessionArgs
+      const delivery = args.delivery === undefined ? "steer" : args.delivery
+      if (delivery !== "steer" && delivery !== "queue") {
+        throw new Error("Invalid delivery mode: expected steer or queue")
+      }
       const ctx = context as { sessionID: string }
       const targetSessionId = args.sessionId ?? tracker.lastChild(ctx.sessionID)?.id
       if (!targetSessionId) {
@@ -236,6 +248,7 @@ export function createPromptSessionTool(
       log("[prompt-session] Sending message to child session", {
         parentSessionID: ctx.sessionID,
         childSessionID: targetSessionId,
+        delivery,
         messagePreview: args.message.slice(0, 100),
       })
 
@@ -244,7 +257,7 @@ export function createPromptSessionTool(
       const turn: PendingTurn = { since: Date.now() }
       watch.pending.add(turn)
       try {
-        const inbox = asRecord(await session.prompt({ sessionID: targetSessionId, text: args.message, delivery: "queue" }))
+        const inbox = asRecord(await session.prompt({ sessionID: targetSessionId, text: args.message, delivery }))
         signal?.throwIfAborted()
         turn.anchorID = typeof inbox.id === "string" ? inbox.id : undefined
         turn.deadline = Date.now() + maxWatchMs

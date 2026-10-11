@@ -4,6 +4,8 @@ description: Send a message to a child session (subagent) to continue the conver
 
 Send a message to a child session using the `prompt-session` tool.
 
+Use the default `steer` delivery for ongoing work. Set `delivery: "queue"` when the user explicitly wants the message handled later. Steering takes effect at the next step boundary and may wait for a running model request or tool.
+
 Parse the input:
 - If the first word matches a known agent type (e.g., `rubber-duck`, `explore`, `general`, `architect`, `doc-writer`, `partner`), use it to find the matching session and send the rest as the message
 - Otherwise, send the entire input to the most recent child session
