@@ -26,6 +26,7 @@ OpenCode plugin providing hooks, specialized agents (product-owner, orchestrator
   - [gitingest](#gitingest)
   - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
+  - [Orchestrator loop](#orchestrator-loop)
   - [pdf-to-markdown](#pdf-to-markdown)
   - [agent-promote](#agent-promote)
   - [Blockchain](#blockchain)
@@ -190,6 +191,10 @@ With `orchestrator` selected, say **"Automatic mode"** to delegate remaining cho
 #### Memory
 
 **`.opencode/orchestrator/learnings.md`** holds useful repo facts and failed approaches with their causes. The coordinator maintains it only when there is something worth retaining. Status and delivery evidence live in the backlog. Active tickets also retain applicable execution references: worker session ID, branch/worktree, last validated SHA with check commands and results, and next step or blocker. On resume, verify these references against available sessions and Git state; `list-child-sessions` uses an in-memory registry that may be incomplete after a restart. There is no run ledger; backlog and memory edits are not automatically committed.
+
+#### Periodic coordination
+
+For sustained background work, the orchestrator can activate a [persistent coordination loop](#orchestrator-loop). Every ten minutes by default, it receives a steering reminder with the established objective and a fresh child/shell activity snapshot. It reconciles progress, resumes the appropriate workers, and creates useful next tasks when needed. It stops the loop when the objective is achieved or the user requests it.
 
 #### Model configuration
 
@@ -503,6 +508,43 @@ Child sessions (2):
 2. [def456] Architecture Discussion
    Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
 ```
+
+---
+
+### Orchestrator loop
+
+`start-orchestrator-loop` enables or updates one persistent reminder loop for the current **root orchestrator session**. `stop-orchestrator-loop` disables that session's loop and cancels its still-pending reminders. The stop tool can also be used after switching the session to another agent.
+
+#### Parameters
+
+| Tool | Parameter | Type | Required | Default | Description |
+|------|-----------|------|----------|---------|-------------|
+| `start-orchestrator-loop` | `objective` | `string` | Yes | - | The user's established objective |
+| `start-orchestrator-loop` | `intervalMinutes` | `integer` | No | `10` | Reminder interval, from 1 to 35791 minutes (the timer's supported range) |
+| `stop-orchestrator-loop` | - | - | - | - | Uses the current session; takes no parameters |
+
+Example tool arguments:
+
+```json
+{
+  "objective": "Complete the agreed implementation and validate its acceptance criteria",
+  "intervalMinutes": 10
+}
+```
+
+#### Behavior
+
+- The first reminder arrives after one interval. Calling start again replaces the objective and cadence and cancels obsolete pending reminders.
+- Reminders use `steer`, including when the orchestrator is active. Delivery happens at a step boundary; a running model request or tool may delay it.
+- At most one reminder for the loop remains in the session inbox. Later intervals reuse it instead of accumulating messages.
+- Each reminder includes paginated child-session activity and running shell IDs from the children's locations, including worktrees. An inactive child is not assumed finished: it may await a shell or another background tool. Failed lookups are reported as unknown activity.
+- The orchestrator decides what to resume or create toward the objective, using native `subagent` notifications for those executions.
+- There is no total-duration cutoff. Transient delivery failures are logged and retried at the next interval.
+- Settings are stored in OpenCode's plugin storage. Reloading the owning location's plugin restores the loop at its next future interval; missed intervals are skipped. The server and that plugin instance must be running to send reminders.
+- Each loop belongs to the plugin location that started it, preventing other loaded worktrees from scheduling duplicate reminders. Reminders pause while a different agent is selected in the target session.
+- Stopping removes the persisted configuration, waits for an in-flight reminder attempt even when invoked from another loaded location, and cancels reminders still in the inbox. Already delivered inputs and running worker tasks are not interrupted. Deleting the session removes its loop; plugin cleanup stops timers while retaining enabled configurations for reload.
+
+The `opencode` CLI must be on the server's `PATH` and connect to the same OpenCode service. The plugin checks the target session's identity before using `opencode api` for inbox and activity operations that the plugin SDK does not expose. API calls have a 30-second request timeout; this is not a limit on the loop's lifetime.
 
 ---
 

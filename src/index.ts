@@ -22,6 +22,7 @@ import {
   pdfToMarkdownTool,
   createPromptSessionTool,
   createListChildSessionsTool,
+  createOrchestratorLoopTools,
   createAgentPromoteTool,
   ethTransactionTool,
   ethAddressTxsTool,
@@ -33,6 +34,9 @@ import { installBundledFiles } from "./command-installer"
 import { ChildSessionTracker } from "./session-children"
 import { applyAgents, createAgentModes } from "./agent-runtime"
 import { migrateAgentCopies } from "./agent-migration"
+import { createOrchestratorLoop } from "./orchestrator-loop"
+import { readOrchestratorActivity } from "./orchestrator-activity"
+import { createOrchestratorClients } from "./orchestrator-api"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
 export { buildSkillActivationBlock } from "./skill-activation"
@@ -122,6 +126,8 @@ export default Plugin.define({
         "pdf-to-markdown",
         "prompt-session",
         "list-child-sessions",
+        "start-orchestrator-loop",
+        "stop-orchestrator-loop",
         "agent-promote",
         "eth-transaction",
         "eth-address-txs",
@@ -308,6 +314,14 @@ export default Plugin.define({
     })
 
     const controller = new AbortController()
+    const orchestratorClients = createOrchestratorClients(ctx.session)
+    const orchestratorLoop = createOrchestratorLoop({
+      directory: ctx.location.directory,
+      storage: ctx.storage,
+      session: orchestratorClients.session,
+      activity: (sessionID) => readOrchestratorActivity(orchestratorClients.session, orchestratorClients.shell, sessionID),
+    })
+    const { startTool: startOrchestratorLoopTool, stopTool: stopOrchestratorLoopTool } = createOrchestratorLoopTools(orchestratorLoop)
     const promptSessionTool = createPromptSessionTool(ctx.session, tracker, { signal: controller.signal })
     const listChildSessionsTool = createListChildSessionsTool(tracker)
     const agentPromoteTool = createAgentPromoteTool(ctx.agent, modes.set, Object.keys(agents))
@@ -317,6 +331,8 @@ export default Plugin.define({
       editor.add(pdfToMarkdownTool)
       editor.add(promptSessionTool)
       editor.add(listChildSessionsTool)
+      editor.add(startOrchestratorLoopTool)
+      editor.add(stopOrchestratorLoopTool)
       editor.add(agentPromoteTool)
       editor.add(ethTransactionTool)
       editor.add(ethAddressTxsTool)
@@ -375,6 +391,11 @@ export default Plugin.define({
             await triggerHooks("session.deleted", sessionID)
             modifiedCodeFiles.delete(sessionID)
             tracker.removeSession(sessionID)
+            try {
+              await orchestratorLoop.stop(sessionID)
+            } catch (error) {
+              log("[orchestrator-loop] failed to clean up deleted session", { sessionID, error: String(error) })
+            }
           }
 
           if (record.type === "session.idle") {
@@ -399,6 +420,18 @@ export default Plugin.define({
       }
     })()
 
-    return () => controller.abort()
+    function cleanup(): Promise<void> {
+      controller.abort()
+      return orchestratorLoop.close()
+    }
+
+    try {
+      await orchestratorLoop.restore()
+    } catch (error) {
+      await cleanup()
+      throw error
+    }
+
+    return cleanup
   },
 })

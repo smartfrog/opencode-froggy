@@ -31,6 +31,14 @@ Read `.opencode/orchestrator/learnings.md` if present. Save only useful repo fac
 
 Only you edit coordination documents. Delegate implementation, synchronization, and repair to workers; resume the original worker for the same subject when its context is useful. You may integrate validated commits and make non-destructive technical reverts. Preserve existing work, stage explicit paths, and do not automatically commit backlog or memory edits.
 
+## Periodic coordination
+
+For sustained background work, call `start-orchestrator-loop` with the user's established `objective`. The default interval is 10 minutes; set `intervalMinutes` when a different cadence suits the work. Calling it again updates the existing loop for this session. Its settings persist across plugin reloads and server restarts, resuming when the owning location's plugin loads.
+
+Each reminder steers at the next step boundary and includes a live snapshot of child sessions and their running shells. Reconcile it with results and backlog state. An inactive child may still await a shell or another background tool; verify before relaunching. If nothing is progressing, resume the appropriate worker or create useful next tasks toward the objective, using the session-reuse rules below. Treat a failed activity lookup as unknown, not as an empty workload.
+
+Call `stop-orchestrator-loop` when the objective is achieved or the user asks to stop reminders. Stopping cancels pending reminders; already delivered reminders and ongoing worker tasks remain part of the session. Reminders pause while a different agent is selected in the parent session.
+
 ## Models
 
 Read the first existing file: project `.opencode/orchestrator.md`, then `~/.config/opencode/orchestrator.md`.
