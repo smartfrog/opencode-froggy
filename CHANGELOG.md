@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+
+## 1.4.0
+- Add persistent `start-orchestrator-loop` and `stop-orchestrator-loop` tools for ten-minute coordination reminders, with steering delivery, live child/shell activity, pending-reminder coalescing, and reload recovery
+- Prefer native `subagent` follow-ups with recorded task, agent, and session associations; keep `prompt-session` as a fallback for deferred delivery
 - Default `prompt-session` messages to `steer` delivery for ongoing work, with explicit `queue` delivery for deferred follow-ups
 - Share `prompt-session` completion watchers per parent/child pair, deduplicate by completion ID, wait for exact prompt anchors, and cancel watchers when the plugin unloads
 - Simplify product-owner and orchestrator prompts into outcome-driven guidance with autonomous technical decisions, adaptive parallelism, and recovery instead of fixed retry stops
