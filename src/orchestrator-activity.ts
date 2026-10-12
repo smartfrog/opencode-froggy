@@ -1,4 +1,4 @@
-import { asRecord } from "./child-completion"
+import { asRecord } from "./record"
 
 interface ChildInfo {
   id: string

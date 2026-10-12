@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { type Plugin } from "@opencode/plugin"
-import { asRecord } from "./child-completion"
+import { asRecord } from "./record"
 import { log } from "./logger"
 
 export const DEFAULT_LOOP_INTERVAL_MINUTES = 10

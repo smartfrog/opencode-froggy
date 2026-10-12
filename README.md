@@ -24,7 +24,6 @@ OpenCode plugin providing hooks, specialized agents (product-owner, orchestrator
   - [Automatic Activation](#automatic-activation)
 - [Tools](#tools)
   - [gitingest](#gitingest)
-  - [prompt-session](#prompt-session)
   - [list-child-sessions](#list-child-sessions)
   - [Orchestrator loop](#orchestrator-loop)
   - [pdf-to-markdown](#pdf-to-markdown)
@@ -84,7 +83,7 @@ Alternatively, clone or copy the plugin files to one of these directories:
 | `/linear-stale-check` | Review open Linear issues for the configured team and report whether they are likely active, uncertain, or obsolete | `plan` |
 | `/review-changes` | Review uncommitted changes (staged, unstaged, untracked) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review diff from source branch into target branch | `code-reviewer` |
-| `/send-to [agent] <message>` | Send a message to a child session (subagent) to continue the conversation | - |
+| `/send-to [agent] <message>` | Continue a child session using the native `subagent` tool | - |
 | `/simplify-changes` | Simplify uncommitted changes (staged, unstaged, untracked) | `code-simplifier` |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
 
@@ -409,76 +408,9 @@ gitingest({
 
 ---
 
-### prompt-session
-
-Send a message to a child session (subagent) to continue the conversation. Useful for iterating with subagents without creating new sessions.
-
-#### Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `message` | `string` | Yes | - | The message to send to the child session |
-| `sessionId` | `string` | No | - | The child session ID to target. If omitted, targets the last child session. |
-| `delivery` | `string` | No | `steer` | `steer` guides ongoing work; `queue` defers the message until later. |
-
-#### Usage Examples
-
-```typescript
-// Send a message to the last child session
-promptSession({ message: "Please also add unit tests for the new function" })
-
-// Send a message to a specific child session
-promptSession({
-  message: "Can you clarify the error handling approach?",
-  sessionId: "abc123"
-})
-
-// Defer a follow-up until after the current work
-promptSession({
-  message: "After your current task, summarize the changes",
-  sessionId: "abc123",
-  delivery: "queue"
-})
-```
-
-#### Behavior
-
-- If `sessionId` is not provided, the tool targets the most recently created child session tracked since the plugin loaded (pass `sessionId` explicitly for older sessions)
-- Messages default to `steer` delivery for answers, corrections, and clarifications
-  affecting ongoing work. Use `delivery: "queue"` for follow-up work intended to wait
-- Steering takes effect at the next step boundary; a running model request or tool
-  may delay delivery
-- Returns a confirmation once the message is admitted to the child session
-- Returns an error message if no child session exists for the current session
-- The plugin then polls the child session until the turn triggered by the sent
-  message completes (checking `time.idle` and the message stream), reads that
-  turn's final assistant text, and injects a `<subagent sessionID="..." state="...">`
-  notification into the parent session through the durable session inbox, mirroring
-  the core's background subagent completion format
-- One shared watcher per parent/child pair tracks pending messages. It anchors on
-  each inbox message ID and waits until that message appears in the child history;
-  send time is used only when admission returns no message ID
-- Notifications are deduplicated by the completion marker's ID. Messages completed
-  together produce one notification; distinct completed turns still produce their
-  own notifications, even when their reports have identical text
-- Transient polling failures are retried (up to 3 in a row); each admitted message
-  has a 30-minute completion budget. If watching fails or times out, the parent
-  receives an explicit abandonment notification instead of waiting forever
-
-#### Limitations
-
-- Active watchers are cancelled when the plugin unloads. Watching is in-memory:
-  pending watches are not restored after a plugin reload or server restart, and an
-  abandonment notification is not guaranteed across shutdowns
-- This compensates for the upstream gap where turns resumed via `prompt-session`
-  do not notify the parent (anomalyco/opencode#50751, #35066); remove it once the
-  core notifies from the child session completion path
-
----
-
 ### list-child-sessions
 
-List all child sessions (subagents) of the current session. Useful for finding specific sessions to target with `prompt-session`.
+List all child sessions (subagents) tracked for the current session. Use the session IDs with recorded task and agent associations for native `subagent` follow-ups. The in-memory list may be incomplete after a plugin reload or server restart.
 
 #### Parameters
 

@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Remove the `prompt-session` tool and its polling-based completion notifications; use native `subagent` follow-ups with `sessionID`, the original `agent`, and `background: true`
+- Migrate `/send-to` and orchestrator guidance to native follow-ups; deferred messages must be sent after the current execution completes instead of using `delivery: "queue"`
 
 ## 1.4.1
 - Fix orchestrator reminders failing to wake idle sessions with HTTP 409 by resuming the same synthetic input instead of changing an already-steered inbox item to `steer`

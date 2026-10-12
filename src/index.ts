@@ -20,7 +20,6 @@ import {
 import {
   gitingestTool,
   pdfToMarkdownTool,
-  createPromptSessionTool,
   createListChildSessionsTool,
   createOrchestratorLoopTools,
   createAgentPromoteTool,
@@ -37,6 +36,7 @@ import { migrateAgentCopies } from "./agent-migration"
 import { createOrchestratorLoop } from "./orchestrator-loop"
 import { readOrchestratorActivity } from "./orchestrator-activity"
 import { createOrchestratorClients } from "./orchestrator-api"
+import { asRecord } from "./record"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
 export { buildSkillActivationBlock } from "./skill-activation"
@@ -54,13 +54,6 @@ const TRACKED_FILE_TOOLS = new Set(["write", "edit", "patch"])
 interface HookExecutionResult {
   blocked: boolean
   blockReason?: string
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  return {}
 }
 
 function readSessionID(event: unknown): string | undefined {
@@ -124,7 +117,6 @@ export default Plugin.define({
       tools: [
         "gitingest",
         "pdf-to-markdown",
-        "prompt-session",
         "list-child-sessions",
         "start-orchestrator-loop",
         "stop-orchestrator-loop",
@@ -322,14 +314,12 @@ export default Plugin.define({
       activity: (sessionID) => readOrchestratorActivity(orchestratorClients.session, orchestratorClients.shell, sessionID),
     })
     const { startTool: startOrchestratorLoopTool, stopTool: stopOrchestratorLoopTool } = createOrchestratorLoopTools(orchestratorLoop)
-    const promptSessionTool = createPromptSessionTool(ctx.session, tracker, { signal: controller.signal })
     const listChildSessionsTool = createListChildSessionsTool(tracker)
     const agentPromoteTool = createAgentPromoteTool(ctx.agent, modes.set, Object.keys(agents))
 
     await ctx.tool.transform((editor) => {
       editor.add(gitingestTool)
       editor.add(pdfToMarkdownTool)
-      editor.add(promptSessionTool)
       editor.add(listChildSessionsTool)
       editor.add(startOrchestratorLoopTool)
       editor.add(stopOrchestratorLoopTool)

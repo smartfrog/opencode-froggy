@@ -13,13 +13,6 @@ describe("ChildSessionTracker", () => {
     expect(tracker.listChildren("ses_a").map((c) => c.id)).toEqual(["ses_c", "ses_b"])
   })
 
-  it("should return the last child", () => {
-    const tracker = new ChildSessionTracker()
-    tracker.trackChild({ id: "ses_b", parentID: "ses_a", created: 1, updated: 1 })
-    tracker.trackChild({ id: "ses_c", parentID: "ses_a", created: 2, updated: 2 })
-    expect(tracker.lastChild("ses_a")?.id).toBe("ses_c")
-  })
-
   it("should remove sessions and their children", () => {
     const tracker = new ChildSessionTracker()
     tracker.trackChild({ id: "ses_b", parentID: "ses_a", created: 1, updated: 1 })

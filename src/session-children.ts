@@ -30,9 +30,4 @@ export class ChildSessionTracker {
     if (!children) return []
     return Array.from(children.values()).sort((a, b) => a.created - b.created)
   }
-
-  lastChild(parentID: string): ChildSessionInfo | undefined {
-    const list = this.listChildren(parentID)
-    return list.at(-1)
-  }
 }

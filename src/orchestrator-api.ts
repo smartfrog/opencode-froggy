@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { asRecord } from "./child-completion"
+import { asRecord } from "./record"
 import { type ActivitySessionClient } from "./orchestrator-activity"
 import { type LoopSessionClient } from "./orchestrator-loop"
 

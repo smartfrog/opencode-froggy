@@ -1,4 +1,4 @@
-import { asRecord } from "../child-completion"
+import { asRecord } from "../record"
 import {
   DEFAULT_LOOP_INTERVAL_MINUTES,
   MAX_LOOP_INTERVAL_MINUTES,
