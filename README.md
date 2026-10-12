@@ -536,8 +536,8 @@ Example tool arguments:
 
 - The first reminder arrives after one interval. Calling start again replaces the objective and cadence and cancels obsolete pending reminders.
 - Reminders use `steer`, including when the orchestrator is active. Delivery happens at a step boundary; a running model request or tool may delay it.
-- At most one reminder for the loop remains in the session inbox. Later intervals reuse it instead of accumulating messages.
-- Each reminder includes paginated child-session activity and running shell IDs from the children's locations, including worktrees. An inactive child is not assumed finished: it may await a shell or another background tool. Failed lookups are reported as unknown activity.
+- At most one reminder for the loop remains in the session inbox. Later intervals resume that same synthetic input by ID instead of accumulating messages, including after a reload or a failed wake attempt.
+- Each reminder includes paginated child-session activity and running shell IDs from the children's locations, including worktrees. Shells are matched by owning session across all successfully inspected locations, even after a child moves. An inactive child is not assumed finished: it may await a shell or another background tool. An inaccessible worktree reports unknown shell activity for its children while preserving known shells from other locations.
 - The orchestrator decides what to resume or create toward the objective, using native `subagent` notifications for those executions.
 - There is no total-duration cutoff. Transient delivery failures are logged and retried at the next interval.
 - Settings are stored in OpenCode's plugin storage. Reloading the owning location's plugin restores the loop at its next future interval; missed intervals are skipped. The server and that plugin instance must be running to send reminders.

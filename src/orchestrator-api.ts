@@ -6,11 +6,10 @@ import { type LoopSessionClient } from "./orchestrator-loop"
 
 const execFileAsync = promisify(execFile)
 
-export type OpenCodeRequest = (method: "get" | "patch" | "delete", path: string, body?: Record<string, string>) => Promise<unknown>
+export type OpenCodeRequest = (method: "get" | "delete", path: string) => Promise<unknown>
 
-export const requestOpenCodeAPI: OpenCodeRequest = async (method, path, body) => {
+export const requestOpenCodeAPI: OpenCodeRequest = async (method, path) => {
   const args = ["api", method, path]
-  if (body) args.push("--data", JSON.stringify(body))
   try {
     const { stdout } = await execFileAsync("opencode", args, { encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })
     return stdout.trim() ? JSON.parse(stdout) as unknown : undefined
@@ -70,9 +69,6 @@ export function createOrchestratorClients(
       },
       async cancel(input) {
         await request("delete", inboxPath(input))
-      },
-      async update(input) {
-        await request("patch", inboxPath(input), { delivery: input.delivery })
       },
     },
     async list(input) {

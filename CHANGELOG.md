@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Fix orchestrator reminders failing to wake idle sessions with HTTP 409 by resuming the same synthetic input instead of changing an already-steered inbox item to `steer`
+- Preserve child activity from accessible worktrees when another location cannot be inspected, reporting its shell activity as unknown while retaining shell ownership across session moves
 
 ## 1.4.0
 - Add persistent `start-orchestrator-loop` and `stop-orchestrator-loop` tools for ten-minute coordination reminders, with steering delivery, live child/shell activity, pending-reminder coalescing, and reload recovery

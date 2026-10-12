@@ -26,16 +26,16 @@ export interface LoopSessionClient {
   get(input: { sessionID: string }): Promise<unknown>
   synthetic(input: {
     sessionID: string
+    id?: string
     text: string
     description: string
     metadata: Record<string, string>
     delivery: "steer"
-    resume: false
+    resume: boolean
   }): Promise<{ id: string }>
   inbox: {
     list(input: { sessionID: string }): Promise<{ id: string; type: string; payload: unknown }[]>
     cancel(input: { sessionID: string; inboxID: string }): Promise<void>
-    update(input: { sessionID: string; inboxID: string; delivery: "steer" }): Promise<void>
   }
 }
 
@@ -210,6 +210,12 @@ export function createOrchestratorLoop(options: {
 
   async function tick(runtime: Runtime): Promise<void> {
     const { sessionID, objective, revision } = runtime.config
+    const input = {
+      sessionID,
+      description: "Orchestrator coordination reminder",
+      delivery: "steer" as const,
+      metadata: { source: REMINDER_SOURCE, revision },
+    }
     if (!await canRemind(runtime)) return
     const pending = await pendingReminders(sessionID)
     if (!await stillCurrent(runtime)) return
@@ -218,9 +224,10 @@ export function createOrchestratorLoop(options: {
       if (item !== existing) await session.inbox.cancel({ sessionID, inboxID: item.id })
     }
     if (existing) {
-      if (await canRemind(runtime) && current(runtime)) {
-        await session.inbox.update({ sessionID, inboxID: existing.id, delivery: "steer" })
-      }
+      if (!await canRemind(runtime) || !current(runtime)) return
+      const text = asRecord(existing.payload).text
+      if (typeof text !== "string") throw new Error("Invalid pending orchestrator reminder text")
+      await session.synthetic({ ...input, id: existing.id, text, resume: true })
       return
     }
     let snapshot: string
@@ -230,30 +237,25 @@ export function createOrchestratorLoop(options: {
       snapshot = `Activity snapshot unavailable: ${String(error)}. Verify child activity before assigning work.`
     }
     if (!await canRemind(runtime) || !current(runtime)) return
-    const reminder = await session.synthetic({
-      sessionID,
-      description: "Orchestrator coordination reminder",
-      delivery: "steer",
-      resume: false,
-      metadata: { source: REMINDER_SOURCE, revision },
-      text: [
-        "Periodic orchestration check.",
-        `Objective: ${objective}`,
-        "",
-        snapshot,
-        "",
-        "Review child results, outstanding tasks, and blockers against the objective.",
-        "An inactive child may still await a shell or another background tool. Verify before relaunching it.",
-        "Use subagent with the recorded sessionID and agent for same-subject follow-ups, with background: true.",
-        "Create a new child session for a new subject. When nothing is progressing, choose useful next work within the objective.",
-        "Call stop-orchestrator-loop when the objective is achieved or the user asks to stop these reminders.",
-      ].join("\n"),
-    })
+    const text = [
+      "Periodic orchestration check.",
+      `Objective: ${objective}`,
+      "",
+      snapshot,
+      "",
+      "Review child results, outstanding tasks, and blockers against the objective.",
+      "An inactive child may still await a shell or another background tool. Verify before relaunching it.",
+      "Use subagent with the recorded sessionID and agent for same-subject follow-ups, with background: true.",
+      "Create a new child session for a new subject. When nothing is progressing, choose useful next work within the objective.",
+      "Call stop-orchestrator-loop when the objective is achieved or the user asks to stop these reminders.",
+    ].join("\n")
+    const reminder = await session.synthetic({ ...input, text, resume: false })
     if (!await canRemind(runtime) || !current(runtime)) {
       await session.inbox.cancel({ sessionID, inboxID: reminder.id })
       return
     }
-    await session.inbox.update({ sessionID, inboxID: reminder.id, delivery: "steer" })
+    // Re-admitting the same ID wakes execution without duplicating the durable input.
+    await session.synthetic({ ...input, id: reminder.id, text, resume: true })
   }
 
   return {

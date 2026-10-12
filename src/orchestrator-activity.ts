@@ -45,14 +45,23 @@ export async function readOrchestratorActivity(
   const [children, active] = await Promise.all([listChildren(session, sessionID), session.active()])
   if (children.length === 0) return "No child sessions found for this parent."
   const directories = [...new Set(children.map((child) => child.location.directory))]
-  const pages = await Promise.all(directories.map((directory) => shell.list({ location: { directory } })))
-  const shells = pages.flatMap((page) => page.data).filter((item) => item.status === "running")
+  const pages = await Promise.allSettled(directories.map((directory) => shell.list({ location: { directory } })))
+  const inspections = new Map(directories.map((directory, index) => [directory, pages[index]]))
+  const runningShells = pages
+    .flatMap((page) => page.status === "fulfilled" ? page.value.data : [])
+    .filter((item) => item.status === "running")
   return [
     "Child activity snapshot (inactive does not mean the task is finished):",
     ...children.map((child) => {
-      const running = shells.filter((item) => asRecord(item.metadata).sessionID === child.id).map((item) => item.id)
+      const inspection = inspections.get(child.location.directory)!
+      const shellActivity = runningShells
+        .filter((item) => asRecord(item.metadata).sessionID === child.id)
+        .map((item) => item.id)
+      if (inspection.status === "rejected") {
+        shellActivity.push(`unknown (${String(inspection.reason)})`)
+      }
       return `- ${child.id} | ${child.agent ?? "unknown agent"} | ${active[child.id]?.type ?? "inactive"}` +
-        ` | running shells: ${running.join(", ") || "none"} | ${JSON.stringify(child.title ?? "Untitled")}`
+        ` | running shells: ${shellActivity.join(", ") || "none"} | ${JSON.stringify(child.title ?? "Untitled")}`
     }),
   ].join("\n")
 }
