@@ -9,6 +9,9 @@ permissions:
     resource: "*"
     effect: deny
   - action: shell
+    resource: "pwd"
+    effect: allow
+  - action: shell
     resource: "git fetch*"
     effect: allow
   - action: shell
@@ -25,6 +28,9 @@ permissions:
     effect: allow
   - action: shell
     resource: "git rev-parse*"
+    effect: allow
+  - action: shell
+    resource: "git branch --show-current"
     effect: allow
   - action: shell
     resource: "git remote -v"

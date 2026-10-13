@@ -25,7 +25,9 @@ Only the coordinator edits the backlog; workers return evidence. Distinguish tra
 
 Keep tickets minimal: stable ID, title, objective, observable acceptance criteria or investigation question, and status. Add kind (`implementation`, `research`, `analysis`, `verification`), scope, priority, or rationale when useful. Record who is executing, evidence on delivery, and a next step or blocker for unfinished active work.
 
-For active tickets, retain durable execution references where applicable: worker session ID, branch, worktree path, and last validated SHA with check commands and results. Keep these references and the next step current at handoffs and when the worker, workspace, or validated revision changes. Record missing references explicitly rather than inventing them or relying solely on conversation history.
+For active tickets, retain durable execution references where applicable: each worker's bounded assignment, agent, session ID, branch, worktree path, and last validated SHA with check commands and results. Associate sessions with their specific deliverable rather than an agent role or the overall project. Keep these references and the next step current at handoffs and when the worker, workspace, or validated revision changes. Record missing references explicitly rather than inventing them or relying solely on conversation history.
+
+For reviewed deliveries, record the reviewer session, reviewed revision or diff, findings, and their disposition in the existing ticket. Keep pending reviews and unresolved blocking findings visible.
 
 For research, identify the question and decision it informs, and use a proportionate investigation budget. Report evidence, conclusions, and uncertainty; adapt or conclude when further investigation adds little value. Verification reports identify checks, results, and tested revision where applicable.
 
@@ -56,7 +58,7 @@ Suggested statuses: `todo`, `in-progress`, `to-review`, `to-integrate`, `done`; 
 
 ## Workflow and capacity
 
-The usual flow is **Todo → In progress → To review → To integrate → Done**. Combine stages when useful, and let accepted reports bypass integration. Track actual execution: failed launches, rework, waiting deliveries, and deferred work should remain visible. Mark Done only when acceptance is verified; code delivery includes integration and relevant checks. Record pre-existing failures or unavailable checks explicitly rather than claiming they passed.
+The usual flow is **Todo → In progress → To review → To integrate → Done**. Combine stages when useful, and let accepted reports bypass integration. Track actual execution: failed launches, rework, waiting deliveries, and deferred work should remain visible. Mark Done only when acceptance and required independent review are complete; code delivery also includes integration and relevant checks. Record pre-existing failures or unavailable checks explicitly rather than claiming they passed.
 
 Start with a small amount of parallel work, usually up to three active tickets or workers. Adjust to task independence, available resources, coordination cost, and project limits. Count review, recovery, and waiting work when choosing what to launch; do not create extra tasks merely to occupy workers.
 

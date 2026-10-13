@@ -245,8 +245,11 @@ export function createOrchestratorLoop(options: {
       "",
       "Review child results, outstanding tasks, and blockers against the objective.",
       "An inactive child may still await a shell or another background tool. Verify before relaunching it.",
-      "Use subagent with the recorded sessionID and agent for same-subject follow-ups, with background: true.",
-      "Create a new child session for a new subject. When nothing is progressing, choose useful next work within the objective.",
+      "Default to a new subagent session for each independent assignment or deliverable: omit sessionID, even within the same project or module.",
+      "Only reuse the recorded sessionID and agent for clarification, correction, synchronization, or validation of that specific assignment; use background: true.",
+      "Before integrating or completing any non-trivial change set, including logic, behavior, configuration, or agent instructions, obtain an independent code-reviewer review. Passing tests do not replace review.",
+      "Use a fresh reviewer session for each independent change set and resume it only for that change set's corrections. Resolve confirmed blocking findings and record review evidence.",
+      "When nothing is progressing, advance unfinished work toward review and integration or choose useful next work within the objective.",
       "Call stop-orchestrator-loop when the objective is achieved or the user asks to stop these reminders.",
     ].join("\n")
     const reminder = await session.synthetic({ ...input, text, resume: false })

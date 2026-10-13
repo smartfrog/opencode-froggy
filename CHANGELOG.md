@@ -3,6 +3,9 @@
 ## Unreleased
 - Remove the `prompt-session` tool and its polling-based completion notifications; use native `subagent` follow-ups with `sessionID`, the original `agent`, and `background: true`
 - Migrate `/send-to` and orchestrator guidance to native follow-ups; deferred messages must be sent after the current execution completes instead of using `delivery: "queue"`
+- Scope child sessions to bounded assignments: start native `subagent` calls without `sessionID` for independent work, and reuse sessions only for their original deliverable's follow-ups
+- Require independent `code-reviewer` review before integrating or completing non-trivial changes, with fresh reviewer sessions per change set, correction follow-ups, and review evidence in the existing backlog
+- Allow `pwd` and `git branch --show-current` in `code-reviewer` so workspace and branch inspection can run without shell permission failures
 
 ## 1.4.1
 - Fix orchestrator reminders failing to wake idle sessions with HTTP 409 by resuming the same synthetic input instead of changing an already-steered inbox item to `steer`

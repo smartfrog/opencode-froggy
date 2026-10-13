@@ -152,7 +152,7 @@ The seven agents other than `partner` use the shared `extreme-programming` skill
 
 - The existing `general` implementation worker uses **test → code → refactor** by default for features and bugfixes. When another verification is more appropriate, it reports the reason, alternative check, and result. The loop stays with the implementer.
 - `architect` supports evolving design and revisable decisions. Research spikes have a question, investigation budget, and decision criterion.
-- `code-reviewer` checks behavioral coverage and acceptance examples. `code-simplifier` provides targeted, tested improvements before delivery validation rather than mandatory final cleanup.
+- `code-reviewer` independently reviews every non-trivial change set before integration or completion, including configuration and agent instructions. It checks behavioral coverage and acceptance examples; passing tests or self-review do not replace it. `code-simplifier` provides targeted, tested improvements before delivery validation rather than mandatory final cleanup.
 - `doc-writer` updates useful documentation alongside the increment; `rubber-duck` supports concrete examples and explicit assumptions while preserving its listening role.
 - Integration is frequent and serialized, with combined-revision checks. Recover a failing integration baseline before adding more changes to it, while continuing independent work. Product outcomes are shown for user feedback; integrated does not mean deployed.
 
@@ -175,13 +175,14 @@ A primary agent that owns execution decisions and delivers the user's objective 
 1. **Organize** useful execution units from the request and real dependencies.
 2. **Prepare** suitable workspaces: isolation for parallel or conflicting work, a shared workspace when sequential execution preserves existing work.
 3. **Delegate** with clear objectives, context, and expected evidence. The initial prompt requires each worker to move its own session to the assigned workspace and verify the workspace and expected Git revision before editing, building, testing, or running other mutating commands. Optional model comparisons load [implementation-comparison](skill/implementation-comparison/SKILL.md) on demand.
-   - Start a new subagent session for each new subject or independent objective. Reuse a session only for follow-up work on the same subject, even when the agent role or model stays the same.
-4. **Validate** proportionately, using tests, direct checks, and specialist review where they help. Checks attributed to a SHA require that exact revision without staged, unstaged, or untracked code, tests, or configuration affecting the result; verify the SHA and working-tree state before and after checks, using a clean validation worktree when needed. Reuse worker and reviewer context for corrections.
+   - Each bounded assignment gets a new native `subagent` session with `background: true` and no `sessionID`. Reuse its recorded session and agent only for clarifications, corrections, synchronization, or validation of that specific deliverable. Sharing a role, model, repository, module, or overall objective is not enough to reuse a session.
+4. **Validate and review** every non-trivial change set with an independent `code-reviewer` before integration or completion. This includes logic, behavior, configuration, and agent instructions; trivial typos and formatting-only changes may use direct checks. Start a fresh reviewer session for each independent change set and reuse it for that change set's corrections. Supply the full diff, acceptance criteria, and test evidence; resolve confirmed blocking findings and record their disposition. Substantive changes after review require follow-up review.
+   - Checks attributed to a SHA require that exact revision without staged, unstaged, or untracked code, tests, or configuration affecting the result; verify the SHA and working-tree state before and after checks, using a clean validation worktree when needed.
 5. **Integrate and finish** incrementally, tying check evidence to the exact delivery SHA and rerunning relevant checks after every synchronization, even without conflicts, before integration. Verify and record the integrated revision and its results. Preserve existing work and recover from regressions before adding changes to an affected baseline.
 
 #### Autonomy and automatic mode
 
-Routine technical choices, ticket adjustments, scheduling, and recovery need no renewed approval. The orchestrator adapts after failures rather than stopping at a fixed retry count, and keeps independent work moving. Reviews, parallelism, and planning depth are chosen for their usefulness.
+Routine technical choices, ticket adjustments, scheduling, and recovery need no renewed approval. The orchestrator adapts after failures rather than stopping at a fixed retry count, and keeps independent work moving. Review depth, parallelism, and planning depth adapt to the work; independent review remains required for non-trivial changes.
 
 Irreversible, destructive, or costly actions need clear authorization, even within the objective; existing authorization needs no repeated confirmation. See the [orchestrator's autonomy guidance](agent/orchestrator.md#autonomy) for handling unresolved authorization in each mode.
 
@@ -189,11 +190,11 @@ With `orchestrator` selected, say **"Automatic mode"** to delegate remaining cho
 
 #### Memory
 
-**`.opencode/orchestrator/learnings.md`** holds useful repo facts and failed approaches with their causes. The coordinator maintains it only when there is something worth retaining. Status and delivery evidence live in the backlog. Active tickets also retain applicable execution references: worker session ID, branch/worktree, last validated SHA with check commands and results, and next step or blocker. On resume, verify these references against available sessions and Git state; `list-child-sessions` uses an in-memory registry that may be incomplete after a restart. There is no run ledger; backlog and memory edits are not automatically committed.
+**`.opencode/orchestrator/learnings.md`** holds useful repo facts and failed approaches with their causes. The coordinator maintains it only when there is something worth retaining. Status and delivery evidence live in the backlog. Active tickets also retain applicable execution references: each worker's assignment, agent and session ID, branch/worktree, last validated SHA with check commands and results, and next step or blocker. Review evidence includes the reviewer session, reviewed revision or diff, findings, and their disposition. On resume, verify these references against available sessions and Git state; `list-child-sessions` uses an in-memory registry that may be incomplete after a restart. There is no run ledger; backlog and memory edits are not automatically committed.
 
 #### Periodic coordination
 
-For sustained background work, the orchestrator can activate a [persistent coordination loop](#orchestrator-loop). Every ten minutes by default, it receives a steering reminder with the established objective and a fresh child/shell activity snapshot. It reconciles progress, resumes the appropriate workers, and creates useful next tasks when needed. It stops the loop when the objective is achieved or the user requests it.
+For sustained background work, the orchestrator can activate a [persistent coordination loop](#orchestrator-loop). Every ten minutes by default, it receives a steering reminder with the established objective and a fresh child/shell activity snapshot. It reconciles progress and pending reviews, resumes workers only for their original assignments, and starts fresh sessions for independent work. It stops the loop when the objective is achieved or the user requests it.
 
 #### Model configuration
 

@@ -11,4 +11,6 @@ description: Apply XP principles through simple evolving design, short feedback 
 - **Courage:** report failed checks and uncertainty honestly; revise decisions when evidence changes.
 - **Respect:** give specific, evidence-based feedback, preserve others' work, and bound investigation and correction costs.
 
-Implementers own tests and ongoing refactoring. Reviewers and simplifiers provide targeted help. Follow shared project conventions; temporary scopes coordinate edits rather than establish permanent code ownership. A passing isolated branch is not proof of successful integration. Prefer reversible design decisions and distinguish production-ready changes from experimental findings.
+Implementers own tests and ongoing refactoring. Before integrating or completing a non-trivial change set, the coordinator obtains an independent `code-reviewer` review, including for changes to behavior, configuration, or agent instructions. Passing tests or implementer self-review do not replace it. Trivial typos and formatting-only changes may use direct checks. Simplifiers provide targeted help.
+
+Follow shared project conventions; temporary scopes coordinate edits rather than establish permanent code ownership. A passing isolated branch is not proof of successful integration. Prefer reversible design decisions and distinguish production-ready changes from experimental findings.
