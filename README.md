@@ -140,6 +140,8 @@ It does not modify Linear issues, add comments, or update project files.
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Rubber duck for thinking out loud. Listens, reflects, and asks gentle, focused questions to help users clarify their own ideas. Read-only. |
 
+The `code-reviewer` permits common Git inspection commands, including tracked files, refs, history, and worktrees. Branch permissions cover bounded listing forms such as `git branch -r --sort=-committerdate` and `git branch --list -a --sort=-committerdate`; use `git for-each-ref` for advanced filtering and formatting. For tag and configuration queries, put the explicit read mode first: `git tag --list`, `git config get`, or `git config list`. Remote inspection uses `git remote`, `git remote -v`, `git remote get-url`, or `git remote show`. Select the repository with the shell tool's `workdir`.
+
 ### product-owner
 
 A primary agent for turning ideas and existing analysis into useful product direction and an actionable backlog. It challenges unnecessary complexity, investigates known context, and keeps briefs and tickets proportionate to the work. Focused consultations with `explore` for discovery and `architect` for technical constraints help resolve consequential uncertainty when useful.

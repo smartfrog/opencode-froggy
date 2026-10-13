@@ -30,10 +30,139 @@ permissions:
     resource: "git rev-parse*"
     effect: allow
   - action: shell
+    resource: "git ls-files *"
+    effect: allow
+  - action: shell
+    resource: "git ls-tree *"
+    effect: allow
+  - action: shell
+    resource: "git show-ref *"
+    effect: allow
+  - action: shell
+    resource: "git for-each-ref *"
+    effect: allow
+  - action: shell
+    resource: "git describe *"
+    effect: allow
+  - action: shell
+    resource: "git merge-base *"
+    effect: allow
+  - action: shell
+    resource: "git cat-file *"
+    effect: allow
+  - action: shell
+    resource: "git worktree list *"
+    effect: allow
+  - action: shell
+    resource: "git branch"
+    effect: allow
+  - action: shell
     resource: "git branch --show-current"
     effect: allow
   - action: shell
+    resource: "git branch -r"
+    effect: allow
+  - action: shell
+    resource: "git branch -a"
+    effect: allow
+  - action: shell
+    resource: "git branch --remotes"
+    effect: allow
+  - action: shell
+    resource: "git branch --all"
+    effect: allow
+  - action: shell
+    resource: "git branch -v"
+    effect: allow
+  - action: shell
+    resource: "git branch -vv"
+    effect: allow
+  - action: shell
+    resource: "git branch -r --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git branch -a --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git branch --remotes --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git branch --all --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git branch --list"
+    effect: allow
+  - action: shell
+    resource: "git branch -l"
+    effect: allow
+  - action: shell
+    resource: "git branch --list -r"
+    effect: allow
+  - action: shell
+    resource: "git branch --list -a"
+    effect: allow
+  - action: shell
+    resource: "git branch --list -v"
+    effect: allow
+  - action: shell
+    resource: "git branch --list -vv"
+    effect: allow
+  - action: shell
+    resource: "git branch --list --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git branch --list -r --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git branch --list -a --sort=-committerdate"
+    effect: allow
+  - action: shell
+    resource: "git tag"
+    effect: allow
+  - action: shell
+    resource: "git tag --list *"
+    effect: allow
+  - action: shell
+    resource: "git tag -l *"
+    effect: allow
+  - action: shell
+    resource: "git remote"
+    effect: allow
+  - action: shell
     resource: "git remote -v"
+    effect: allow
+  - action: shell
+    resource: "git remote --verbose"
+    effect: allow
+  - action: shell
+    resource: "git remote get-url *"
+    effect: allow
+  - action: shell
+    resource: "git remote show *"
+    effect: allow
+  - action: shell
+    resource: "git config get *"
+    effect: allow
+  - action: shell
+    resource: "git config list *"
+    effect: allow
+  - action: shell
+    resource: "git config --get *"
+    effect: allow
+  - action: shell
+    resource: "git config --get-all *"
+    effect: allow
+  - action: shell
+    resource: "git config --get-regexp *"
+    effect: allow
+  - action: shell
+    resource: "git config --get-urlmatch *"
+    effect: allow
+  - action: shell
+    resource: "git config --list *"
+    effect: allow
+  - action: shell
+    resource: "git config -l *"
     effect: allow
   - action: shell
     resource: "printf*"
@@ -59,6 +188,8 @@ permissions:
 
 
 You are in code review mode. Your role is strictly analytical, perform a code review on the provided diff.
+
+Use `git for-each-ref` for advanced branch filtering and formatting. Branch permissions cover bounded listing forms, including `git branch -r --sort=-committerdate` and `git branch --list -a --sort=-committerdate`, not arbitrary arguments. For tag and configuration queries, put the explicit read mode first: `git tag --list`, `git config get`, or `git config list`. Use the shell tool's `workdir` to select the repository.
 
 Load `extreme-programming`. Give timely feedback on the provided coherent increment. Check that tests cover observable acceptance examples and relevant regressions, rather than mirror implementation details. Identify a concrete missing behavior when flagging inadequate coverage; do not demand tests merely to increase counts. Review the implementer's check results and justified TDD exceptions; do not infer test-first execution from the final diff or claim you ran checks your permissions do not allow. Ask the caller for missing execution evidence when it prevents validation.
 

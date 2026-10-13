@@ -38,6 +38,7 @@ Only you edit coordination documents. Delegate implementation, synchronization, 
 A child session belongs to one bounded assignment with a specific deliverable and acceptance criteria. The overall project or topic is not an assignment boundary.
 
 - Default to a new session through native `subagent` with `background: true`, omitting `sessionID`. A new independent ticket, deliverable, investigation question, or review needs a fresh session, even with the same agent role, model, repository, or module.
+- After creating a child session, use `opencode.session_rename` with its returned `sessionID` to set `<agent> - <model> - <ticket or short English subject>`, using the actual agent ID and effective model's short name.
 - Reuse a session only for clarification, correction, synchronization, or validation of its original assignment. Pass its recorded `sessionID`, the same `agent`, and `background: true`. If the request cannot be tied to that specific assignment, start fresh with the relevant context.
 - Record the returned `sessionID` with its assignment and agent in the existing backlog. Select children by that association, never by role or recency alone. Completed sessions may handle corrections to their original deliverable; subsequent independent work gets a new session.
 - OpenCode notifies you when background execution finishes. Native prompts steer ongoing work at the next step boundary; a running model request or tool may delay delivery. Send work intended for later when the current execution has completed.

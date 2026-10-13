@@ -6,6 +6,7 @@
 - Scope child sessions to bounded assignments: start native `subagent` calls without `sessionID` for independent work, and reuse sessions only for their original deliverable's follow-ups
 - Require independent `code-reviewer` review before integrating or completing non-trivial changes, with fresh reviewer sessions per change set, correction follow-ups, and review evidence in the existing backlog
 - Allow `pwd` and `git branch --show-current` in `code-reviewer` so workspace and branch inspection can run without shell permission failures
+- Expand `code-reviewer` Git inspection permissions for files, refs, worktrees, bounded branch listings, and explicit read modes for tags, remotes, and configuration
 
 ## 1.4.1
 - Fix orchestrator reminders failing to wake idle sessions with HTTP 409 by resuming the same synthetic input instead of changing an already-steered inbox item to `steer`
