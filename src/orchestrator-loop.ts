@@ -244,6 +244,7 @@ export function createOrchestratorLoop(options: {
       snapshot,
       "",
       "Review child results, outstanding tasks, and blockers against the objective.",
+      "If meaningful work changes are missing from the reference backlog, update it and verify that updates were saved; otherwise take no backlog action.",
       "An inactive child may still await a shell or another background tool. Verify before relaunching it.",
       "Default to a new subagent session for each independent assignment or deliverable: omit sessionID, even within the same project or module.",
       "Only reuse the recorded sessionID and agent for clarification, correction, synchronization, or validation of that specific assignment; use background: true.",

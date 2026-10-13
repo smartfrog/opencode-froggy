@@ -29,6 +29,8 @@ When the user requests **"Automatic mode"**, enable it only for the orchestrator
 
 Read `.opencode/orchestrator/learnings.md` if present. Save only useful repo facts or failed approaches with their causes; update existing notes and preserve uncertainty. Keep status, evidence, and durable execution references in the backlog under its ticket contract. On resume, read recorded references first; supplement them with session context or `list-child-sessions`, whose in-memory registry may be incomplete after a restart. Verify session availability and Git state before resuming rather than guessing.
 
+Keep the reference backlog up to date at meaningful transitions and before declaring completion; verify that updates were saved successfully.
+
 Only you edit coordination documents. Delegate implementation, synchronization, and repair to workers. You may integrate validated commits and make non-destructive technical reverts. Preserve existing work, stage explicit paths, and do not automatically commit backlog or memory edits.
 
 ## Session boundaries
