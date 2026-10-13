@@ -7,12 +7,33 @@
   <a href="https://www.npmjs.com/package/opencode-froggy"><img src="https://badge.fury.io/js/opencode-froggy.svg" alt="npm version"></a>
 </p>
 
-OpenCode plugin providing hooks, specialized agents (product-owner, orchestrator, architect, doc-writer, rubber-duck, partner, code-reviewer, code-simplifier), skills (extreme-programming, backlog-management, implementation-comparison, ask-questions-if-underspecified, tdd), and tools (gitingest, pdf-to-markdown, blockchain queries, agent-promote).
+## Philosophy
+
+OpenCode Froggy brings **multi-agent delegation and orchestration** to OpenCode, guided by **Extreme Programming (XP)**.
+
+- **Delegate with purpose:** specialized agents handle focused tasks; the orchestrator coordinates them and validates the result.
+- **Work in short feedback loops:** test, code, refactor, review, and integrate incrementally.
+- **KISS:** choose the simplest solution that meets the need.
+- **YAGNI:** build what is needed now, not what might be useful later.
+
+**Clear objectives. Focused agents. Simple solutions. Verified results.**
+
+## Keep orchestration moving
+
+Delegation is only the start. The **orchestrator loop** periodically brings the orchestrator back to the objective with a fresh view of child-agent activity and running shells. It can follow up on stalled work, coordinate pending reviews, and advance the next tasks without waiting for another user prompt.
+
+The loop persists across plugin reloads and server restarts, with a configurable interval (10 minutes by default). It supports sustained multi-agent work—not just one round of delegation.
+
+Reminders require the OpenCode server and plugin to be running. The orchestrator stops the loop when the objective is achieved or the user asks it to stop.
+
+See [Orchestrator loop](#orchestrator-loop) for tools and configuration.
 
 ---
 
 ## Table of Contents
 
+- [Philosophy](#philosophy)
+- [Keep orchestration moving](#keep-orchestration-moving)
 - [Installation](#installation)
 - [Commands](#commands)
 - [Agents](#agents)
