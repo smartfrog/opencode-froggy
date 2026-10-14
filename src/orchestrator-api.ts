@@ -1,7 +1,6 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { asRecord } from "./record"
-import { type ActivitySessionClient } from "./orchestrator-activity"
 import { type LoopSessionClient } from "./orchestrator-loop"
 
 const execFileAsync = promisify(execFile)
@@ -57,7 +56,7 @@ export function createOrchestratorClients(
     }
   }
 
-  const session: LoopSessionClient & ActivitySessionClient = {
+  const session: LoopSessionClient = {
     get: (input) => native.get(input),
     synthetic: (input) => native.synthetic(input),
     inbox: {
@@ -71,37 +70,7 @@ export function createOrchestratorClients(
         await request("delete", inboxPath(input))
       },
     },
-    async list(input) {
-      const query = new URLSearchParams({ parentID: input.parentID, limit: input.limit })
-      if (input.cursor) query.set("cursor", input.cursor)
-      const response = record(await request("get", `/api/session?${query}`))
-      const next = response.cursor == null ? undefined : record(response.cursor).next
-      return {
-        data: items(response).map((child) => ({
-          id: text(child.id),
-          agent: typeof child.agent === "string" ? child.agent : undefined,
-          title: typeof child.title === "string" ? child.title : undefined,
-          location: { directory: text(record(child.location).directory) },
-        })),
-        ...(next == null ? {} : { cursor: { next: text(next) } }),
-      }
-    },
-    async active() {
-      const active = record(data(await request("get", "/api/session/active")))
-      return Object.fromEntries(Object.entries(active).map(([id, value]) => [id, { type: text(record(value).type) }]))
-    },
   }
 
-  const shell = {
-    async list({ location }: { location: { directory: string } }) {
-      const query = new URLSearchParams({ "location[directory]": location.directory })
-      return {
-        data: items(await request("get", `/api/shell?${query}`)).map((item) => ({
-          id: text(item.id), status: text(item.status), metadata: record(item.metadata),
-        })),
-      }
-    },
-  }
-
-  return { session, shell }
+  return { session }
 }

@@ -63,10 +63,9 @@ function setup(
       if (index !== -1) pending.splice(index, 1)
     }),
   }
-  const activity = vi.fn(async () => "ses_child: inactive, 1 running shell")
-  const loop = createLoop({ directory, storage, session: { get, synthetic, inbox }, activity })
+  const loop = createLoop({ directory, storage, session: { get, synthetic, inbox } })
   loops.push(loop)
-  return { loop, saved, storage, get, synthetic, admit, wake, inbox, pending, delivered, activity }
+  return { loop, saved, storage, get, synthetic, admit, wake, inbox, pending, delivered }
 }
 
 describe("orchestrator loop", () => {
@@ -95,7 +94,7 @@ describe("orchestrator loop", () => {
     expect(pending).toHaveLength(0)
   })
 
-  it("steers the current orchestrator after ten minutes with its objective and child activity", async () => {
+  it("steers the current orchestrator after ten minutes with a coordination check", async () => {
     const { loop, admit, wake } = setup()
     await loop.start("ses_parent", { objective: "Finish the port" })
 
@@ -108,9 +107,8 @@ describe("orchestrator loop", () => {
       sessionID: "ses_parent",
       delivery: "steer",
       resume: false,
-      text: expect.stringContaining("Finish the port"),
+      text: expect.stringContaining("Periodic coordination check:"),
     }))
-    expect(admit.mock.calls[0][0].text).toContain("ses_child: inactive, 1 running shell")
     expect(wake).toHaveBeenCalledWith({ ...admit.mock.calls[0][0], id: "msg_1", resume: true })
   })
 
@@ -121,11 +119,8 @@ describe("orchestrator loop", () => {
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
 
     const text = admit.mock.calls[0][0].text
-    expect(text).toContain("Reconcile this orchestration's temporary workspaces")
-    expect(text).toContain("Workspace lifecycle")
-    expect(text).toContain("Inactive is not sufficient")
-    expect(text).toContain("unknown ownership or activity blocks removal")
-    expect(text).toContain("Record verified removals or retention reasons in the backlog")
+    expect(text).toContain("Reconcile temporary workspaces and release eligible ones following the workspace lifecycle")
+    expect(text).toContain("Reconcile meaningful changes with the reference backlog and verify updates were saved")
   })
 
   it("keeps only one reminder pending while the orchestrator is busy", async () => {
@@ -140,7 +135,7 @@ describe("orchestrator loop", () => {
   })
 
   it("replaces the existing cadence and cancels its old pending reminder", async () => {
-    const { loop, admit, pending } = setup()
+    const { loop, admit, pending, saved } = setup()
     await loop.start("ses_parent", { objective: "First objective" })
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
 
@@ -149,7 +144,7 @@ describe("orchestrator loop", () => {
     await vi.advanceTimersByTimeAsync(2 * MINUTE)
 
     expect(admit).toHaveBeenCalledTimes(2)
-    expect(admit.mock.calls[1][0].text).toContain("Revised objective")
+    expect(saved.get("orchestrator-loop/ses_parent")).toMatchObject({ objective: "Revised objective", intervalMinutes: 2 })
     expect(vi.getTimerCount()).toBe(1)
   })
 
@@ -178,7 +173,7 @@ describe("orchestrator loop", () => {
     await vi.advanceTimersByTimeAsync(5 * MINUTE)
 
     expect(restored.admit).toHaveBeenCalledOnce()
-    expect(restored.admit.mock.calls[0][0].text).toContain("Finish the port")
+    expect(restored.admit.mock.calls[0][0].sessionID).toBe("ses_parent")
   })
 
   it("does not restore an explicitly stopped loop", async () => {
@@ -223,16 +218,34 @@ describe("orchestrator loop", () => {
     }))
   })
 
-  it("reports an unavailable activity snapshot instead of assuming no work is running", async () => {
-    const { loop, activity, admit } = setup()
-    activity.mockRejectedValueOnce(new Error("Shell service unavailable"))
-    await loop.start("ses_parent", { objective: "Finish the port" })
+  it("keeps reminders short even when the established objective is long", async () => {
+    const { loop, admit } = setup()
+    await loop.start("ses_parent", { objective: "A detailed project objective. ".repeat(2000) })
 
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
 
     expect(admit).toHaveBeenCalledOnce()
-    expect(admit.mock.calls[0][0].text).toContain("Activity snapshot unavailable")
-    expect(admit.mock.calls[0][0].text).toContain("Shell service unavailable")
+    expect(admit.mock.calls[0][0].text.length).toBeLessThan(1000)
+  })
+
+  it("replaces a legacy snapshot reminder left pending before a reload", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    await first.loop.close()
+    const legacy = first.pending[0]
+    legacy.id = "msg_legacy"
+    legacy.payload = { ...first.admit.mock.calls[0][0], text: "Child activity snapshot\n".repeat(2000) }
+    const restored = setup("/project", first.saved, first.pending)
+
+    await restored.loop.restore()
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(restored.inbox.cancel).toHaveBeenCalledWith({ sessionID: "ses_parent", inboxID: "msg_legacy" })
+    expect(restored.pending).toHaveLength(1)
+    expect(restored.admit).toHaveBeenCalledOnce()
+    expect(restored.admit.mock.calls[0][0].text.length).toBeLessThan(1000)
+    expect(restored.wake).toHaveBeenCalledWith(expect.objectContaining({ id: restored.pending[0].id, resume: true }))
   })
 
   it("cancels a reminder whose admission finishes while stop is waiting", async () => {
@@ -252,15 +265,15 @@ describe("orchestrator loop", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("does not send a late activity result after plugin cleanup", async () => {
-    const { loop, activity, synthetic, saved } = setup()
-    const inspection = deferred<string>()
-    activity.mockReturnValueOnce(inspection.promise)
+  it("does not send a reminder after an inbox lookup finishes during plugin cleanup", async () => {
+    const { loop, inbox, synthetic, saved } = setup()
+    const inspection = deferred<PendingInputs>()
     await loop.start("ses_parent", { objective: "Finish the port" })
+    inbox.list.mockReturnValueOnce(inspection.promise)
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
 
     const closing = loop.close()
-    inspection.resolve("No active children")
+    inspection.resolve([])
     await closing
 
     expect(synthetic).not.toHaveBeenCalled()
@@ -290,15 +303,15 @@ describe("orchestrator loop", () => {
 
   it("observes an explicit stop issued from another loaded location", async () => {
     const first = setup()
-    const inspection = deferred<string>()
-    first.activity.mockReturnValueOnce(inspection.promise)
+    const inspection = deferred<PendingInputs>()
     await first.loop.start("ses_parent", { objective: "Finish the port" })
+    first.inbox.list.mockReturnValueOnce(inspection.promise)
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
     const other = setup("/other-project", first.saved)
 
     const stopping = other.loop.stop("ses_parent")
     await vi.advanceTimersByTimeAsync(0)
-    inspection.resolve("No active children")
+    inspection.resolve([])
     await stopping
     await vi.advanceTimersByTimeAsync(20 * MINUTE)
 
@@ -475,7 +488,7 @@ describe("orchestrator loop", () => {
   })
 
   it("serializes concurrent updates to the same session", async () => {
-    const { loop, admit } = setup()
+    const { loop, admit, saved } = setup()
     await Promise.all([
       loop.start("ses_parent", { objective: "First request", intervalMinutes: 2 }),
       loop.start("ses_parent", { objective: "Second request", intervalMinutes: 3 }),
@@ -484,7 +497,7 @@ describe("orchestrator loop", () => {
     await vi.advanceTimersByTimeAsync(3 * MINUTE)
 
     expect(admit).toHaveBeenCalledOnce()
-    expect(admit.mock.calls[0][0].text).toContain("Second request")
+    expect(saved.get("orchestrator-loop/ses_parent")).toMatchObject({ objective: "Second request", intervalMinutes: 3 })
     expect(vi.getTimerCount()).toBe(1)
   })
 
@@ -560,15 +573,15 @@ describe("orchestrator loop", () => {
     expect(admit).toHaveBeenCalledOnce()
   })
 
-  it("pauses admission when the agent switches during the activity lookup", async () => {
-    const { loop, get, activity, synthetic, wake } = setup()
-    const inspection = deferred<string>()
-    activity.mockReturnValueOnce(inspection.promise)
+  it("pauses admission when the agent switches during the inbox lookup", async () => {
+    const { loop, get, inbox, synthetic, wake } = setup()
+    const inspection = deferred<PendingInputs>()
     await loop.start("ses_parent", { objective: "Finish the port" })
+    inbox.list.mockReturnValueOnce(inspection.promise)
     await vi.advanceTimersByTimeAsync(10 * MINUTE)
 
     get.mockResolvedValue({ agent: "plan" })
-    inspection.resolve("No active children")
+    inspection.resolve([])
     await vi.advanceTimersByTimeAsync(0)
 
     expect(synthetic).not.toHaveBeenCalled()

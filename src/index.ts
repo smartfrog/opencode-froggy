@@ -34,7 +34,6 @@ import { ChildSessionTracker } from "./session-children"
 import { applyAgents, createAgentModes } from "./agent-runtime"
 import { migrateAgentCopies } from "./agent-migration"
 import { createOrchestratorLoop } from "./orchestrator-loop"
-import { readOrchestratorActivity } from "./orchestrator-activity"
 import { createOrchestratorClients } from "./orchestrator-api"
 import { asRecord } from "./record"
 
@@ -311,7 +310,6 @@ export default Plugin.define({
       directory: ctx.location.directory,
       storage: ctx.storage,
       session: orchestratorClients.session,
-      activity: (sessionID) => readOrchestratorActivity(orchestratorClients.session, orchestratorClients.shell, sessionID),
     })
     const { startTool: startOrchestratorLoopTool, stopTool: stopOrchestratorLoopTool } = createOrchestratorLoopTools(orchestratorLoop)
     const listChildSessionsTool = createListChildSessionsTool(tracker)

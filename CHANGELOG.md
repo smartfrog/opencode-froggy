@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Replace verbose orchestrator reminders with a fixed coordination check covering activity, reviews, blockers, backlog updates, and workspace cleanup; remove automatic child/shell snapshots and replace obsolete pending reminders after reload
 - Remove the `prompt-session` tool and its polling-based completion notifications; use native `subagent` follow-ups with `sessionID`, the original `agent`, and `background: true`
 - Migrate `/send-to` and orchestrator guidance to native follow-ups; deferred messages must be sent after the current execution completes instead of using `delivery: "queue"`
 - Scope child sessions to bounded assignments: start native `subagent` calls without `sessionID` for independent work, and reuse sessions only for their original deliverable's follow-ups

@@ -49,7 +49,7 @@ A child session belongs to one bounded assignment with a specific deliverable an
 
 For sustained background work, call `start-orchestrator-loop` with the user's established `objective`. The default interval is 10 minutes; set `intervalMinutes` when a different cadence suits the work. Calling it again updates the existing loop for this session. Its settings persist across plugin reloads and server restarts, resuming when the owning location's plugin loads.
 
-Each reminder steers at the next step boundary and includes a live snapshot of child sessions and their running shells. Reconcile it with results and backlog state, including pending reviews. An inactive child may still await a shell or another background tool; verify before relaunching. If nothing is progressing, advance unfinished work toward review and integration or choose useful next work toward the objective, applying the session boundaries above. Treat a failed activity lookup as unknown, not as an empty workload.
+Each reminder is a short coordination check that steers at the next step boundary. Inspect current worker/background activity as needed and reconcile results with backlog state, including pending reviews. An inactive child may still await a shell or another background tool; verify before relaunching. If nothing is progressing, advance unfinished work toward review and integration or choose useful next work toward the objective, applying the session boundaries above. Treat a failed activity lookup as unknown, not as an empty workload.
 
 Also reconcile temporary workspaces at each reminder. Release eligible workspaces using the workspace lifecycle below; record retained workspaces with a reason and next step, including cleanup failures.
 

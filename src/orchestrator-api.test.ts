@@ -32,31 +32,11 @@ describe("orchestrator API bridge", () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
-  it("rejects malformed active-session data instead of claiming no sessions are running", async () => {
+  it("rejects malformed inbox data instead of claiming no reminders are pending", async () => {
     const { session, request } = setup()
+    request.mockResolvedValueOnce({ data: { id: "ses_parent", time: { created: 123 } } })
     request.mockResolvedValueOnce({ error: "Service unavailable" })
 
-    await expect(session.active()).rejects.toThrow("data")
-  })
-
-  it("preserves parent pagination and a worktree's shell ownership", async () => {
-    const { session, shell, request } = setup()
-    request.mockResolvedValueOnce({ data: [{ id: "ses_child", agent: "general", location: { directory: "/work tree" } }], cursor: { next: "next-page" } })
-    request.mockResolvedValueOnce({ data: [{ id: "sh_build", status: "running", metadata: { sessionID: "ses_child" } }] })
-
-    const page = await session.list({ parentID: "ses_parent", limit: "20", cursor: "page+2" })
-    const commands = await shell.list({ location: { directory: page.data[0].location.directory } })
-
-    expect(request).toHaveBeenNthCalledWith(1, "get", "/api/session?parentID=ses_parent&limit=20&cursor=page%2B2")
-    expect(page.cursor?.next).toBe("next-page")
-    expect(request).toHaveBeenNthCalledWith(2, "get", "/api/shell?location%5Bdirectory%5D=%2Fwork+tree")
-    expect(commands.data[0].metadata).toEqual({ sessionID: "ses_child" })
-  })
-
-  it("accepts the null cursor returned by OpenCode at the end of a child listing", async () => {
-    const { session, request } = setup()
-    request.mockResolvedValueOnce({ data: [], cursor: { previous: null, next: null } })
-
-    await expect(session.list({ parentID: "ses_parent", limit: "20" })).resolves.toEqual({ data: [] })
+    await expect(session.inbox.list({ sessionID: "ses_parent" })).rejects.toThrow("data")
   })
 })

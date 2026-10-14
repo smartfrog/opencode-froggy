@@ -16,7 +16,7 @@ export function createOrchestratorLoopTools(loop: ReturnType<typeof createOrches
     name: "start-orchestrator-loop",
     description:
       "Start or update persistent coordination reminders for the current root orchestrator session. " +
-      "Defaults to every 10 minutes. Reminders steer even during active work and include live child activity. " +
+      "Defaults to every 10 minutes. Short coordination checks steer even during active work. " +
       "Use stop-orchestrator-loop when the objective is achieved or the user asks to stop reminders.",
     input: {
       type: "object",

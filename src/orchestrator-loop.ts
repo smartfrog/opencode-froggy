@@ -7,6 +7,13 @@ export const DEFAULT_LOOP_INTERVAL_MINUTES = 10
 export const MAX_LOOP_INTERVAL_MINUTES = Math.floor(2_147_483_647 / 60_000)
 const STORAGE_PREFIX = "orchestrator-loop/"
 const REMINDER_SOURCE = "opencode-froggy:orchestrator-loop"
+const REMINDER_TEXT = [
+  "Periodic coordination check:",
+  "- Check current worker/background activity, new results, pending reviews, and blockers.",
+  "- Reconcile meaningful changes with the reference backlog and verify updates were saved.",
+  "- Reconcile temporary workspaces and release eligible ones following the workspace lifecycle.",
+  "- Unblock stalled work or advance the next useful action toward the objective.",
+].join("\n")
 const COORDINATION_KEY = Symbol.for("opencode-froggy:orchestrator-loop:coordination:v2")
 const SHARED = globalThis as typeof globalThis & {
   [COORDINATION_KEY]?: {
@@ -100,9 +107,8 @@ export function createOrchestratorLoop(options: {
   directory: string
   storage: LoopStorage
   session: LoopSessionClient
-  activity: (sessionID: string) => Promise<string>
 }) {
-  const { directory, storage, session, activity } = options
+  const { directory, storage, session } = options
   const runtimes = new Map<string, Runtime>()
   const operations = new Set<Promise<void>>()
   let closed = false
@@ -209,9 +215,10 @@ export function createOrchestratorLoop(options: {
   }
 
   async function tick(runtime: Runtime): Promise<void> {
-    const { sessionID, objective, revision } = runtime.config
+    const { sessionID, revision } = runtime.config
     const input = {
       sessionID,
+      text: REMINDER_TEXT,
       description: "Orchestrator coordination reminder",
       delivery: "steer" as const,
       metadata: { source: REMINDER_SOURCE, revision },
@@ -219,51 +226,25 @@ export function createOrchestratorLoop(options: {
     if (!await canRemind(runtime)) return
     const pending = await pendingReminders(sessionID)
     if (!await stillCurrent(runtime)) return
-    const existing = pending.find((item) => asRecord(asRecord(item.payload).metadata).revision === revision)
+    const existing = pending.find((item) => {
+      const payload = asRecord(item.payload)
+      return asRecord(payload.metadata).revision === revision && payload.text === REMINDER_TEXT
+    })
     for (const item of pending) {
       if (item !== existing) await session.inbox.cancel({ sessionID, inboxID: item.id })
     }
+    if (!await canRemind(runtime) || !current(runtime)) return
     if (existing) {
-      if (!await canRemind(runtime) || !current(runtime)) return
-      const text = asRecord(existing.payload).text
-      if (typeof text !== "string") throw new Error("Invalid pending orchestrator reminder text")
-      await session.synthetic({ ...input, id: existing.id, text, resume: true })
+      await session.synthetic({ ...input, id: existing.id, resume: true })
       return
     }
-    let snapshot: string
-    try {
-      snapshot = await activity(sessionID)
-    } catch (error) {
-      snapshot = `Activity snapshot unavailable: ${String(error)}. Verify child activity before assigning work.`
-    }
-    if (!await canRemind(runtime) || !current(runtime)) return
-    const text = [
-      "Periodic orchestration check.",
-      `Objective: ${objective}`,
-      "",
-      snapshot,
-      "",
-      "Review child results, outstanding tasks, and blockers against the objective.",
-      "If meaningful work changes are missing from the reference backlog, update it and verify that updates were saved; otherwise take no backlog action.",
-      "An inactive child may still await a shell or another background tool. Verify before relaunching it.",
-      "Default to a new subagent session for each independent assignment or deliverable: omit sessionID, even within the same project or module.",
-      "Only reuse the recorded sessionID and agent for clarification, correction, synchronization, or validation of that specific assignment; use background: true.",
-      "Before integrating or completing any non-trivial change set, including logic, behavior, configuration, or agent instructions, obtain an independent code-reviewer review. Passing tests do not replace review.",
-      "Use a fresh reviewer session for each independent change set and resume it only for that change set's corrections. Resolve confirmed blocking findings and record review evidence.",
-      "Reconcile this orchestration's temporary workspaces with ticket references and actual inventory, including completed assignments and review/validation worktrees.",
-      "Follow the orchestrator's Workspace lifecycle to release eligible workspaces after accepted deliveries or reports, not only at the end of the objective.",
-      "Inactive is not sufficient: verify all workspace users and background work; unknown ownership or activity blocks removal. Preserve branches, recoverable work, evidence, and session locations before removal; never force routine cleanup.",
-      "Record verified removals or retention reasons in the backlog, with durable evidence/recovery paths and a next step for blockers.",
-      "When nothing is progressing, advance unfinished work toward review and integration or choose useful next work within the objective.",
-      "Call stop-orchestrator-loop when the objective is achieved or the user asks to stop these reminders.",
-    ].join("\n")
-    const reminder = await session.synthetic({ ...input, text, resume: false })
+    const reminder = await session.synthetic({ ...input, resume: false })
     if (!await canRemind(runtime) || !current(runtime)) {
       await session.inbox.cancel({ sessionID, inboxID: reminder.id })
       return
     }
     // Re-admitting the same ID wakes execution without duplicating the durable input.
-    await session.synthetic({ ...input, id: reminder.id, text, resume: true })
+    await session.synthetic({ ...input, id: reminder.id, resume: true })
   }
 
   return {
