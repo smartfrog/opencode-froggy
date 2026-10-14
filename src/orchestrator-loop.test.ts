@@ -114,6 +114,20 @@ describe("orchestrator loop", () => {
     expect(wake).toHaveBeenCalledWith({ ...admit.mock.calls[0][0], id: "msg_1", resume: true })
   })
 
+  it("reminds the orchestrator to reconcile and safely release temporary workspaces", async () => {
+    const { loop, admit } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    const text = admit.mock.calls[0][0].text
+    expect(text).toContain("Reconcile this orchestration's temporary workspaces")
+    expect(text).toContain("Workspace lifecycle")
+    expect(text).toContain("Inactive is not sufficient")
+    expect(text).toContain("unknown ownership or activity blocks removal")
+    expect(text).toContain("Record verified removals or retention reasons in the backlog")
+  })
+
   it("keeps only one reminder pending while the orchestrator is busy", async () => {
     const { loop, admit, wake, pending } = setup()
     await loop.start("ses_parent", { objective: "Finish the port" })

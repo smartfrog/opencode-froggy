@@ -27,6 +27,8 @@ Keep tickets minimal: stable ID, title, objective, observable acceptance criteri
 
 For active tickets, retain durable execution references where applicable: each worker's bounded assignment, agent, session ID, branch, worktree path, and last validated SHA with check commands and results. Associate sessions with their specific deliverable rather than an agent role or the overall project. Keep these references and the next step current at handoffs and when the worker, workspace, or validated revision changes. Record missing references explicitly rather than inventing them or relying solely on conversation history.
 
+For each temporary workspace, including review and validation worktrees, keep its ownership/assignments and lifecycle state in the associated ticket: `active`, `retained` with a reason and next step, or `removed` after verified removal. Preserve the original path, branch/ref and SHA, session IDs and their current locations, and durable evidence or recovery paths after removal; a removed directory is not a usable evidence link. Delivery status and workspace state are separate: a Done ticket can retain a blocked workspace cleanup.
+
 For reviewed deliveries, record the reviewer session, reviewed revision or diff, findings, and their disposition in the existing ticket. Keep pending reviews and unresolved blocking findings visible.
 
 For research, identify the question and decision it informs, and use a proportionate investigation budget. Report evidence, conclusions, and uncertainty; adapt or conclude when further investigation adds little value. Verification reports identify checks, results, and tested revision where applicable.
@@ -67,5 +69,7 @@ Prefer finishing and integrating useful increments over starting more work. An i
 ## Reconciliation
 
 At startup or resume, read execution references from active tickets and verify them against available worker sessions and Git evidence. During execution, refresh affected tickets, dependencies, and ongoing work before decisions or writes. Broaden the scan when state is missing or inconsistent; a full backlog audit is not required for every task.
+
+Reconcile this orchestration's temporary workspace inventory with ticket references at startup/resume, periodic coordination, and closure, including completed tickets with unreleased workspaces. After each accepted delivery or report, record verified releases or retention reasons using the orchestrator's workspace lifecycle. Inactivity is not proof of completion or permission to remove a workspace; unknown ownership or activity blocks removal.
 
 Recover stranded work, stale statuses, unattended reviews, or pending integrations when relevant. Correct discrepancies using evidence and preserve concurrent human edits. At closure, report delivered outcomes, ongoing work, and real blockers or remaining gaps. State any unavailable evidence or inaccessible tracker scope honestly.

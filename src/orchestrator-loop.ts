@@ -250,6 +250,10 @@ export function createOrchestratorLoop(options: {
       "Only reuse the recorded sessionID and agent for clarification, correction, synchronization, or validation of that specific assignment; use background: true.",
       "Before integrating or completing any non-trivial change set, including logic, behavior, configuration, or agent instructions, obtain an independent code-reviewer review. Passing tests do not replace review.",
       "Use a fresh reviewer session for each independent change set and resume it only for that change set's corrections. Resolve confirmed blocking findings and record review evidence.",
+      "Reconcile this orchestration's temporary workspaces with ticket references and actual inventory, including completed assignments and review/validation worktrees.",
+      "Follow the orchestrator's Workspace lifecycle to release eligible workspaces after accepted deliveries or reports, not only at the end of the objective.",
+      "Inactive is not sufficient: verify all workspace users and background work; unknown ownership or activity blocks removal. Preserve branches, recoverable work, evidence, and session locations before removal; never force routine cleanup.",
+      "Record verified removals or retention reasons in the backlog, with durable evidence/recovery paths and a next step for blockers.",
       "When nothing is progressing, advance unfinished work toward review and integration or choose useful next work within the objective.",
       "Call stop-orchestrator-loop when the objective is achieved or the user asks to stop these reminders.",
     ].join("\n")
