@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 1.5.0
 - Retrieve persisted direct child sessions across reloads with full pagination and refreshed metadata; distinguish verified inventory, incomplete cached fallback and unavailable discovery
 - Add read-only `orchestrator-status` for settings, local scheduling, pending reminders and revision-scoped persisted delivery diagnostics, without claiming reminder processing or task progress
 - Define memory-manager's primary mission as useful, deduplicated, topic-organized English knowledge adapted to the project; keep operational state in tickets, report placement conflicts, and preserve literals, uncertainty and archives
