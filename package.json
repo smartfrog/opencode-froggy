@@ -26,6 +26,7 @@
     "skill",
     "tui.ts",
     "images",
+    "docs",
     "README.md"
   ],
   "scripts": {

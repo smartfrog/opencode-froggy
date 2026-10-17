@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Reorganize documentation into a concise README hub with dedicated guides for orchestration, project memory, Ethereum/EVM tools, hooks, and reference material
 - Make `memory-manager` the sole writer for structured tasks and knowledge while all agents retain direct reads; coordinators delegate verified transitions and decisions, and the manager reconciles related fields in one revision-checked task save
 - Replace npm, Node and Vitest with Bun for installs, scripts, tests, CI and the lockfile; publication keeps npm only for OIDC provenance
 - Add a per-project SQLite coordination store at `.opencode/memory/memory.db` with `task-board` for revision-checked task state and `knowledge` for topic-organized durable knowledge; both return bounded summaries and archive previous revisions
