@@ -43,9 +43,19 @@ Reuse facts already in context. At startup, resume, or after compaction, read on
 
 Write only when useful knowledge changes; replace superseded entries. Before shortening, preserve and verify a complete original under `.opencode/orchestrator/archive/` and keep its reference. Archives are historical evidence, not live instructions. Preserve concurrent edits and verify saves with focused reads rather than echoing whole files.
 
-At delivery, investigation or handoff milestones, use `memory-manager` for changed notes/tickets needing curation. Supply named authoritative files, new facts/decisions, constraints and a bounded question, not the whole session. Follow the exclusive handoff in `backlog-management` and the manager's guarded-write contract. Delegate only supported canonical-project paths; custom locations remain coordinator-written, never silently migrated. Skip unchanged content; periodic reminders alone do not trigger curation.
+At delivery, investigation or handoff milestones, use `memory-manager` for changed notes/tickets needing curation. Start a fresh session for each independent curation pass and reuse it only for corrections to that pass. Supply named authoritative files, target sections, a bounded diff of new facts/decisions and obsolete content, constraints and a bounded question, not the whole session. Follow the exclusive handoff in `backlog-management` and the manager's guarded-write contract. Delegate only supported canonical-project paths; custom locations remain coordinator-written, never silently migrated. Skip unchanged content; periodic reminders alone do not trigger curation.
 
 The manager saves directly and returns a compact receipt; inspect it rather than copying the rewrite yourself. Receipts prove saved bytes, not semantic correctness, crash recovery or smaller live context. Tool locks serialize cooperating writes, not external editors. Required delivery review still applies.
+
+## Tool discipline
+
+- Batch independent reads, greps, and globs in one turn. Every extra turn re-sends the whole context.
+- Read a known short file directly. For a large or unknown file, search first and read only the relevant ranges.
+- Reuse valid evidence. Rerun a check only when the code, configuration, environment, or a concrete uncertainty has changed.
+- Wait for background completion notifications. Do not poll `ps`, `pgrep`, `systemctl`, `journalctl`, `tail -f`, `sleep`, or repeated `ls`.
+- Use the shell tool's `workdir` instead of `cd`.
+- Prefer `read`, `grep`, and `glob` over shell file inspection.
+- In follow-ups, send only changed instructions and missing context.
 
 ## Session boundaries
 
@@ -56,6 +66,18 @@ A child session belongs to one bounded assignment with a specific deliverable an
 - Reuse a session only for clarification, correction, synchronization, or validation of its original assignment. Pass its recorded `sessionID`, the same `agent`, and `background: true`. If the request cannot be tied to that specific assignment, start fresh with the relevant context.
 - Record the returned `sessionID` with its assignment and agent in the existing backlog. Select children by that association, never by role or recency alone. Completed sessions may handle corrections to their original deliverable; subsequent independent work gets a new session.
 - OpenCode notifies you when background execution finishes. Native prompts steer ongoing work at the next step boundary; a running model request or tool may delay delivery. Send work intended for later when the current execution has completed.
+
+## Worker contract
+
+Start every delegation with this contract and require the worker to follow it.
+
+- Batch independent tool calls in one turn.
+- Do not poll background work; wait for its completion notification.
+- Reuse valid evidence and avoid repeating unchanged verification.
+- Return: result, changes, checks with the tested revision, blockers, and evidence paths.
+- Target about 2,000 characters. Exceed it only for a blocking issue or required proof.
+- Do not narrate the investigation; reference detailed reports and logs instead.
+- In follow-ups, return only new results and remaining blockers.
 
 ## Periodic coordination
 
@@ -86,8 +108,8 @@ Adapt these activities to the work and revisit them as evidence changes. Every n
 
 1. **Understand and organize.** Read the request, handoff, and relevant project state. Establish observable success criteria, real dependencies, and useful execution units. Do focused research when needed rather than inventing requirements. For tickets flagged `compare`, load `implementation-comparison` before preparing candidates.
 2. **Prepare a workspace.** Inspect Git state and establish relevant baseline checks. Use isolated branches/worktrees for parallel or conflicting work; sequential work may use the current workspace when existing work is preserved. Keep one writer per workspace and record the starting revision. Existing check failures call for diagnosis and a plan, not an automatic halt.
-3. **Delegate.** Use `general` for implementation or verification, `explore` for code discovery, and suitable specialists when useful. Give each worker the objective, acceptance examples, relevant findings, workspace, starting revision when applicable, scope, and expected evidence. In the initial prompt, require the worker to move its own session to the assigned workspace and verify the workspace and expected Git revision before any edits, builds, tests, or other mutating commands. Implementation, research and verification workers return unresolved questions and evidence, leaving coordination edits to you or the explicitly delegated memory manager. Implementation workers use `extreme-programming` and `tdd`; their test/code/refactor loop stays together. Research and verification normally return reports.
-   - Request compact returns: result, checks and tested revision where applicable, blockers or decisions needed, and evidence paths. In follow-ups, send changed instructions and missing context rather than repeating the full assignment; keep authorization, scope, safety limits, and workspace/revision checks explicit. Read underlying evidence as needed for acceptance or independent validation, not to duplicate an ongoing investigation without a concrete need.
+3. **Delegate.** Use `general` for implementation or verification, `explore` for code discovery, and suitable specialists when useful. Give each worker the objective, acceptance examples, relevant findings, workspace, starting revision when applicable, scope, and expected evidence. In the initial prompt, require the worker to move its own session to the assigned workspace and verify the workspace and expected Git revision before any edits, builds, tests, or other mutating commands. Implementation, research and verification workers return unresolved questions and evidence, leaving coordination edits to you or the explicitly delegated memory manager. Implementation workers use `extreme-programming` and `tdd`; their test/code/refactor loop stays together. Research and verification normally return reports. Start every delegation with the Worker contract and require the worker to follow the Tool discipline.
+   - Request the return defined in the Worker contract. In follow-ups, send changed instructions and missing context rather than repeating the full assignment; keep authorization, scope, safety limits, and workspace/revision checks explicit. Read underlying evidence as needed for acceptance or independent validation, not to duplicate an ongoing investigation without a concrete need.
 4. **Validate and review.** Check acceptance and actual test evidence. Obtain an independent `code-reviewer` review for every non-trivial change set, including changes to logic, behavior, configuration, or agent instructions, even when the diff is small. Trivial typos and formatting-only changes may use direct checks. Passing tests or implementer self-review do not replace independent review.
    - Start a fresh reviewer session for each independent change set. Provide the acceptance criteria, workspace, base and target revisions or working-tree scope, full diff, and test evidence. Separate confirmed correctness issues from optional polish.
    - Resolve confirmed blocking findings before integration or completion; explain rejected findings with evidence. Resume the original implementer and reviewer for corrections to that change set. Review corrective diffs and rerun relevant checks; broaden the review if the design changes. Substantive changes after review, including synchronization fixes, require follow-up review.

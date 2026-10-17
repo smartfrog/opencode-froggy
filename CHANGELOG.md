@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Add `/session-context` and a read-only `session-context` tool for recent project sessions, including subagents: Markdown table with agent/model, active context size, model-window usage, cumulative tokens/cost and character shares by category; only aggregated results are returned, never raw session messages
+- Fix `memory-file` section indexing for CRLF files and fenced code contained in list items
+- Add `memory-file` structure inspection, bounded range reads, and unique passage patches with the existing hash, archive and lock guarantees; report character/line deltas so the manager avoids whole-file rewrites
+- Add orchestrator tool discipline and a compact worker return contract to reduce tool round trips and oversized handbacks
+- Remove `code-reviewer` permission restrictions and document that its read-only behavior is no longer enforced
 
 ## 1.5.0
 - Retrieve persisted direct child sessions across reloads with full pagination and refreshed metadata; distinguish verified inventory, incomplete cached fallback and unavailable discovery

@@ -4,6 +4,9 @@
   "description": "OpenCode plugin with a hook layer (tool.before.*, session.idle...), agents (code-reviewer, doc-writer), and commands (/review-pr, /commit)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "froggy-session-context": "./dist/cli/session-context.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -27,7 +30,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "session-context": "bun dist/cli/session-context.js"
   },
   "keywords": [
     "opencode",

@@ -251,6 +251,170 @@ describe("guarded memory files", () => {
     expect(readFileSync(join(directory, PATH), "utf8")).toBe("Original evidence\n")
   })
 
+  it("reports structure and hash without reading the document", async () => {
+    const path = ".opencode/orchestrator/learnings.md"
+    const content = "# Memory\n\n## Perf\ntext\n### Detail\n"
+    mkdirSync(join(directory, ".opencode/orchestrator"), { recursive: true })
+    writeFileSync(join(directory, path), content)
+
+    const result = JSON.parse((await tool.execute({ action: "stat", path }, CONTEXT)).content)
+
+    expect(result).toMatchObject({ hash: hash(content), exists: true, totalLines: 5 })
+    expect(result).not.toHaveProperty("content")
+    expect(result.headings).toEqual([
+      { level: 1, title: "Memory", line: 1 },
+      { level: 2, title: "Perf", line: 3 },
+      { level: 3, title: "Detail", line: 5 },
+    ])
+  })
+
+  it.each(["LF", "CRLF"])("ignores fenced code and preserves literal hashes in headings: %s", async (lineEnding) => {
+    const path = ".opencode/orchestrator/learnings.md"
+    const newline = lineEnding === "CRLF" ? "\r\n" : "\n"
+    const content = ["# Top", "", "```sh", "# shell comment", "```", "", "## C#", "## Closing ##"].join(newline) + newline
+    mkdirSync(join(directory, ".opencode/orchestrator"), { recursive: true })
+    writeFileSync(join(directory, path), content)
+
+    const result = JSON.parse((await tool.execute({ action: "stat", path }, CONTEXT)).content)
+
+    expect(result.headings).toEqual([
+      { level: 1, title: "Top", line: 1 },
+      { level: 2, title: "C#", line: 7 },
+      { level: 2, title: "Closing", line: 8 },
+    ])
+  })
+
+  it("ignores fenced code contained in list items", async () => {
+    const path = ".opencode/orchestrator/learnings.md"
+    const content = "# Top\n- ```sh\n  # shell comment\n  ```\n## Real\n"
+    mkdirSync(join(directory, ".opencode/orchestrator"), { recursive: true })
+    writeFileSync(join(directory, path), content)
+
+    const result = JSON.parse((await tool.execute({ action: "stat", path }, CONTEXT)).content)
+
+    expect(result.headings).toEqual([
+      { level: 1, title: "Top", line: 1 },
+      { level: 2, title: "Real", line: 5 },
+    ])
+  })
+
+  it("reports an absent memory file without inventing content", async () => {
+    const result = JSON.parse((await tool.execute({ action: "stat", path: ".opencode/orchestrator/learnings.md" }, CONTEXT)).content)
+
+    expect(result).toMatchObject({ hash: null, exists: false, totalLines: 0, headings: [] })
+  })
+
+  it("reads a bounded line range with its hash and continuation", async () => {
+    const path = ".opencode/backlog/RANGE.md"
+    const content = "one\ntwo\nthree\n"
+    writeFileSync(join(directory, path), content)
+
+    const result = JSON.parse((await tool.execute({ action: "read", path, offset: 2, limit: 1 }, CONTEXT)).content)
+
+    expect(result).toMatchObject({
+      hash: hash(content), content: "two\n", startLine: 2, endLine: 2, totalLines: 3, hasMore: true, nextOffset: 3,
+    })
+  })
+
+  it("caps a large read by complete lines and reports where to continue", async () => {
+    const path = ".opencode/backlog/LARGE.md"
+    const content = Array.from({ length: 8000 }, (_, index) => `line ${index} ${"x".repeat(80)}`).join("\n") + "\n"
+    writeFileSync(join(directory, path), content)
+
+    const result = JSON.parse((await tool.execute({ action: "read", path }, CONTEXT)).content)
+
+    expect(result.hasMore).toBe(true)
+    expect(result.endLine).toBeLessThan(8000)
+    expect(result.content.length).toBeLessThanOrEqual(20_000)
+    expect(result.nextOffset).toBe(result.endLine + 1)
+  })
+
+  it("rejects an invalid read offset", async () => {
+    await expect(tool.execute({ action: "read", path: PATH, offset: 0 }, CONTEXT)).rejects.toThrow("positive integer")
+  })
+
+  it("patches a unique passage and archives the complete original", async () => {
+    const result = JSON.parse((await tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("Original evidence\n"), oldText: "Original", newText: "Updated",
+    }, CONTEXT)).content)
+
+    expect(result).toMatchObject({
+      changed: true, operation: "patch", hash: hash("Updated evidence\n"), characterDelta: -1, lineDelta: 0,
+    })
+    expect(readFileSync(result.archive, "utf8")).toBe("Original evidence\n")
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("Updated evidence\n")
+  })
+
+  it("treats replacement text literally", async () => {
+    const result = JSON.parse((await tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("Original evidence\n"), oldText: "Original", newText: "$& $1",
+    }, CONTEXT)).content)
+
+    expect(result.changed).toBe(true)
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("$& $1 evidence\n")
+  })
+
+  it("rejects a patch whose target is not unique", async () => {
+    writeFileSync(join(directory, PATH), "same same\n")
+
+    await expect(tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("same same\n"), oldText: "same", newText: "other",
+    }, CONTEXT)).rejects.toThrow("not unique")
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("same same\n")
+  })
+
+  it("rejects overlapping patch targets without modifying the file", async () => {
+    writeFileSync(join(directory, PATH), "ababa\n")
+
+    await expect(tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("ababa\n"), oldText: "aba", newText: "X",
+    }, CONTEXT)).rejects.toThrow("not unique")
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("ababa\n")
+    expect(readdirSync(join(directory, ".opencode"))).toEqual(["backlog"])
+  })
+
+  it("rejects a patch whose target is absent", async () => {
+    await expect(tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("Original evidence\n"), oldText: "absent", newText: "other",
+    }, CONTEXT)).rejects.toThrow("not found")
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("Original evidence\n")
+  })
+
+  it("rejects a stale patch without replacing the file", async () => {
+    writeFileSync(join(directory, PATH), "Concurrent update\n")
+
+    await expect(tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("Original evidence\n"), oldText: "Original", newText: "Updated",
+    }, CONTEXT)).rejects.toThrow("Source changed")
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("Concurrent update\n")
+  })
+
+  it("reports an unchanged patch without archiving", async () => {
+    const result = JSON.parse((await tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("Original evidence\n"), oldText: "Original", newText: "Original",
+    }, CONTEXT)).content)
+
+    expect(result.changed).toBe(false)
+    expect(readdirSync(join(directory, ".opencode"))).toEqual(["backlog"])
+  })
+
+  it("rejects a patch that would empty the memory file", async () => {
+    await expect(tool.execute({
+      action: "patch", path: PATH, expectedHash: hash("Original evidence\n"), oldText: "Original evidence\n", newText: "",
+    }, CONTEXT)).rejects.toThrow("empty the memory file")
+    expect(readFileSync(join(directory, PATH), "utf8")).toBe("Original evidence\n")
+  })
+
+  it("requires an existing target for a patch", async () => {
+    await expect(tool.execute({
+      action: "patch", path: ".opencode/orchestrator/learnings.md", expectedHash: null, oldText: "x", newText: "y",
+    }, CONTEXT)).rejects.toThrow("Patch requires an existing file")
+  })
+
+  it("requires a fresh hash for a patch", async () => {
+    await expect(tool.execute({ action: "patch", path: PATH, oldText: "Original", newText: "Updated" }, CONTEXT)).rejects.toThrow("expectedHash")
+  })
+
   it.each([false, true])("releases the lock after partial write failure, even when temporary removal fails: %s", async (cleanupFails) => {
     const actual = await vi.importActual<typeof import("node:fs")>("node:fs")
     const writeError = new Error("Disk full during temporary write")

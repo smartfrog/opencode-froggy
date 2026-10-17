@@ -2,6 +2,7 @@ export { gitingestTool, fetchGitingest, type GitingestArgs } from "./gitingest"
 export { convertPdfToMarkdown, type PdfToMarkdownArgs } from "./pdf-to-markdown-core"
 export { pdfToMarkdownTool } from "./pdf-to-markdown"
 export { createListChildSessionsTool } from "./list-child-sessions"
+export { createSessionContextTool } from "./session-context"
 export { createOrchestratorLoopTools } from "./orchestrator-loop"
 export { createMemoryFileTool } from "./memory-file"
 export {

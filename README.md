@@ -46,6 +46,7 @@ See [Orchestrator loop](#orchestrator-loop) for tools and configuration.
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [list-child-sessions](#list-child-sessions)
+  - [session-context](#session-context)
   - [Orchestrator loop](#orchestrator-loop)
   - [pdf-to-markdown](#pdf-to-markdown)
   - [agent-promote](#agent-promote)
@@ -156,13 +157,13 @@ It does not modify Linear issues, add comments, or update project files.
 | `orchestrator` | primary | Autonomously coordinates sub-agents, adapts execution, and validates delivery against the user's objective. |
 | `architect` | subagent | Strategic technical advisor providing high-leverage guidance on architecture, code structure, and complex engineering trade-offs. Read-only. |
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
-| `code-reviewer` | subagent | Read-only code review agent for quality, correctness, security, and maintainability feedback. |
+| `code-reviewer` | subagent | Code review agent for quality, correctness, security, and maintainability feedback. |
 | `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
 | `memory-manager` | subagent | Curates and writes delegated memory/ticket files through version-checked saves with verified archives and compact receipts. |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Rubber duck for thinking out loud. Listens, reflects, and asks gentle, focused questions to help users clarify their own ideas. Read-only. |
 
-The `code-reviewer` permits common Git inspection commands, including tracked files, refs, history, and worktrees. Branch permissions cover bounded listing forms such as `git branch -r --sort=-committerdate` and `git branch --list -a --sort=-committerdate`; use `git for-each-ref` for advanced filtering and formatting. For tag and configuration queries, put the explicit read mode first: `git tag --list`, `git config get`, or `git config list`. Remote inspection uses `git remote`, `git remote -v`, `git remote get-url`, or `git remote show`. Select the repository with the shell tool's `workdir`.
+The `code-reviewer` adds no agent-specific permission restrictions. Shell commands and file edits follow the effective OpenCode configuration; Froggy does not enforce read-only access for this agent. Its prompt remains analytical, focused on reviewing the supplied diff and reporting findings. Select the repository with the shell tool's `workdir`.
 
 ### product-owner
 
@@ -234,7 +235,7 @@ The bundled [memory-manager](agent/memory-manager.md) writes explicitly delegate
 
 Its primary mission is useful, deduplicated, topic-organized knowledge adapted to the project, not merely translating or recording updates. Curated prose is in English; identifiers, paths, hashes and exact quotations remain verbatim. Operational status, assignments, build deliveries and planned runs stay in tickets rather than being copied into knowledge. Conflicting placement requests are reported, not silently followed or expanded into unrelated files. Historical archives remain unchanged.
 
-`memory-file` is available only to the `memory-manager` agent. `read` returns content and SHA-256; `write` requires that `expectedHash` (null only when absent) and a current session identity. Targets are restricted to the canonical project's `.opencode/orchestrator/learnings.md` and direct `.opencode/backlog/*.md` files, excluding instruction files and symlinked paths. Check this before delegation: other authoritative paths and remote trackers remain coordinator-written, never silently migrated. Project-wide memory intentionally uses the canonical root across worktrees; loop scheduling belongs to its invoking plugin location. Changed existing files are archived byte-for-byte and verified before locked temporary-file/rename replacement, with source rechecks and saved-content verification. Receipts contain hashes and archive paths, not the full document. Unchanged writes are no-ops. No delete, force or archive-edit operation is exposed.
+`memory-file` is available only to the `memory-manager` agent. `stat` returns the SHA-256, size, line count and section index; `read` returns content in bounded line ranges with the hash and a continuation offset; `patch` replaces one unique passage; `write` replaces the whole document. `write` and `patch` require that `expectedHash` (null only for an absent file on write) and a current session identity. Targets are restricted to the canonical project's `.opencode/orchestrator/learnings.md` and direct `.opencode/backlog/*.md` files, excluding instruction files and symlinked paths. Check this before delegation: other authoritative paths and remote trackers remain coordinator-written, never silently migrated. Project-wide memory intentionally uses the canonical root across worktrees; loop scheduling belongs to its invoking plugin location. Changed existing files are archived byte-for-byte and verified before locked temporary-file/rename replacement, with source rechecks and saved-content verification. Receipts contain hashes, archive paths, and character/line deltas, not the full document. Unchanged writes are no-ops. No delete, force or archive-edit operation is exposed.
 
 Reads and saved/unchanged write receipts include `bytes` (UTF-8), `characters` and `characterUnit: "unicode-code-points"`; these are not token or visual-grapheme counts. Only `learnings.md` also returns `budget` with `targetCharacters: 5000`, non-negative `remainingCharacters` and `excessCharacters`, and `hardLimit: false`. An absent knowledge file reports zero usage and the full remaining budget. Over-budget writes remain intact; tickets have no knowledge-budget restriction.
 
@@ -494,6 +495,66 @@ Child sessions (2):
 2. [ses_def456] Architecture Discussion
    Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
 ```
+
+---
+
+### session-context
+
+Use `/session-context [limit]` to analyze the most recent sessions in the current project, including subagent sessions. The command calls the `session-context` tool and asks the agent to return its Markdown table and category list. Raw session messages are read inside the tool process and are never returned or copied into the discussion.
+
+The `session-context` tool returns a Markdown table by default, so the agent can render it directly in its response. Its result contains only aggregated metrics; it never includes raw messages. The tool adds its small schema to the agent's tool catalog.
+
+For each row the report includes the agent type, model and variant, active-context size after the last compaction, the model context limit and usage, cumulative session tokens and cost, and a character-based breakdown by category.
+
+`Context` is the last assistant prompt (`input + cache.read + cache.write`), not cumulative session input. `Used` is `Context / model limit`. Category percentages are shares of active context characters after the last compaction; they are not token shares and exclude tool-schema/system overhead that is not present in messages. Attachments are counted separately and excluded from percentages. Context messages include `system`, `user`, `assistant`, `reasoning`, `tool calls`, `tool results`, `compaction` and `other` (shell).
+
+Both read through the OpenCode API and do not start, stop, modify or compact a session. A context failure is reported on its row without hiding other sessions. If model limits are unavailable, rows still render with `n/a` usage. This is read-only reporting, not live activity or task completion.
+
+#### Parameters
+
+| Entry point | Parameter | Type | Required | Default | Description |
+|-------------|-----------|------|----------|---------|-------------|
+| `/session-context` | `limit` | `integer` | No | `10` | Positional argument, from 1 to 50 |
+| `session-context` tool | `limit` | `integer` | No | `10` | Number of recent sessions to analyze, from 1 to 50 |
+| `froggy-session-context` | `limit` | `integer` | No | `10` | Direct CLI argument, from 1 to 50 |
+| `froggy-session-context` | `--markdown` | flag | No | text | Print the Markdown table instead of the aligned text report |
+
+#### Usage Examples
+
+```text
+/session-context
+/session-context 5
+```
+
+```bash
+# Direct CLI, without going through the agent (requires Bun, the plugin runtime)
+bun dist/cli/session-context.js 5
+bun dist/cli/session-context.js --markdown 5
+
+# After npm link or a global install
+froggy-session-context --markdown 5
+```
+
+The slash command and tool do not require a separate CLI install. The direct CLI uses Bun, which is also the OpenCode plugin runtime.
+
+#### Output
+
+The tool returns a Markdown summary table followed by a category table:
+
+```markdown
+| # | Session | Agent · Model | Context / Limit (used) | Cost | Cumul session (in/out/cache) |
+|---|---------|---------------|------------------------|------|-------------------------------|
+| 1 | Passe 7j… | memory-manager (sub) · deepseek/deepseek-flash#high | 242.5k / 1.00M (24.2%) | $2.58 | 6.18M / 1.38M / 112M |
+
+### Categories
+
+| # | Agent (kind) | Cost | reasoning | tool calls | tool results | system | compaction | assistant | user | other |
+|---|--------------|------|-----------|------------|--------------|--------|------------|-----------|------|-------|
+| 1 | memory-manager (sub) | $2.58 | 23.3% | 25.0% | 35.0% | 0.0% | 15.5% | 0.6% | 0.4% | 0.0% |
+| **Global** | **all sessions** | **$2.58** | **23.3%** | **25.0%** | **35.0%** | **0.0%** | **15.5%** | **0.6%** | **0.4%** | **0.0%** |
+```
+
+`Context / Limit` is the last assistant prompt and its share of the model window. `Cumul session` is cumulative `input / output / cache read` for the whole session, separate from the active context. `Cost` is the session cost in USD. The `Global` row shows the weighted category share across analyzed sessions and the total cost of the listed sessions.
 
 ---
 

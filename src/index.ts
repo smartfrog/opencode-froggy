@@ -21,6 +21,7 @@ import {
   gitingestTool,
   pdfToMarkdownTool,
   createListChildSessionsTool,
+  createSessionContextTool,
   createOrchestratorLoopTools,
   createMemoryFileTool,
   createAgentPromoteTool,
@@ -36,6 +37,7 @@ import { applyAgents, createAgentModes } from "./agent-runtime"
 import { migrateAgentCopies } from "./agent-migration"
 import { createOrchestratorLoop } from "./orchestrator-loop"
 import { createOrchestratorClients } from "./orchestrator-api"
+import { createSessionContextClient } from "./session-context-api"
 import { asRecord } from "./record"
 
 export { parseFrontmatter, loadAgents, loadCommands, type LoadedSkill } from "./loaders"
@@ -315,6 +317,20 @@ export default Plugin.define({
     })
     const { startTool: startOrchestratorLoopTool, stopTool: stopOrchestratorLoopTool, statusTool: orchestratorStatusTool } = createOrchestratorLoopTools(orchestratorLoop)
     const listChildSessionsTool = createListChildSessionsTool(tracker, orchestratorClients.listChildren)
+    const sessionContextClient = createSessionContextClient({
+      readContext: (sessionID) => ctx.session.context({ sessionID }),
+      listModels: async (directory) => (await ctx.model.list({ location: { directory } })).data,
+    })
+    const sessionContextTool = createSessionContextTool(ctx.location.project.id, ctx.location.directory, {
+      client: sessionContextClient,
+      verifySession: async (sessionID) => {
+        const host = asRecord(await ctx.session.get({ sessionID }))
+        const remote = await sessionContextClient.getSession(sessionID)
+        if (remote.id !== sessionID || remote.created !== asRecord(host.time).created) {
+          throw new Error("The opencode CLI must connect to the same OpenCode service as this plugin")
+        }
+      },
+    })
     const agentPromoteTool = createAgentPromoteTool(ctx.agent, modes.set, Object.keys(agents))
 
     await ctx.tool.transform((editor) => {
@@ -323,6 +339,7 @@ export default Plugin.define({
       editor.add(gitingestTool)
       editor.add(pdfToMarkdownTool)
       editor.add(listChildSessionsTool)
+      editor.add(sessionContextTool)
       editor.add(startOrchestratorLoopTool)
       editor.add(stopOrchestratorLoopTool)
       editor.add(orchestratorStatusTool)
