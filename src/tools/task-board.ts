@@ -106,7 +106,7 @@ export function createTaskBoardTool(directory: string) {
   return {
     name: "task-board",
     options: { codemode: false },
-    description: "Project task state curated by memory-manager. All agents may read bounded summaries, fields and history. Only memory-manager may save revision-checked updates; coordinators delegate verified facts and execution decisions.",
+    description: "Project task state curated by memory-manager. All agents may read bounded summaries, fields and history; prefer summary or a field range over full details. Only memory-manager may save revision-checked updates; coordinators delegate verified facts and execution decisions.",
     input: {
       type: "object",
       properties: {
@@ -114,6 +114,7 @@ export function createTaskBoardTool(directory: string) {
         id: { type: "string", description: "Stable task id" },
         revision: { type: "integer", minimum: 1, description: "Select an archived revision with history; read its JSON snapshot by offset/limit" },
         field: { type: "string", enum: TASK_FIELDS, description: "Read one field range instead of the bounded task" },
+        summary: { type: "boolean", description: "Return a bounded summary instead of full details" },
         item: { type: "integer", minimum: 0, description: "Array item index for a field range" },
         status: { type: "string", description: "Filter for list, or new status for save" },
         offset: { type: "integer", minimum: 0, description: "Character or array-item offset for get, or row offset for list/history" },
@@ -156,6 +157,10 @@ export function createTaskBoardTool(directory: string) {
           if (!task) throw new Error(`Task not found: ${args.id}`)
           if (typeof args.expectedRevision === "number" && task.revision !== args.expectedRevision) {
             throw new Error(`Task ${args.id} changed: expected revision ${args.expectedRevision}, current ${task.revision}`)
+          }
+          if (args.summary === true) {
+            if (args.field !== undefined) throw new Error("summary cannot be combined with field")
+            return response({ path, task: taskSummary(task) })
           }
           if (args.field !== undefined) {
             const offset = typeof args.offset === "number" ? args.offset : 0

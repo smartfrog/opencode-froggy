@@ -20,7 +20,7 @@ export function createSessionContextTool(
   const verifySession = options.verifySession
   return {
     name: "session-context",
-    description: "List recent project sessions as a Markdown table with active context size, model/agent, cumulative tokens, cost and character breakdown by category. Returns only aggregated results, never raw session messages.",
+    description: "List recent project sessions as a Markdown table with active context size, model/agent, cumulative tokens, cost and character breakdown by category and by tool. Returns only aggregated results, never raw session messages.",
     input: {
       type: "object",
       properties: {

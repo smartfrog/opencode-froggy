@@ -1,6 +1,6 @@
 # Orchestration
 
-Froggy turns an objective into coordinated work: primary agents decide what should happen, workers execute bounded assignments, reviewers challenge the result, and the orchestrator integrates only what has been verified.
+Froggy turns an objective into coordinated work: the product owner clarifies what matters, primary agents decide what should happen, workers execute bounded assignments, reviewers challenge the result, and the orchestrator integrates only what has been verified.
 
 This page explains the working model. It intentionally avoids plugin internals.
 
@@ -9,6 +9,7 @@ This page explains the working model. It intentionally avoids plugin internals.
 ## Contents
 
 - [Roles](#roles)
+- [Product owner](#product-owner)
 - [The delivery loop](#the-delivery-loop)
 - [Delegation and sessions](#delegation-and-sessions)
 - [Review and integration](#review-and-integration)
@@ -36,6 +37,33 @@ The separation is deliberate:
 - **Only the memory-manager saves tasks or knowledge through the structured tools.**
 
 A coordinator does not write memory prose itself. It supplies verified facts, decisions, affected record IDs, obsolete state, and evidence references; the memory-manager reconciles the record and returns a compact receipt.
+
+## Product owner
+
+The `product-owner` is the primary agent for the **problem and the commitment**, before execution starts or when it must be reshaped.
+
+It:
+
+- challenges unnecessary complexity and assumptions;
+- clarifies the user's intent, scope, priorities, and acceptance criteria;
+- investigates existing context instead of inventing requirements;
+- turns the result into a proportionate brief or backlog;
+- states explicitly when a decision needs user input.
+
+It does **not** own implementation, independent review, integration, or delivery claims. It hands the clarified intent and execution context to the `orchestrator`. The orchestrator may adjust technical ticket boundaries and sequencing while preserving the product commitments.
+
+Publishing a backlog does not authorize development. A product decision becomes execution work only when the user's mandate and the project's authorization rules allow it.
+
+```mermaid
+flowchart LR
+    U[User intent] --> P[Product owner: clarify and prioritize]
+    P -->|product intent, scope, acceptance| O[Orchestrator: plan and execute]
+    O -->|evidence, limits, unresolved questions| P
+```
+
+Use the product owner when the objective is ambiguous, when priorities or acceptance criteria are missing, or when the work needs a meaningful scope decision. Use the orchestrator when the objective is actionable and the remaining choices are execution details.
+
+The product owner also does not write task or knowledge records directly. It delegates meaningful transitions through the same memory path as every other coordinator.
 
 ## The delivery loop
 

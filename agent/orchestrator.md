@@ -39,7 +39,7 @@ Own coordination documents under the ownership rules in `backlog-management`. De
 
 Use the following read/write paths when the structured store is authoritative; for a legacy project, use its existing `.opencode/orchestrator/learnings.md` and `.opencode/backlog/` instead. Never switch or synchronize backends without an agreed migration.
 
-- `task-board` owns objectives, acceptance, status, blockers, next actions, assignments and evidence references. Use `list` for an overview and `get` for one task; do not load every task into context. A task marked `truncated` or `hasMore` needs a `field`/`item` range, not a guess.
+- `task-board` owns objectives, acceptance, status, blockers, next actions, assignments and evidence references. Use `list` for an overview, `get` with `summary` for one task's bounded overview, and `get` with `field`/`offset`/`limit` when only part of a long field matters; do not load every task or every field into context. A task marked `truncated` or `hasMore` needs a `field`/`item` range, not a guess.
 - `knowledge` owns durable constraints, decisions, facts and lessons. Start with `overview`, which exposes `project-rules` and the available topics; then `search`, then `get` only matching notes. Continue a partial note with `offset`/`limit` and pin `expectedRevision` when consistency matters. Keep essential note ids in the task's `knowledgeRefs`.
 - Detailed reports, logs and measurements stay in files referenced from the task or note. Do not copy them into either store.
 - `knowledge` history is the archive. Page it with `offset` and select `revision` for a complete archived JSON snapshot in ranges. Do not create a second archive in the project.
@@ -60,6 +60,7 @@ The manager reconciles all affected task fields and relevant knowledge, saves th
 - Wait for background completion notifications. Do not poll `ps`, `pgrep`, `systemctl`, `journalctl`, `tail -f`, `sleep`, or repeated `ls`.
 - Use the shell tool's `workdir` instead of `cd`.
 - Prefer `read`, `grep`, and `glob` over shell file inspection.
+- Bound command output: redirect full build or test logs to an evidence file and print only the relevant excerpt, counts or diff; never dump a complete log.
 - In follow-ups, send only changed instructions and missing context.
 
 ## Session boundaries
@@ -79,6 +80,7 @@ Start every delegation with this contract and require the worker to follow it.
 - Batch independent tool calls in one turn.
 - Do not poll background work; wait for its completion notification.
 - Reuse valid evidence and avoid repeating unchanged verification.
+- Bound shell output; keep complete logs in referenced files and return only the relevant excerpt.
 - Return: result, changes, checks with the tested revision, blockers, and evidence paths.
 - Target about 2,000 characters. Exceed it only for a blocking issue or required proof.
 - Do not narrate the investigation; reference detailed reports and logs instead.

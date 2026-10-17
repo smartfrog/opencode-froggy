@@ -41,16 +41,27 @@ export interface SessionSummary {
   tokens: SessionTokens
 }
 
+export interface ToolUsage {
+  name: string
+  calls: number
+  callCharacters: number
+  resultCharacters: number
+  characters: number
+}
+
 export interface ContextAnalysis {
   messages: number
   characters: number
   categories: Record<ContextCategory, number>
   percentages: Record<ContextCategory, number>
+  tools: ToolUsage[]
   promptTokens: number | null
   contextLimit: number | null
   usedPercent: number | null
   attachments: number
 }
+
+const TOOL_ROWS = 10
 
 export interface SessionContextRow {
   session: SessionSummary
@@ -102,6 +113,7 @@ export function modelLabel(value: unknown): { label: string; key: string | null 
 
 export function analyzeContext(messages: unknown[], contextLimit: number | null): ContextAnalysis {
   const categories = Object.fromEntries(CONTEXT_CATEGORIES.map((category) => [category, 0])) as Record<ContextCategory, number>
+  const tools = new Map<string, Omit<ToolUsage, "name" | "characters">>()
   let attachments = 0
   let lastPromptTokens: number | null = null
 
@@ -128,16 +140,25 @@ export function analyzeContext(messages: unknown[], contextLimit: number | null)
             categories.reasoning += text(part.text).length
           } else if (part.type === "tool") {
             const state = asRecord(part.state)
-            categories["tool calls"] += jsonLength(state.input)
+            const callCharacters = jsonLength(state.input)
+            let resultCharacters = 0
             for (const rawContent of array(state.content)) {
               const content = asRecord(rawContent)
               if (content.type === "text") {
-                categories["tool results"] += text(content.text).length
+                resultCharacters += text(content.text).length
               } else if (content.type === "file") {
                 attachments += 1
               }
             }
-            if (state.error !== undefined) categories["tool results"] += jsonLength(state.error)
+            if (state.error !== undefined) resultCharacters += jsonLength(state.error)
+            categories["tool calls"] += callCharacters
+            categories["tool results"] += resultCharacters
+            const name = text(part.name) || "(unnamed)"
+            const usage = tools.get(name) ?? { calls: 0, callCharacters: 0, resultCharacters: 0 }
+            usage.calls += 1
+            usage.callCharacters += callCharacters
+            usage.resultCharacters += resultCharacters
+            tools.set(name, usage)
           }
         }
         break
@@ -161,12 +182,16 @@ export function analyzeContext(messages: unknown[], contextLimit: number | null)
     characters === 0 ? 0 : categories[category] / characters * 100,
   ])) as Record<ContextCategory, number>
   const limit = typeof contextLimit === "number" && Number.isFinite(contextLimit) && contextLimit > 0 ? contextLimit : null
+  const toolUsage = [...tools.entries()]
+    .map(([name, usage]) => ({ name, ...usage, characters: usage.callCharacters + usage.resultCharacters }))
+    .sort((left, right) => right.characters - left.characters || left.name.localeCompare(right.name))
 
   return {
     messages: messages.length,
     characters,
     categories,
     percentages,
+    tools: toolUsage,
     promptTokens: lastPromptTokens,
     contextLimit: limit,
     usedPercent: lastPromptTokens !== null && limit !== null ? lastPromptTokens / limit * 100 : null,
@@ -242,6 +267,41 @@ function categoryLines(analysis: ContextAnalysis): string[] {
   return lines
 }
 
+function topToolLabel(analysis: ContextAnalysis | null): string {
+  if (!analysis || analysis.tools.length === 0) return "n/a"
+  const [top] = analysis.tools
+  return `${top.name} ${formatTokens(top.characters)}`
+}
+
+function collectTools(analyses: ContextAnalysis[]): ToolUsage[] {
+  const totals = new Map<string, ToolUsage>()
+  for (const analysis of analyses) {
+    for (const tool of analysis.tools) {
+      const total = totals.get(tool.name) ?? {
+        name: tool.name,
+        calls: 0,
+        callCharacters: 0,
+        resultCharacters: 0,
+        characters: 0,
+      }
+      total.calls += tool.calls
+      total.callCharacters += tool.callCharacters
+      total.resultCharacters += tool.resultCharacters
+      total.characters += tool.characters
+      totals.set(tool.name, total)
+    }
+  }
+  return [...totals.values()].sort((left, right) => right.characters - left.characters || left.name.localeCompare(right.name))
+}
+
+function totalToolCharacters(tools: ToolUsage[]): number {
+  return tools.reduce((total, tool) => total + tool.characters, 0)
+}
+
+function toolShare(tool: ToolUsage, total: number): string {
+  return formatPercent(total === 0 ? null : tool.characters / total * 100)
+}
+
 function markdownCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim()
 }
@@ -250,13 +310,13 @@ export function formatSessionContextMarkdown(rows: SessionContextRow[], options:
   const lines = [
     `### Session context — ${rows.length} most recent session${rows.length === 1 ? "" : "s"}`,
     "",
-    "| # | Session | Agent · Model | Context / Limit (used) | Cost | Cumul session (in/out/cache) |",
-    "|---|---------|---------------|------------------------|------|-------------------------------|",
+    "| # | Session | Agent · Model | Context / Limit (used) | Top tool | Cost | Cumul session (in/out/cache) |",
+    "|---|---------|---------------|------------------------|----------|------|-------------------------------|",
   ]
 
   rows.forEach((entry, index) => {
     const { session, analysis } = entry
-    lines.push(`| ${index + 1} | ${markdownCell(sessionName(session))} | ${markdownCell(agentModel(session))} | ${contextLabel(analysis)} | ${formatCost(session.cost)} | ${cumulativeTokens(session)} |`)
+    lines.push(`| ${index + 1} | ${markdownCell(sessionName(session))} | ${markdownCell(agentModel(session))} | ${contextLabel(analysis)} | ${markdownCell(topToolLabel(analysis))} | ${formatCost(session.cost)} | ${cumulativeTokens(session)} |`)
   })
 
   lines.push(
@@ -283,6 +343,22 @@ export function formatSessionContextMarkdown(rows: SessionContextRow[], options:
   })
   lines.push(`| **Global** | **all sessions** | **${formatCost(totalCost)}** | ${globalValues.map((value) => `**${value}**`).join(" | ")} |`)
 
+  const tools = collectTools(analyzed.map((entry) => entry.analysis))
+  if (tools.length > 0) {
+    const total = totalToolCharacters(tools)
+    lines.push(
+      "",
+      "### Tools",
+      "",
+      "| Tool | Calls | Call chars | Result chars | Share of tool chars |",
+      "|---|---:|---:|---:|---:|",
+    )
+    for (const tool of tools.slice(0, TOOL_ROWS)) {
+      lines.push(`| ${markdownCell(tool.name)} | ${tool.calls} | ${formatTokens(tool.callCharacters)} | ${formatTokens(tool.resultCharacters)} | ${toolShare(tool, total)} |`)
+    }
+    if (tools.length > TOOL_ROWS) lines.push("", `Top ${TOOL_ROWS} of ${tools.length} tools by characters.`)
+  }
+
   if (options.limitError) lines.push("", `**Model limits unavailable:** ${markdownCell(options.limitError)}`)
   const errors = rows
     .map((entry, index) => entry.error ? `- **#${index + 1}** error: ${markdownCell(entry.error)}` : null)
@@ -300,6 +376,7 @@ export function formatSessionContextMarkdown(rows: SessionContextRow[], options:
     "Context / Limit = last assistant prompt tokens / model window; the percentage is in parentheses.",
     "Cumul session = cumulative input / output / cache read across all calls, not the active context.",
     "Categories = share of active context characters after the last compaction.",
+    "Tools = call input plus result characters per tool; share is over all tool characters.",
     "Global = weighted category share across analyzed sessions; cost is the total of the listed sessions.",
   )
   return lines.join("\n")
@@ -312,6 +389,7 @@ export function formatSessionContextReport(rows: SessionContextRow[], options: {
     "Cost = total session cost in USD",
     "Cumul session = cumulative input / output / cache read across all calls, not the active context",
     "Categories = share of active context characters after the last compaction",
+    "Tools = call input plus result characters per tool; share is over all tool characters",
   ]
   if (options.limitError) lines.push(`Model limits unavailable: ${options.limitError}`)
   lines.push("")
@@ -333,12 +411,36 @@ export function formatSessionContextReport(rows: SessionContextRow[], options: {
     ]))
     if (analysis) {
       lines.push(...categoryLines(analysis))
+      if (analysis.tools.length > 0) {
+        const [top] = analysis.tools
+        lines.push(`   top tool: ${top.name} ${formatTokens(top.characters)} (${toolShare(top, totalToolCharacters(analysis.tools))} of tool chars)`)
+      }
       if (analysis.attachments > 0) {
         lines.push(`   attachments: ${analysis.attachments} file${analysis.attachments === 1 ? "" : "s"} (excluded from percentages)`)
       }
     }
     if (error) lines.push(`   error: ${error}`)
   })
+
+  const analyzed = rows.filter((entry): entry is SessionContextRow & { analysis: ContextAnalysis } => entry.analysis !== null)
+  const tools = collectTools(analyzed.map((entry) => entry.analysis))
+  if (tools.length > 0) {
+    const total = totalToolCharacters(tools)
+    const toolWidths = [20, 6, 10, 12, 7]
+    const toolRow = (values: string[]) => values.map((value, index) => pad(value, toolWidths[index])).join(" ").trimEnd()
+    lines.push("", "Tools (all sessions)")
+    lines.push(toolRow(["Tool", "Calls", "Call chars", "Result chars", "Share"]))
+    for (const tool of tools.slice(0, TOOL_ROWS)) {
+      lines.push(toolRow([
+        tool.name,
+        String(tool.calls),
+        formatTokens(tool.callCharacters),
+        formatTokens(tool.resultCharacters),
+        toolShare(tool, total),
+      ]))
+    }
+    if (tools.length > TOOL_ROWS) lines.push(`Top ${TOOL_ROWS} of ${tools.length} tools by characters.`)
+  }
 
   lines.push("")
   lines.push("Source: messages after the last compaction.")

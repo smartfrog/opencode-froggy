@@ -51,7 +51,7 @@ describe("session-context tool", () => {
 
     expect(client.listSessions).toHaveBeenCalledWith("project-1", 10)
     expect(result.content).toContain("### Session context — 2 most recent sessions")
-    expect(result.content).toContain("| # | Session | Agent · Model | Context / Limit (used) | Cost | Cumul session (in/out/cache) |")
+    expect(result.content).toContain("| # | Session | Agent · Model | Context / Limit (used) | Top tool | Cost | Cumul session (in/out/cache) |")
     expect(result.content).toContain("| # | Agent (kind) | Cost | reasoning | tool calls | tool results | system | compaction | assistant | user | other |")
     expect(result.content).toContain("### Categories")
     expect(result.content).toContain("memory-manager")

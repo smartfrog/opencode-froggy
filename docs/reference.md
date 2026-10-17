@@ -310,9 +310,11 @@ Use `/session-context [limit]` to analyze the most recent sessions in the curren
 
 The `session-context` tool returns a Markdown table by default, so the agent can render it directly in its response. Its result contains only aggregated metrics; it never includes raw messages. The tool adds its small schema to the agent's tool catalog.
 
-For each row the report includes the agent type, model and variant, active-context size after the last compaction, the model context limit and usage, cumulative session tokens and cost, and a character-based breakdown by category.
+For each row the report includes the agent type, model and variant, active-context size after the last compaction, the model context limit and usage, the top tool by characters, cumulative session tokens and cost, and a character-based breakdown by category.
 
 `Context` is the last assistant prompt (`input + cache.read + cache.write`), not cumulative session input. `Used` is `Context / model limit`. Category percentages are shares of active context characters after the last compaction; they are not token shares and exclude tool-schema/system overhead that is not present in messages. Attachments are counted separately and excluded from percentages. Context messages include `system`, `user`, `assistant`, `reasoning`, `tool calls`, `tool results`, `compaction` and `other` (shell).
+
+The `Tools` table aggregates tool-call input and tool-result characters per tool name across the analyzed sessions. Its share is over all tool characters, so it answers which tools consume the active context. Tool parts without a name are reported as `(unnamed)`. The table lists the top 10 tools by characters.
 
 Both read through the OpenCode API and do not start, stop, modify or compact a session. A context failure is reported on its row without hiding other sessions. If model limits are unavailable, rows still render with `n/a` usage. This is read-only reporting, not live activity or task completion.
 
@@ -345,22 +347,28 @@ The slash command and tool do not require a separate CLI install. The direct CLI
 
 #### Output
 
-The tool returns a Markdown summary table followed by a category table:
+The tool returns a Markdown summary table followed by category and tool tables:
 
 ```markdown
-| # | Session | Agent · Model | Context / Limit (used) | Cost | Cumul session (in/out/cache) |
-|---|---------|---------------|------------------------|------|-------------------------------|
-| 1 | Passe 7j… | memory-manager (sub) · deepseek/deepseek-flash#high | 242.5k / 1.00M (24.2%) | $2.58 | 6.18M / 1.38M / 112M |
+| # | Session | Agent · Model | Context / Limit (used) | Top tool | Cost | Cumul session (in/out/cache) |
+|---|---------|---------------|------------------------|----------|------|-------------------------------|
+| 1 | Passe 7j… | memory-manager (sub) · deepseek/deepseek-flash#high | 242.5k / 1.00M (24.2%) | shell 220.9k | $2.58 | 6.18M / 1.38M / 112M |
 
-#### Categories
+### Categories
 
 | # | Agent (kind) | Cost | reasoning | tool calls | tool results | system | compaction | assistant | user | other |
 |---|--------------|------|-----------|------------|--------------|--------|------------|-----------|------|-------|
 | 1 | memory-manager (sub) | $2.58 | 23.3% | 25.0% | 35.0% | 0.0% | 15.5% | 0.6% | 0.4% | 0.0% |
 | **Global** | **all sessions** | **$2.58** | **23.3%** | **25.0%** | **35.0%** | **0.0%** | **15.5%** | **0.6%** | **0.4%** | **0.0%** |
+
+### Tools
+
+| Tool | Calls | Call chars | Result chars | Share of tool chars |
+|---|---:|---:|---:|---:|
+| shell | 120 | 40.1k | 220.9k | 52.0% |
 ```
 
-`Context / Limit` is the last assistant prompt and its share of the model window. `Cumul session` is cumulative `input / output / cache read` for the whole session, separate from the active context. `Cost` is the session cost in USD. The `Global` row shows the weighted category share across analyzed sessions and the total cost of the listed sessions.
+`Context / Limit` is the last assistant prompt and its share of the model window. `Cumul session` is cumulative `input / output / cache read` for the whole session, separate from the active context. `Cost` is the session cost in USD. `Top tool` is the tool with the most characters in that session. The `Global` row shows the weighted category share across analyzed sessions and the total cost of the listed sessions.
 
 ---
 

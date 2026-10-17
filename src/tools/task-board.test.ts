@@ -49,6 +49,27 @@ describe("task-board tool", () => {
     })
   })
 
+  it("returns a bounded summary instead of full details", async () => {
+    const memory = tool()
+    await memory.execute({
+      action: "save", id: "T", title: "Task", objective: "O".repeat(4_000), nextAction: "Next",
+    }, CONTEXT)
+
+    const body = result(await memory.execute({ action: "get", id: "T", summary: true }, CONTEXT))
+
+    expect(body.task).toEqual({
+      id: "T", title: "Task", status: "todo", nextAction: "Next", revision: 1, truncated: [],
+    })
+  })
+
+  it("rejects a summary combined with a field range", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "T", title: "Task" }, CONTEXT)
+
+    await expect(memory.execute({ action: "get", id: "T", summary: true, field: "objective" }, CONTEXT))
+      .rejects.toThrow("summary cannot be combined with field")
+  })
+
   it("bounds long task fields on read", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task", currentState: "x".repeat(5_000) }, CONTEXT)

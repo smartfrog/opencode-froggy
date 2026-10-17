@@ -13,7 +13,8 @@
 - Validate replacement note ids before saving; share field-range, response-budget and history handling between memory tools and clarify structured-versus-legacy ownership
 - Add `knowledge` overview topics, focused search, full-note reads and on-demand history; restrict structured task and knowledge writes to `memory-manager`
 - Update `memory-manager`, `orchestrator` and `backlog-management` to prefer the structured store while keeping legacy Markdown memory supported
-- Add `/session-context` and a read-only `session-context` tool for recent project sessions, including subagents: Markdown table with agent/model, active context size, model-window usage, cumulative tokens/cost and character shares by category; only aggregated results are returned, never raw session messages
+- Add `/session-context` and a read-only `session-context` tool for recent project sessions, including subagents: Markdown table with agent/model, active context size, model-window usage, top tool, cumulative tokens/cost and character shares by category; only aggregated results are returned, never raw session messages
+- Add a per-tool character breakdown to `session-context`, separating call input from result output so oversized shell, read or memory payloads are visible without ad-hoc scripts
 - Fix `memory-file` section indexing for CRLF files and fenced code contained in list items
 - Add `memory-file` structure inspection, bounded range reads, and unique passage patches with the existing hash, archive and lock guarantees; report character/line deltas so the manager avoids whole-file rewrites
 - Add orchestrator tool discipline and a compact worker return contract to reduce tool round trips and oversized handbacks

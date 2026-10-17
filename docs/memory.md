@@ -317,11 +317,11 @@ The next action describes what to do next, not a narrative of what just happened
 | Action | Purpose |
 |---|---|
 | `list` | Bounded task overview; filter by status |
-| `get` | Read one task or one long field range |
+| `get` | Read one task, a bounded summary (`summary: true`), or one long field range |
 | `save` | Create or update a task with a revision check |
 | `history` | Page through prior revisions; select one revision to read it in ranges |
 
-Common fields for `get`/`save` are `id`, `title`, `objective`, `acceptance`, `currentState`, `nextAction`, `blockers`, `knowledgeRefs`, `evidence`, `assignments`, and `expectedRevision`. Use `offset`, `limit`, `field`, and `item` for bounded reads.
+Common fields for `get`/`save` are `id`, `title`, `objective`, `acceptance`, `currentState`, `nextAction`, `blockers`, `knowledgeRefs`, `evidence`, `assignments`, and `expectedRevision`. Use `offset`, `limit`, `field`, and `item` for bounded reads. Prefer `summary` when only the title, status, next action and revision are needed; do not read a whole field to answer one question about it.
 
 ### `knowledge`
 
@@ -362,6 +362,7 @@ A useful test: **if this disappeared, would a future decision become worse?** If
 | Copy a report into a note | Duplicates the source and grows unbounded | Link the evidence path |
 | Store the same fact in task and knowledge | Two authorities drift apart | Pick one home and reference it |
 | Load the entire store at startup | Wastes context and hides the relevant fact | Overview, search, then get |
+| Read every field when one answer is needed | Long prose consumes context without adding a decision | `summary` or a `field` range |
 | Save directly from the coordinator | Bypasses curation and consistency checks | Delegate to the memory-manager |
 | Keep a Markdown and SQLite backlog together | Two live authorities | Migrate once and keep one backend |
 | Trust a stale revision | Overwrites concurrent work | Re-read and reconcile |

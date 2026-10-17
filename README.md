@@ -53,7 +53,7 @@ Project memory needs no separate service. Agents read the project’s canonical 
 
 ## Orchestration
 
-The orchestrator turns an objective into a sequence of bounded assignments. It decides what to do, chooses workers and models, requests independent review, and integrates only verified revisions.
+The `product-owner` clarifies intent, scope, priorities, and acceptance before execution. The orchestrator then turns that objective into a sequence of bounded assignments: it decides what to do, chooses workers and models, requests independent review, and integrates only verified revisions.
 
 ```mermaid
 flowchart LR

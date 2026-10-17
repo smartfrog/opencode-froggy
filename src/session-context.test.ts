@@ -21,6 +21,7 @@ const messages = [
       { type: "reasoning", text: "think" },
       {
         type: "tool",
+        name: "read",
         state: {
           status: "completed",
           input: { path: "x" },
@@ -70,6 +71,25 @@ describe("session context analysis", () => {
     })
     expect(Object.values(analysis.percentages).reduce((total, value) => total + value, 0)).toBeCloseTo(100)
     expect(analysis.percentages["tool calls"]).toBeCloseTo(12 / 58 * 100)
+    expect(analysis.tools).toEqual([
+      { name: "read", calls: 1, callCharacters: 12, resultCharacters: 6, characters: 18 },
+    ])
+  })
+
+  it("aggregates tool characters by name and counts errors as results", () => {
+    const analysis = analyzeContext([{
+      type: "assistant",
+      content: [
+        { type: "tool", name: "shell", state: { status: "completed", input: { command: "ls" }, content: [{ type: "text", text: "out" }] } },
+        { type: "tool", name: "shell", state: { status: "error", input: { command: "pwd" }, content: [], error: "boom" } },
+        { type: "tool", state: { status: "completed", input: {}, content: [] } },
+      ],
+    }], null)
+
+    expect(analysis.tools).toEqual([
+      { name: "shell", calls: 2, callCharacters: 33, resultCharacters: 9, characters: 42 },
+      { name: "(unnamed)", calls: 1, callCharacters: 2, resultCharacters: 0, characters: 2 },
+    ])
   })
 
   it("uses the last assistant step that reported prompt tokens", () => {
@@ -167,12 +187,15 @@ describe("session context analysis", () => {
 
     const markdown = formatSessionContextMarkdown(rows, { limitError: "model offline" })
 
-    expect(markdown).toContain("| # | Session | Agent · Model | Context / Limit (used) | Cost | Cumul session (in/out/cache) |")
+    expect(markdown).toContain("| # | Session | Agent · Model | Context / Limit (used) | Top tool | Cost | Cumul session (in/out/cache) |")
     expect(markdown).toContain("| # | Agent (kind) | Cost | reasoning | tool calls | tool results | system | compaction | assistant | user | other |")
     const categoryRows = markdown.split("### Categories")[1].split("\n")
     expect(categoryRows.find((line) => line.startsWith("| 1 |"))).toContain("| plan (main) | $1.25 |")
     expect(categoryRows.find((line) => line.startsWith("| 2 |"))).toContain("| memory-manager (sub) | $1.25 |")
     expect(markdown).toContain("| 1 | plan (main) |")
+    expect(markdown).toContain("| read 18 |")
+    expect(markdown).toContain("### Tools")
+    expect(markdown).toContain("| read | 1 | 12 | 6 | 100.0% |")
     expect(markdown).toContain("19.0%")
     expect(markdown).toContain("| **Global** | **all sessions** | **$2.50** |")
     expect(markdown).toContain("**19.0%**")
@@ -201,6 +224,8 @@ describe("session context analysis", () => {
     expect(report).toContain("deepseek/deepseek-flash#high")
     expect(report).toContain("categories: reasoning")
     expect(report).toContain("system 19.0%")
+    expect(report).toContain("top tool: read 18 (100.0% of tool chars)")
+    expect(report).toContain("Tools (all sessions)")
     expect(report).toContain("error: context unavailable")
     expect(report).toContain("Cumul session")
     expect(report).toContain("Source: messages after the last compaction.")
