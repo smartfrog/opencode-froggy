@@ -2,6 +2,7 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { asRecord } from "./record"
 import { type LoopSessionClient } from "./orchestrator-loop"
+import { type ChildSessionInfo } from "./session-children"
 
 const execFileAsync = promisify(execFile)
 
@@ -39,6 +40,13 @@ function text(value: unknown): string {
   return value
 }
 
+function timestamp(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(new Date(value).getTime())) {
+    throw new Error("Invalid OpenCode session timestamp")
+  }
+  return value
+}
+
 export function createOrchestratorClients(
   native: Pick<LoopSessionClient, "get" | "synthetic">,
   request: OpenCodeRequest = requestOpenCodeAPI,
@@ -72,5 +80,38 @@ export function createOrchestratorClients(
     },
   }
 
-  return { session }
+  async function listChildren(parentID: string): Promise<ChildSessionInfo[]> {
+    if (typeof parentID !== "string" || !parentID.startsWith("ses")) throw new Error("A parent session is required")
+    await verifySession(parentID)
+    const children = new Map<string, ChildSessionInfo>()
+    const cursors = new Set<string>()
+    let cursor: string | undefined
+    do {
+      const query = new URLSearchParams({ parentID, limit: "100" })
+      if (cursor) query.set("cursor", cursor)
+      const page = record(await request("get", `/api/session?${query}`))
+      for (const item of items(page)) {
+        if (item.parentID !== parentID) throw new Error("OpenCode child inventory returned a different parent")
+        const time = record(item.time)
+        const id = text(item.id)
+        if (!id.startsWith("ses")) throw new Error("Invalid OpenCode child session ID")
+        children.set(id, {
+          id, parentID,
+          title: item.title === undefined ? undefined : text(item.title),
+          created: timestamp(time.created),
+          updated: timestamp(time.updated),
+        })
+      }
+      const next = record(page.cursor).next
+      if (next !== undefined && next !== null && (typeof next !== "string" || !next)) throw new Error("Invalid OpenCode pagination cursor")
+      cursor = typeof next === "string" ? next : undefined
+      if (cursor) {
+        if (cursors.has(cursor)) throw new Error("OpenCode child pagination did not advance")
+        cursors.add(cursor)
+      }
+    } while (cursor)
+    return [...children.values()].sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
+  }
+
+  return { session, listChildren }
 }

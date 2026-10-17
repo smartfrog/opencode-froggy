@@ -16,6 +16,7 @@ export function createOrchestratorLoopTools(loop: ReturnType<typeof createOrches
     name: "start-orchestrator-loop",
     description:
       "Start or update persistent coordination reminders for the current root orchestrator session. " +
+      "Identical settings preserve the current cadence and pending reminders. " +
       "Defaults to every 10 minutes. Short coordination checks steer even during active work. " +
       "Use stop-orchestrator-loop when the objective is achieved or the user asks to stop reminders.",
     input: {
@@ -38,7 +39,8 @@ export function createOrchestratorLoopTools(loop: ReturnType<typeof createOrches
       const result = await loop.start(sessionID, input)
       return {
         content: `Coordination reminders enabled for ${sessionID} every ${result.intervalMinutes} minutes. ` +
-          "The first reminder arrives after this interval. Settings survive plugin reloads. " +
+          (result.changed ? "The first reminder arrives after this interval. " : "Settings unchanged; cadence preserved. ") +
+          "Settings survive plugin reloads. " +
           "Call stop-orchestrator-loop to disable them.",
       }
     },
@@ -55,5 +57,14 @@ export function createOrchestratorLoopTools(loop: ReturnType<typeof createOrches
     },
   }
 
-  return { startTool, stopTool }
+  const statusTool = {
+    name: "orchestrator-status",
+    description: "Inspect the current session's loop settings, local scheduler, pending reminders and saved delivery diagnostics without waking execution or changing cadence. Admission and wake requests do not prove reminder processing or task progress.",
+    input: { type: "object", properties: {}, additionalProperties: false },
+    async execute(_input: unknown, context: unknown) {
+      return { content: JSON.stringify(await loop.status(currentSessionID(context))) }
+    },
+  }
+
+  return { startTool, stopTool, statusTool }
 }

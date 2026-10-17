@@ -22,6 +22,16 @@ function holdNextAdmission(admit: ReturnType<typeof setup>["admit"]) {
   return admission.resolve
 }
 
+function holdNextDiagnosticSave(storage: LoopStorage) {
+  const saving = deferred<void>()
+  const save = vi.mocked(storage.set).getMockImplementation()!
+  vi.mocked(storage.set).mockImplementationOnce(async (key, value) => {
+    await saving.promise
+    await save(key, value)
+  })
+  return saving.resolve
+}
+
 function setup(
   directory = "/project",
   saved = new Map<string, Parameters<LoopStorage["set"]>[1]>(),
@@ -78,6 +88,453 @@ describe("orchestrator loop", () => {
     await Promise.all(loops.splice(0).map((loop) => loop.close()))
     vi.clearAllTimers()
     vi.useRealTimers()
+  })
+
+  it("reports a disabled loop without admitting inputs or writing storage", async () => {
+    const { loop, synthetic, storage } = setup()
+
+    const status = await loop.status("ses_parent")
+
+    expect(status).toMatchObject({ enabled: false, state: "disabled", objective: null, scheduler: { loadedHere: false, nextCheckAt: null }, pending: { state: "verified", ids: [] } })
+    expect(synthetic).not.toHaveBeenCalled()
+    expect(storage.set).not.toHaveBeenCalled()
+    expect(storage.remove).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("reports the current objective and actual next check without changing cadence", async () => {
+    const { loop, saved, storage } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    const deadline = Date.now() + 10 * MINUTE
+    const original = structuredClone([...saved])
+    vi.mocked(storage.set).mockClear()
+    await vi.advanceTimersByTimeAsync(3 * MINUTE)
+
+    const status = await loop.status("ses_parent")
+
+    expect(status).toMatchObject({ enabled: true, state: "scheduled", objective: "Finish the port", intervalMinutes: 10, ownerDirectory: "/project", scheduler: { loadedHere: true, nextCheckAt: deadline } })
+    expect([...saved]).toEqual(original)
+    expect(storage.set).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it("reports suspension when another agent is selected", async () => {
+    const { loop, get } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    get.mockResolvedValue({ agent: "build" })
+
+    expect(await loop.status("ses_parent")).toMatchObject({ enabled: true, state: "paused", selectedAgent: "build", suspensionReason: "different-agent" })
+  })
+
+  it("does not imply a different location's scheduler is loaded", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    const other = setup("/other-project", first.saved)
+
+    expect(await other.loop.status("ses_parent")).toMatchObject({ enabled: true, state: "not-loaded-here", ownerDirectory: "/project", scheduler: { loadedHere: false, nextCheckAt: null } })
+  })
+
+  it("records reminder admission separately from a failed wake request", async () => {
+    const { loop, wake } = setup()
+    wake.mockRejectedValueOnce(new Error("Wake unavailable"))
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(await loop.status("ses_parent")).toMatchObject({
+      pending: { state: "verified", ids: ["msg_1"] },
+      diagnostics: {
+        lastReminderAdmitted: { inboxID: "msg_1", at: Date.now() },
+        lastWakeRequested: null,
+        lastError: { message: "Error: Wake unavailable", at: Date.now() },
+      },
+    })
+  })
+
+  it("restores saved diagnostics alongside the original cadence", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const admittedAt = Date.now()
+    await first.loop.close()
+    const restored = setup("/project", first.saved, first.pending)
+    await restored.loop.restore()
+
+    expect(await restored.loop.status("ses_parent")).toMatchObject({
+      state: "scheduled",
+      scheduler: { nextCheckAt: admittedAt + 10 * MINUTE },
+      diagnostics: {
+        lastReminderAdmitted: { inboxID: "msg_1", at: admittedAt },
+        lastWakeRequested: { inboxID: "msg_1", at: admittedAt },
+      },
+    })
+    expect(restored.synthetic).not.toHaveBeenCalled()
+  })
+
+  it("preserves the last delivery error across plugin restoration", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    first.inbox.list.mockRejectedValueOnce(new Error("CLI unavailable"))
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    await first.loop.close()
+    const restored = setup("/project", first.saved)
+    await restored.loop.restore()
+
+    expect(await restored.loop.status("ses_parent")).toMatchObject({ diagnostics: { lastError: { message: "Error: CLI unavailable" } } })
+  })
+
+  it("retains original admission diagnostics when a restored loop wakes a pending reminder", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const admittedAt = Date.now()
+    await first.loop.close()
+    const restored = setup("/project", first.saved, first.pending)
+    await restored.loop.restore()
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(await restored.loop.status("ses_parent")).toMatchObject({ diagnostics: {
+      lastReminderAdmitted: { at: admittedAt, inboxID: "msg_1" },
+      lastWakeRequested: { at: Date.now(), inboxID: "msg_1" },
+    } })
+  })
+
+  it("retains the last failure as history after a successful retry", async () => {
+    const { loop, wake } = setup()
+    wake.mockRejectedValueOnce(new Error("Wake unavailable"))
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const failedAt = Date.now()
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(await loop.status("ses_parent")).toMatchObject({ diagnostics: {
+      lastWakeRequested: { at: Date.now() },
+      lastError: { at: failedAt, message: "Error: Wake unavailable" },
+    } })
+  })
+
+  it("does not rewrite saved diagnostics during paused checks", async () => {
+    const { loop, storage, get } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    vi.mocked(storage.set).mockClear()
+    get.mockResolvedValue({ agent: "build" })
+
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(storage.set).not.toHaveBeenCalled()
+  })
+
+  it("reports disabled status and clears diagnostics after stopping", async () => {
+    const { loop, saved } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    await loop.stop("ses_parent")
+
+    expect(await loop.status("ses_parent")).toMatchObject({ enabled: false, state: "disabled", suspensionReason: null, diagnostics: { lastReminderAdmitted: null } })
+    expect(saved.size).toBe(0)
+  })
+
+  it("reports corrupt diagnostics without pretending they are absent", async () => {
+    const { loop, saved } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    saved.set("orchestrator-diagnostics/ses_parent", { version: 1, revision: "old", lastError: { at: "invalid", message: "broken" } })
+
+    expect(await loop.status("ses_parent")).toMatchObject({ diagnostics: { readError: expect.stringContaining("Invalid") } })
+  })
+
+  it("waits for in-flight diagnostic persistence before clearing stopped state", async () => {
+    const { loop, storage, saved } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    const releaseSave = holdNextDiagnosticSave(storage)
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    let stopped = false
+    const stopping = loop.stop("ses_parent").then(() => { stopped = true })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(stopped).toBe(false)
+    } finally {
+      releaseSave()
+      await stopping
+    }
+
+    expect(saved.size).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("still cancels pending reminders when clearing diagnostic storage fails", async () => {
+    const { loop, storage, pending } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const remove = vi.mocked(storage.remove).getMockImplementation()!
+    vi.mocked(storage.remove).mockImplementation(async (key) => {
+      if (key.startsWith("orchestrator-diagnostics/")) throw new Error("Diagnostic cleanup failed")
+      await remove(key)
+    })
+
+    await expect(loop.stop("ses_parent")).rejects.toThrow("Diagnostic cleanup failed")
+
+    expect(pending).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([false, true])("schedules and wakes despite diagnostic cleanup failure (reconfiguration: %s)", async (reconfigure) => {
+    const { loop, storage, wake } = setup()
+    if (reconfigure) await loop.start("ses_parent", { objective: "Old objective" })
+    const remove = vi.mocked(storage.remove).getMockImplementation()!
+    vi.mocked(storage.remove).mockImplementation(async (key) => {
+      if (key.startsWith("orchestrator-diagnostics/")) throw new Error("Diagnostic cleanup failed")
+      await remove(key)
+    })
+
+    await expect(loop.start("ses_parent", { objective: "New objective", intervalMinutes: 1 })).resolves.toMatchObject({ changed: true })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(await loop.status("ses_parent")).toMatchObject({ enabled: true, state: "scheduled", diagnostics: { persistenceError: "Error: Diagnostic cleanup failed" } })
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    expect(wake).toHaveBeenCalledOnce()
+  })
+
+  it.each([false, true])("keeps core wakes independent of a delayed diagnostic save (reload: %s)", async (reload) => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    const releaseSave = holdNextDiagnosticSave(first.storage)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    const admittedAt = Date.now()
+    let closing: Promise<void> | undefined
+    const next = reload ? setup("/project", first.saved, first.pending) : first
+    try {
+      if (reload) {
+        closing = first.loop.close()
+        await next.loop.restore()
+      }
+      await vi.advanceTimersByTimeAsync(MINUTE)
+
+      const wakeCount = first.wake.mock.calls.length + (reload ? next.wake.mock.calls.length : 0)
+      expect(wakeCount).toBe(2)
+      expect(await next.loop.status("ses_parent")).toMatchObject({ scheduler: { nextCheckAt: Date.now() + MINUTE } })
+    } finally {
+      releaseSave()
+      await closing
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
+    expect(await next.loop.status("ses_parent")).toMatchObject({ diagnostics: {
+      lastReminderAdmitted: { at: admittedAt, inboxID: "msg_1" },
+      lastWakeRequested: { at: Date.now(), inboxID: "msg_1" },
+    } })
+  })
+
+  it("does not delay enablement or reminders while diagnostic cleanup is pending", async () => {
+    const { loop, storage, wake } = setup()
+    const cleaning = deferred<void>()
+    const remove = vi.mocked(storage.remove).getMockImplementation()!
+    vi.mocked(storage.remove).mockImplementation(async (key) => {
+      if (key.startsWith("orchestrator-diagnostics/")) await cleaning.promise
+      await remove(key)
+    })
+    let enabled = false
+    const starting = loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 }).then(() => { enabled = true })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(enabled).toBe(true)
+      await vi.advanceTimersByTimeAsync(MINUTE)
+
+      expect(wake).toHaveBeenCalledOnce()
+      expect(await loop.status("ses_parent")).toMatchObject({ diagnostics: { persistencePending: true } })
+    } finally {
+      cleaning.resolve()
+      await starting
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it("reconfigures during a delayed diagnostic save without losing new-revision diagnostics", async () => {
+    const { loop, storage, saved, wake } = setup()
+    await loop.start("ses_parent", { objective: "First", intervalMinutes: 1 })
+    const releaseSave = holdNextDiagnosticSave(storage)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    let reconfigured = false
+    const starting = loop.start("ses_parent", { objective: "Second", intervalMinutes: 1 }).then(() => { reconfigured = true })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(reconfigured).toBe(true)
+      await vi.advanceTimersByTimeAsync(MINUTE)
+
+      expect(wake).toHaveBeenCalledTimes(2)
+    } finally {
+      releaseSave()
+      await starting
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
+    const config = saved.get("orchestrator-loop/ses_parent")
+    const diagnostics = saved.get("orchestrator-diagnostics/ses_parent")
+    expect(diagnostics).toMatchObject({ revision: (config as { revision: string }).revision, lastReminderAdmitted: { inboxID: "msg_2" } })
+    expect(await loop.status("ses_parent")).toMatchObject({ objective: "Second", diagnostics: { lastWakeRequested: { inboxID: "msg_2" }, persistencePending: false } })
+  })
+
+  it("cancels pending reminders before awaiting slow diagnostic cleanup at stop", async () => {
+    const { loop, storage, pending } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    const cleaning = deferred<void>()
+    const remove = vi.mocked(storage.remove).getMockImplementation()!
+    vi.mocked(storage.remove).mockImplementation(async (key) => {
+      if (key.startsWith("orchestrator-diagnostics/")) await cleaning.promise
+      await remove(key)
+    })
+    const stopping = loop.stop("ses_parent")
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(pending).toHaveLength(0)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      cleaning.resolve()
+      await stopping
+    }
+  })
+
+  it("flushes the latest coalesced observation during graceful close", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    const releaseSave = holdNextDiagnosticSave(first.storage)
+    await vi.advanceTimersByTimeAsync(2 * MINUTE)
+    const latestWake = Date.now()
+    const closing = first.loop.close()
+    releaseSave()
+    await closing
+    const restored = setup("/project", first.saved, first.pending)
+    await restored.loop.restore()
+
+    expect(await restored.loop.status("ses_parent")).toMatchObject({ diagnostics: { lastWakeRequested: { at: latestWake } } })
+  })
+
+  it("drains diagnostic operations spawned by an in-flight reminder during close", async () => {
+    const { loop, admit, storage } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    const releaseAdmission = holdNextAdmission(admit)
+    const releaseSave = holdNextDiagnosticSave(storage)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    let closed = false
+    const closing = loop.close().then(() => { closed = true })
+    releaseAdmission()
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(closed).toBe(false)
+    } finally {
+      releaseSave()
+      await closing
+    }
+  })
+
+  it("makes a final attempt to flush buffered observations after an earlier save failure", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    vi.mocked(first.storage.set).mockRejectedValueOnce(new Error("Transient failure"))
+    await vi.advanceTimersByTimeAsync(MINUTE)
+
+    await first.loop.close()
+    const restored = setup("/project", first.saved, first.pending)
+    await restored.loop.restore()
+
+    expect(await restored.loop.status("ses_parent")).toMatchObject({ diagnostics: { lastReminderAdmitted: { at: Date.now(), inboxID: "msg_1" } } })
+  })
+
+  it("does not let an older runtime observation hide newer persisted status", async () => {
+    const { loop, storage, saved } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    const releaseSave = holdNextDiagnosticSave(storage)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    const revision = (saved.get("orchestrator-loop/ses_parent") as { revision: string }).revision
+    vi.setSystemTime(Date.now() + 1)
+    saved.set("orchestrator-diagnostics/ses_parent", { version: 1, revision, lastWakeRequested: { at: Date.now(), inboxID: "msg_newer" } })
+    try {
+      expect(await loop.status("ses_parent")).toMatchObject({ diagnostics: { lastWakeRequested: { at: Date.now(), inboxID: "msg_newer" } } })
+    } finally {
+      releaseSave()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+  })
+
+  it.each([false, true])("merges late old-manager saves without regressing newer events (new wake fails: %s)", async (failWake) => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
+    const releaseSave = holdNextDiagnosticSave(first.storage)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    first.pending.splice(0)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    const oldWakeAt = Date.now()
+    first.inbox.list.mockRejectedValueOnce(new Error("Old delivery failed"))
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    const oldErrorAt = Date.now()
+    const closing = first.loop.close()
+    const next = setup("/project", first.saved, first.pending)
+    next.pending.splice(0)
+    if (failWake) next.wake.mockRejectedValueOnce(new Error("New delivery failed"))
+    try {
+      await next.loop.restore()
+      await vi.advanceTimersByTimeAsync(MINUTE)
+    } finally {
+      releaseSave()
+      await closing
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
+    const restored = setup("/project", first.saved, first.pending)
+    await restored.loop.restore()
+    expect(await restored.loop.status("ses_parent")).toMatchObject({ diagnostics: {
+      lastReminderAdmitted: { at: Date.now() },
+      lastWakeRequested: { at: failWake ? oldWakeAt : Date.now() },
+      lastError: { at: failWake ? Date.now() : oldErrorAt, message: failWake ? "Error: New delivery failed" : "Error: Old delivery failed" },
+    } })
+  })
+
+  it("does not reuse an earlier objective's diagnostics after settings change", async () => {
+    const { loop } = setup()
+    await loop.start("ses_parent", { objective: "First" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    await loop.start("ses_parent", { objective: "Second" })
+
+    expect(await loop.status("ses_parent")).toMatchObject({ objective: "Second", diagnostics: { lastReminderAdmitted: null, lastWakeRequested: null, lastError: null } })
+  })
+
+  it("reports failed inbox inspection as unavailable rather than empty", async () => {
+    const { loop, inbox } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    inbox.list.mockRejectedValueOnce(new Error("CLI offline"))
+
+    expect(await loop.status("ses_parent")).toMatchObject({ pending: { state: "unavailable", error: "Error: CLI offline" } })
+  })
+
+  it("reports failed agent inspection without assuming the loop can remind", async () => {
+    const { loop, get } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    get.mockRejectedValueOnce(new Error("Session lookup failed"))
+
+    expect(await loop.status("ses_parent")).toMatchObject({ enabled: true, state: "unknown", sessionError: "Error: Session lookup failed" })
+  })
+
+  it("keeps reminders working and exposes diagnostic persistence failures", async () => {
+    const { loop, storage, wake } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    vi.mocked(storage.set).mockRejectedValueOnce(new Error("Diagnostic storage failed"))
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(wake).toHaveBeenCalledOnce()
+    expect(await loop.status("ses_parent")).toMatchObject({ diagnostics: { persistenceError: "Error: Diagnostic storage failed", lastReminderAdmitted: { inboxID: "msg_1" } } })
+  })
+
+  it("exposes a read-only public status tool for the invoking session", async () => {
+    const { loop, synthetic } = setup()
+    const { statusTool } = createOrchestratorLoopTools(loop)
+
+    const result = await statusTool.execute({}, { sessionID: "ses_parent" })
+
+    expect(statusTool.name).toBe("orchestrator-status")
+    expect(JSON.parse(result.content)).toMatchObject({ sessionID: "ses_parent", state: "disabled" })
+    expect(synthetic).not.toHaveBeenCalled()
   })
 
   it("enables and disables reminders through the public tools in the invoking session", async () => {
@@ -146,6 +603,127 @@ describe("orchestrator loop", () => {
     expect(admit).toHaveBeenCalledTimes(2)
     expect(saved.get("orchestrator-loop/ses_parent")).toMatchObject({ objective: "Revised objective", intervalMinutes: 2 })
     expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it("preserves the original deadline when the same normalized settings are started again", async () => {
+    const { loop, saved, storage, admit } = setup()
+    expect(await loop.start("ses_parent", { objective: "Finish the port" })).toMatchObject({ changed: true })
+    const original = structuredClone(saved.get("orchestrator-loop/ses_parent"))
+    await vi.advanceTimersByTimeAsync(9 * MINUTE)
+
+    expect(await loop.start("ses_parent", { objective: "  Finish the port  ", intervalMinutes: 10 })).toMatchObject({ changed: false })
+    expect(saved.get("orchestrator-loop/ses_parent")).toEqual(original)
+    expect(storage.set).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(MINUTE)
+
+    expect(admit).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it("does not cancel a pending reminder on an identical start", async () => {
+    const { loop, inbox, pending, admit, wake } = setup()
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const reminder = structuredClone(pending[0])
+    inbox.cancel.mockClear()
+
+    await loop.start("ses_parent", { objective: "Finish the port" })
+
+    expect(inbox.cancel).not.toHaveBeenCalled()
+    expect(pending).toEqual([reminder])
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    expect(admit).toHaveBeenCalledOnce()
+    expect(wake).toHaveBeenCalledTimes(2)
+  })
+
+  it("leaves an in-flight admission running on an identical start", async () => {
+    const { loop, admit, wake, pending } = setup()
+    const releaseAdmission = holdNextAdmission(admit)
+    await loop.start("ses_parent", { objective: "Finish the port" })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    let unchanged = false
+    const starting = loop.start("ses_parent", { objective: "Finish the port" }).then((result) => {
+      unchanged = !result.changed
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(unchanged).toBe(true)
+    } finally {
+      releaseAdmission()
+      await starting
+      await vi.advanceTimersByTimeAsync(0)
+    }
+
+    expect(wake).toHaveBeenCalledOnce()
+    expect(pending).toHaveLength(1)
+  })
+
+  it("reactivates an identical persisted loop without resetting its deadline", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    const original = structuredClone(first.saved.get("orchestrator-loop/ses_parent"))
+    await first.loop.close()
+    await vi.advanceTimersByTimeAsync(9 * MINUTE)
+    const restored = setup("/project", first.saved)
+
+    expect(await restored.loop.start("ses_parent", { objective: "Finish the port" })).toMatchObject({ changed: false })
+    expect(restored.saved.get("orchestrator-loop/ses_parent")).toEqual(original)
+    expect(restored.storage.set).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(MINUTE)
+
+    expect(restored.admit).toHaveBeenCalledOnce()
+  })
+
+  it("replaces an invalid persisted schedule even when its settings match", async () => {
+    const { loop, saved, admit } = setup()
+    saved.set("orchestrator-loop/ses_parent", {
+      version: 1, sessionID: "ses_parent", directory: "/project", objective: "Finish the port",
+      intervalMinutes: 10, startedAt: "invalid", revision: "invalid-schedule",
+    })
+
+    expect(await loop.start("ses_parent", { objective: "Finish the port" })).toMatchObject({ changed: true })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(admit).toHaveBeenCalledOnce()
+    expect(saved.get("orchestrator-loop/ses_parent")).toMatchObject({ startedAt: expect.any(Number) })
+  })
+
+  it("coalesces concurrent starts with identical settings", async () => {
+    const { loop, storage } = setup()
+
+    const results = await Promise.all([
+      loop.start("ses_parent", { objective: "Finish the port" }),
+      loop.start("ses_parent", { objective: "Finish the port" }),
+    ])
+
+    expect(results.map((result) => result.changed)).toEqual([true, false])
+    expect(storage.set).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it("moves cadence ownership when identical settings are started from a different location", async () => {
+    const first = setup()
+    await first.loop.start("ses_parent", { objective: "Finish the port" })
+    const other = setup("/other-project", first.saved, first.pending)
+
+    expect(await other.loop.start("ses_parent", { objective: "Finish the port" })).toMatchObject({ changed: true })
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+
+    expect(first.admit).not.toHaveBeenCalled()
+    expect(other.admit).toHaveBeenCalledOnce()
+    expect(other.saved.get("orchestrator-loop/ses_parent")).toMatchObject({ directory: "/other-project" })
+  })
+
+  it("reports an unchanged public start without promising a postponed first reminder", async () => {
+    const { loop } = setup()
+    const { startTool } = createOrchestratorLoopTools(loop)
+    await startTool.execute({ objective: "Finish the port" }, { sessionID: "ses_parent" })
+
+    const result = await startTool.execute({ objective: "Finish the port" }, { sessionID: "ses_parent" })
+
+    expect(result.content).toContain("unchanged")
+    expect(result.content).toContain("cadence preserved")
+    expect(result.content).not.toContain("first reminder arrives after")
   })
 
   it("stops reminders and cancels only this loop's pending input", async () => {

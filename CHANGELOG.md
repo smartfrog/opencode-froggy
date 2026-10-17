@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+- Retrieve persisted direct child sessions across reloads with full pagination and refreshed metadata; distinguish verified inventory, incomplete cached fallback and unavailable discovery
+- Add read-only `orchestrator-status` for settings, local scheduling, pending reminders and revision-scoped persisted delivery diagnostics, without claiming reminder processing or task progress
+- Define memory-manager's primary mission as useful, deduplicated, topic-organized English knowledge adapted to the project; keep operational state in tickets, report placement conflicts, and preserve literals, uncertainty and archives
+- Report UTF-8 bytes and Unicode code-point usage in `memory-file` reads and saved/unchanged receipts; expose the 5,000-character knowledge target, remaining capacity and excess without rejecting writes or applying that budget to tickets
+- Preserve cadence, revision and pending/in-flight reminders when `start-orchestrator-loop` receives unchanged settings at the same location; restore persisted schedules without resetting their deadlines
+- Identify memory-lock owners by session/process and timestamp, report lock age/path and safe recovery instructions, and test isolated process recovery/crash scenarios with a strictly typechecked TypeScript fixture and no automatic unlocks
+- Align memory-manager delegation with canonical-project paths and document local-only versus backed-up conservation; keep the memory size budget explicitly soft
+- Add an on-demand `memory-manager` writer for delegated local notes/tickets, using a scoped `memory-file` tool with source-hash checks, verified original archives, locked atomic replacement and saved-content receipts; no new hooks or loop
+- Keep orchestrator memory short and source-linked, separate durable knowledge from execution history, and prefer targeted reads with verified archival before shortening oversized notes
+- Use one authoritative backlog with concise current-state tickets, a shared local Markdown location across worktrees, verified backend migrations, and compact worker handoffs without weakening evidence or safety checks
 
 ## 1.4.2
 - Replace verbose orchestrator reminders with a fixed coordination check covering activity, reviews, blockers, backlog updates, and workspace cleanup; remove automatic child/shell snapshots and replace obsolete pending reminders after reload

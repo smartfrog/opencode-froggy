@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto"
 import { type Plugin } from "@opencode/plugin"
 import { asRecord } from "./record"
 import { log } from "./logger"
+import { mergeLoopDiagnostics, readLoopDiagnostics, type LoopDiagnostics } from "./orchestrator-diagnostics"
 
 export const DEFAULT_LOOP_INTERVAL_MINUTES = 10
 export const MAX_LOOP_INTERVAL_MINUTES = Math.floor(2_147_483_647 / 60_000)
 const STORAGE_PREFIX = "orchestrator-loop/"
+const DIAGNOSTICS_PREFIX = "orchestrator-diagnostics/"
 const REMINDER_SOURCE = "opencode-froggy:orchestrator-loop"
 const REMINDER_TEXT = [
   "Periodic coordination check:",
@@ -22,7 +24,7 @@ const SHARED = globalThis as typeof globalThis & {
   }
 }
 // Share in-flight coordination across location-specific plugin copies and reloads.
-const { operations: SESSION_OPERATIONS, reminders: IN_FLIGHT_REMINDERS } = SHARED[COORDINATION_KEY] ??= {
+const { operations: COORDINATION_OPERATIONS, reminders: IN_FLIGHT_REMINDERS } = SHARED[COORDINATION_KEY] ??= {
   operations: new Map<string, Promise<void>>(),
   reminders: new Map<string, ReminderAttempt>(),
 }
@@ -59,6 +61,10 @@ type LoopConfig = {
 interface Runtime {
   config: LoopConfig
   timer?: ReturnType<typeof setTimeout>
+  nextCheckAt?: number
+  diagnostics?: LoopDiagnostics
+  flushingDiagnostics?: boolean
+  persistenceError?: string
 }
 
 interface ReminderAttempt {
@@ -103,6 +109,10 @@ function isMissingSession(error: unknown): boolean {
   return tag === "SessionNotFoundError" || tag === "Session.NotFoundError"
 }
 
+function validateSessionID(sessionID: unknown): void {
+  if (typeof sessionID !== "string" || !sessionID.startsWith("ses")) throw new Error("A session ID is required")
+}
+
 export function createOrchestratorLoop(options: {
   directory: string
   storage: LoopStorage
@@ -114,21 +124,22 @@ export function createOrchestratorLoop(options: {
   let closed = false
 
   const key = (sessionID: string) => `${STORAGE_PREFIX}${sessionID}`
+  const diagnosticsKey = (sessionID: string) => `${DIAGNOSTICS_PREFIX}${sessionID}`
   const current = (runtime: Runtime) => !closed && runtimes.get(runtime.config.sessionID) === runtime
 
   function ensureOpen(): void {
     if (closed) throw new Error("Orchestrator loop manager is closed")
   }
 
-  function exclusive<T>(sessionID: string, operation: () => Promise<T>): Promise<T> {
-    const result = (SESSION_OPERATIONS.get(sessionID) ?? Promise.resolve()).then(operation)
+  function exclusive<T>(operationKey: string, operation: () => Promise<T>): Promise<T> {
+    const result = (COORDINATION_OPERATIONS.get(operationKey) ?? Promise.resolve()).then(operation)
     // The caller observes failures; the serialization gate must still release.
     const gate = result.then(() => {}, () => {})
-    SESSION_OPERATIONS.set(sessionID, gate)
+    COORDINATION_OPERATIONS.set(operationKey, gate)
     operations.add(gate)
     void gate.then(() => {
       operations.delete(gate)
-      if (SESSION_OPERATIONS.get(sessionID) === gate) SESSION_OPERATIONS.delete(sessionID)
+      if (COORDINATION_OPERATIONS.get(operationKey) === gate) COORDINATION_OPERATIONS.delete(operationKey)
     })
     return result
   }
@@ -136,6 +147,13 @@ export function createOrchestratorLoop(options: {
   function forget(runtime: Runtime): void {
     clearTimeout(runtime.timer)
     if (runtimes.get(runtime.config.sessionID) === runtime) runtimes.delete(runtime.config.sessionID)
+  }
+
+  function activate(config: LoopConfig): Runtime {
+    const runtime: Runtime = { config }
+    runtimes.set(config.sessionID, runtime)
+    schedule(runtime)
+    return runtime
   }
 
   async function stillCurrent(runtime: Runtime): Promise<boolean> {
@@ -161,6 +179,56 @@ export function createOrchestratorLoop(options: {
     return current(runtime) && info.agent === "orchestrator" && !info.parentID
   }
 
+  function saveDiagnostics(runtime: Runtime, snapshot: LoopDiagnostics): Promise<void> {
+    const { sessionID, revision } = runtime.config
+    return exclusive(diagnosticsKey(sessionID), async () => {
+      if (asRecord(await storage.get(key(sessionID))).revision !== revision) return
+      const value = await storage.get(diagnosticsKey(sessionID))
+      const saved = asRecord(value).revision === revision ? readLoopDiagnostics(value) : undefined
+      await storage.set(diagnosticsKey(sessionID), {
+        ...mergeLoopDiagnostics(saved ?? {}, snapshot),
+        version: 1,
+        revision,
+      })
+    })
+  }
+
+  function recordDiagnosticsFailure(runtime: Runtime, error: unknown): void {
+    runtime.persistenceError = String(error)
+    log("[orchestrator-loop] diagnostics persistence failed", { sessionID: runtime.config.sessionID, error: String(error) })
+  }
+
+  function flushDiagnostics(runtime: Runtime): void {
+    const snapshot = runtime.diagnostics
+    if (!snapshot || runtime.flushingDiagnostics) return
+    let saved = false
+    const flushing = saveDiagnostics(runtime, snapshot)
+      .then(() => {
+        saved = true
+        if (runtime.diagnostics === snapshot) runtime.diagnostics = undefined
+        runtime.persistenceError = undefined
+      })
+      .catch((error: unknown) => recordDiagnosticsFailure(runtime, error))
+      .finally(() => {
+        runtime.flushingDiagnostics = undefined
+        operations.delete(flushing)
+        if (saved && runtime.diagnostics) flushDiagnostics(runtime)
+      })
+    runtime.flushingDiagnostics = true
+    operations.add(flushing)
+  }
+
+  function clearDiagnostics(sessionID: string): Promise<void> {
+    return exclusive(diagnosticsKey(sessionID), () => storage.remove(diagnosticsKey(sessionID)))
+  }
+
+  function queueDiagnosticsCleanup(runtime: Runtime): void {
+    const cleanup = clearDiagnostics(runtime.config.sessionID)
+      .catch((error: unknown) => recordDiagnosticsFailure(runtime, error))
+      .finally(() => operations.delete(cleanup))
+    operations.add(cleanup)
+  }
+
   async function retire(sessionID: string): Promise<void> {
     const runtime = runtimes.get(sessionID)
     if (runtime) forget(runtime)
@@ -184,7 +252,9 @@ export function createOrchestratorLoop(options: {
     const interval = runtime.config.intervalMinutes * 60_000
     const elapsed = Math.max(0, Date.now() - runtime.config.startedAt)
     const delay = interval - elapsed % interval
+    runtime.nextCheckAt = Date.now() + delay
     runtime.timer = setTimeout(() => {
+      runtime.nextCheckAt = undefined
       const { sessionID } = runtime.config
       const pending = IN_FLIGHT_REMINDERS.get(sessionID)
       const running: Promise<void> = (pending?.running ?? tick(runtime))
@@ -193,6 +263,7 @@ export function createOrchestratorLoop(options: {
             try {
               await storage.remove(key(runtime.config.sessionID))
               forget(runtime)
+              queueDiagnosticsCleanup(runtime)
               return
             } catch (cleanupError) {
               error = cleanupError
@@ -202,11 +273,13 @@ export function createOrchestratorLoop(options: {
             sessionID: runtime.config.sessionID,
             error: String(error),
           })
+          runtime.diagnostics = { ...runtime.diagnostics, lastError: { at: Date.now(), message: String(error) } }
         })
         .finally(() => {
           operations.delete(running)
           if (!pending) IN_FLIGHT_REMINDERS.delete(sessionID)
           schedule(runtime)
+          if (!pending) flushDiagnostics(runtime)
         })
       operations.add(running)
       if (!pending) IN_FLIGHT_REMINDERS.set(sessionID, { running, cancel: () => forget(runtime) })
@@ -234,20 +307,88 @@ export function createOrchestratorLoop(options: {
       if (item !== existing) await session.inbox.cancel({ sessionID, inboxID: item.id })
     }
     if (!await canRemind(runtime) || !current(runtime)) return
-    if (existing) {
-      await session.synthetic({ ...input, id: existing.id, resume: true })
-      return
-    }
-    const reminder = await session.synthetic({ ...input, resume: false })
-    if (!await canRemind(runtime) || !current(runtime)) {
-      await session.inbox.cancel({ sessionID, inboxID: reminder.id })
-      return
+    const reminder = existing ?? await session.synthetic({ ...input, resume: false })
+    if (!existing) {
+      runtime.diagnostics = { ...runtime.diagnostics, lastReminderAdmitted: { at: Date.now(), inboxID: reminder.id } }
+      if (!await canRemind(runtime) || !current(runtime)) {
+        await session.inbox.cancel({ sessionID, inboxID: reminder.id })
+        return
+      }
     }
     // Re-admitting the same ID wakes execution without duplicating the durable input.
     await session.synthetic({ ...input, id: reminder.id, resume: true })
+    runtime.diagnostics = { ...runtime.diagnostics, lastWakeRequested: { at: Date.now(), inboxID: reminder.id } }
   }
 
   return {
+    async status(sessionID: string) {
+      ensureOpen()
+      validateSessionID(sessionID)
+      return exclusive(sessionID, async () => {
+        ensureOpen()
+        const stored = await storage.get(key(sessionID))
+        const config = stored === undefined ? undefined : readConfig(stored)
+        if (config && config.sessionID !== sessionID) throw new Error("Loop storage key does not match its session")
+        const candidate = runtimes.get(sessionID)
+        const runtime = candidate && config?.revision === candidate.config.revision && current(candidate) ? candidate : undefined
+        let info: Record<string, unknown> = {}
+        let sessionError: string | null = null
+        try {
+          info = asRecord(await session.get({ sessionID }))
+        } catch (error) {
+          sessionError = String(error)
+        }
+        const selectedAgent = typeof info.agent === "string" ? info.agent : null
+        let suspensionReason: string | null = null
+        if (config && !sessionError) {
+          if (info.parentID) suspensionReason = "child-session"
+          else if (selectedAgent !== "orchestrator") suspensionReason = "different-agent"
+        }
+        let pending: { state: "verified"; ids: string[] } | { state: "unavailable"; error: string }
+        try {
+          pending = { state: "verified", ids: (await pendingReminders(sessionID)).map((item) => item.id) }
+        } catch (error) {
+          pending = { state: "unavailable", error: String(error) }
+        }
+        let diagnostics: LoopDiagnostics = {}
+        let readError: string | null = null
+        try {
+          const saved = readLoopDiagnostics(await storage.get(diagnosticsKey(sessionID)))
+          if (config && saved?.revision === config.revision) diagnostics = saved
+        } catch (error) {
+          readError = String(error)
+        }
+        diagnostics = mergeLoopDiagnostics(diagnostics, runtime?.diagnostics ?? {})
+        let state = "disabled"
+        if (config) {
+          if (sessionError) state = "unknown"
+          else if (suspensionReason) state = "paused"
+          else state = runtime ? "scheduled" : "not-loaded-here"
+        }
+        return {
+          sessionID,
+          observedAt: Date.now(),
+          enabled: config !== undefined,
+          state,
+          objective: config?.objective ?? null,
+          intervalMinutes: config?.intervalMinutes ?? null,
+          ownerDirectory: config?.directory ?? null,
+          selectedAgent,
+          suspensionReason,
+          sessionError,
+          scheduler: { loadedHere: runtime !== undefined, nextCheckAt: runtime?.nextCheckAt ?? null },
+          pending,
+          diagnostics: {
+            lastReminderAdmitted: diagnostics.lastReminderAdmitted ?? null,
+            lastWakeRequested: diagnostics.lastWakeRequested ?? null,
+            lastError: diagnostics.lastError ?? null,
+            persistenceError: runtime?.persistenceError ?? null,
+            persistencePending: COORDINATION_OPERATIONS.has(diagnosticsKey(sessionID)),
+            readError,
+          },
+        }
+      })
+    },
     async restore(): Promise<void> {
       ensureOpen()
       let after: string | undefined
@@ -267,9 +408,7 @@ export function createOrchestratorLoop(options: {
               return
             }
             if (closed || config.directory !== directory || runtimes.has(config.sessionID)) return
-            const runtime: Runtime = { config }
-            runtimes.set(config.sessionID, runtime)
-            schedule(runtime)
+            activate(config)
           })
         }
         if (page.next !== undefined && page.next === after) throw new Error("Loop storage pagination did not advance")
@@ -278,13 +417,32 @@ export function createOrchestratorLoop(options: {
     },
     async start(sessionID: string, input: unknown) {
       ensureOpen()
-      if (typeof sessionID !== "string" || !sessionID.startsWith("ses")) throw new Error("A session ID is required")
+      validateSessionID(sessionID)
       const settings = readSettings(input)
       return exclusive(sessionID, async () => {
         ensureOpen()
         const info = asRecord(await session.get({ sessionID }))
         if (info.agent !== "orchestrator" || info.parentID) {
           throw new Error("Start the loop from a root orchestrator session")
+        }
+        const stored = await storage.get(key(sessionID))
+        ensureOpen()
+        let existing: LoopConfig | undefined
+        if (stored !== undefined) {
+          try {
+            existing = readConfig(stored)
+          } catch (error) {
+            log("[orchestrator-loop] replacing invalid stored loop", { sessionID, error: String(error) })
+          }
+        }
+        if (existing?.sessionID === sessionID && existing.directory === directory &&
+            existing.objective === settings.objective && existing.intervalMinutes === settings.intervalMinutes) {
+          const runtime = runtimes.get(sessionID)
+          if (runtime?.config.revision !== existing.revision) {
+            if (runtime) forget(runtime)
+            activate(existing)
+          }
+          return { intervalMinutes: existing.intervalMinutes, changed: false }
         }
         await retire(sessionID)
         ensureOpen()
@@ -294,21 +452,36 @@ export function createOrchestratorLoop(options: {
         }
         await storage.set(key(sessionID), config)
         ensureOpen()
-        const runtime: Runtime = { config }
-        runtimes.set(sessionID, runtime)
-        schedule(runtime)
-        return { intervalMinutes: config.intervalMinutes }
+        queueDiagnosticsCleanup(activate(config))
+        return { intervalMinutes: config.intervalMinutes, changed: true }
       })
     },
     async stop(sessionID: string): Promise<void> {
       ensureOpen()
-      if (typeof sessionID !== "string" || !sessionID.startsWith("ses")) throw new Error("A session ID is required")
-      await exclusive(sessionID, () => retire(sessionID))
+      validateSessionID(sessionID)
+      await exclusive(sessionID, async () => {
+        const errors: unknown[] = []
+        try {
+          await retire(sessionID)
+        } catch (error) {
+          errors.push(error)
+        }
+        try {
+          await clearDiagnostics(sessionID)
+        } catch (error) {
+          errors.push(error)
+        }
+        if (errors.length === 1) throw errors[0]
+        if (errors.length > 1) throw new AggregateError(errors, "Orchestrator loop cleanup incomplete", { cause: errors[0] })
+      })
     },
     async close(): Promise<void> {
       closed = true
-      for (const runtime of runtimes.values()) clearTimeout(runtime.timer)
-      await Promise.all(operations)
+      for (const runtime of runtimes.values()) {
+        clearTimeout(runtime.timer)
+        flushDiagnostics(runtime)
+      }
+      while (operations.size) await Promise.all([...operations])
       runtimes.clear()
     },
   }

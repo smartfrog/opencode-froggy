@@ -158,6 +158,7 @@ It does not modify Linear issues, add comments, or update project files.
 | `doc-writer` | subagent | Technical writer that crafts clear, comprehensive documentation (README, API docs, architecture docs, user guides). |
 | `code-reviewer` | subagent | Read-only code review agent for quality, correctness, security, and maintainability feedback. |
 | `code-simplifier` | subagent | Simplifies recently modified code for clarity and maintainability while strictly preserving behavior. |
+| `memory-manager` | subagent | Curates and writes delegated memory/ticket files through version-checked saves with verified archives and compact receipts. |
 | `partner` | subagent | Strategic ideation partner that breaks frames, expands solution spaces, and surfaces non-obvious strategic options. Read-only. |
 | `rubber-duck` | subagent | Rubber duck for thinking out loud. Listens, reflects, and asks gentle, focused questions to help users clarify their own ideas. Read-only. |
 
@@ -171,7 +172,7 @@ The product owner produces requested planning artifacts within the user's mandat
 
 ### XP practices
 
-The seven agents other than `partner` use the shared `extreme-programming` skill according to their roles. It translates communication, simplicity, feedback, courage, and respect into practical rules. This adaptation uses independent implementation and review, without pair programming or a new developer agent.
+The seven existing delivery and advisory agents other than `partner` use the shared `extreme-programming` skill according to their roles. It translates communication, simplicity, feedback, courage, and respect into practical rules. The `memory-manager` has a separate bounded writing/curation contract, without an exemption from required independent review. This adaptation uses independent implementation and review, without pair programming or a new developer agent.
 
 - The existing `general` implementation worker uses **test → code → refactor** by default for features and bugfixes. When another verification is more appropriate, it reports the reason, alternative check, and result. The loop stays with the implementer.
 - `architect` supports evolving design and revisable decisions. Research spikes have a question, investigation budget, and decision criterion.
@@ -181,11 +182,15 @@ The seven agents other than `partner` use the shared `extreme-programming` skill
 
 ### Shared backlog workflow
 
-Both primary agents use [backlog-management](skill/backlog-management/SKILL.md) with the agreed **Linear/Trello MCP** or an existing Markdown backlog, defaulting to **`.opencode/backlog/<ticket-id>.md`**. Existing backlogs stay authoritative; unavailable trackers can have local notes pending reconciliation.
+Both primary agents use [backlog-management](skill/backlog-management/SKILL.md) with **one authoritative backlog**: the agreed project backend, or local **`.opencode/backlog/<ticket-id>.md`** by default. Linear/Trello MCP remains supported when selected; an existing tracker is not silently replaced. For local Markdown, record one authoritative directory in a retained checkout and share its absolute path with sessions in other worktrees instead of maintaining divergent copies.
+
+Keep one short current snapshot per coherent deliverable: objective and acceptance, actual status, next action or blocker, applicable worker/session/branch/worktree/revision references, review disposition, and links to evidence. Do not create a ticket per worker, review, test, or trial, or turn tickets and coordination files into duplicate execution diaries. Preserve historical details in linked reports or archives before shortening records, keep recovery references discoverable, and update the parent outcome as work advances. Worker returns summarize results, checks, blockers, and evidence paths; follow-ups carry changed or missing context without dropping authorization or safety limits.
+
+For an agreed backend migration, reconcile open work against actual sessions and evidence, preserve IDs, constraints and recovery/review references, and independently verify the migrated state before recording the new authority and stopping updates to the old backend. Keep the previous tracker accessible as history, not a synchronized second backlog. Unavailable trackers can have local notes explicitly pending reconciliation. These are agent instructions, not an automatic migration, synchronization service, or schema enforcement.
 
 The suggested flow is **Todo → In progress → To review → To integrate → Done**, adapted to existing project statuses. Accepted reports bypass integration; Done reflects verified acceptance and, for code delivery, integrated results. Tickets contain only useful execution context and evidence.
 
-Start small, usually with up to three active tickets or workers, and adapt parallelism to resources, independence, and project limits. Real dependencies and explicit sequencing govern readiness; priority alone does not block independent work. Refresh relevant state as needed instead of auditing the whole backlog for every task.
+Start small, usually with up to three active tickets or workers, and adapt parallelism to resources, independence, and project limits. Real dependencies and explicit sequencing govern readiness; priority alone does not block independent work. At startup, resume, or after compaction, recover relevant missing references and verify them against sessions and Git. Reuse available context and refresh affected work instead of rereading all reports or auditing the whole backlog for every task or periodic reminder.
 
 ### orchestrator
 
@@ -215,7 +220,27 @@ With `orchestrator` selected, say **"Automatic mode"** to delegate remaining cho
 
 #### Memory
 
-**`.opencode/orchestrator/learnings.md`** holds useful repo facts and failed approaches with their causes. The coordinator maintains it only when there is something worth retaining. Status and delivery evidence live in the backlog. Active tickets also retain applicable execution references: each worker's assignment, agent and session ID, branch/worktree, last validated SHA with check commands and results, and next step or blocker. Review evidence includes the reviewer session, reviewed revision or diff, findings, and their disposition. On resume, verify these references against available sessions and Git state; `list-child-sessions` uses an in-memory registry that may be incomplete after a restart. There is no run ledger; backlog and memory edits are not automatically committed.
+**`.opencode/orchestrator/learnings.md`** is optional project knowledge, not an execution journal. Its **5,000-character soft budget is not a truncation limit**: preserve unique constraints and unresolved safety limits beyond it with a concise reason. Keep reusable repo facts, corrections, failed approaches with their causes, source references and explicit uncertainty; replace superseded notes rather than duplicating instructions or backlog history. There is no automatic injection or background compaction.
+
+Reuse facts already in context. At startup, resume, or after compaction, read only relevant missing notes or facts needing verification; search by topic or source before opening long notes or archives. Periodic reminders do not require rereading unchanged memory. Before shortening an oversized file, preserve and verify its complete text under `.opencode/orchestrator/archive/` and retain references to archived sources. Archives are historical evidence, not live instructions. Preserve unique user constraints and unresolved safety limits even if they exceed the target, explaining the exception. Coordinate writers, preserve concurrent edits, and verify saves with focused reads rather than printing the whole file. Shortening a file does not remove earlier reads from an existing session or guarantee that compaction retained every fact.
+
+Status and delivery evidence live in the backlog, not memory. Active tickets also retain applicable execution references: each worker's assignment, agent and session ID, branch/worktree, last validated SHA with check commands and results, and next step or blocker. Review evidence includes the reviewer session, reviewed revision or diff, findings, and their disposition. On resume, verify these references against available sessions and Git state; `list-child-sessions` retrieves persisted direct children, marking cached fallback results incomplete when discovery fails. Inventory does not prove worker activity or assignment completion. Memory does not establish current state. There is no run ledger; backlog and memory edits are not automatically committed.
+
+Follow the backlog skill's [conservation policy](skill/backlog-management/SKILL.md#conservation): local files survive a service restart, but this is not a backup. Record explicitly approved Git history, a verified external backup, or `local-only` alongside the authority path. Same-checkout archives and ignore rules do not protect against checkout/disk loss; no automatic backup, commit or ignore-rule change is performed. The isolated recovery tests use fresh Node processes, disk-backed fixture storage and simulated sessions/clock; they do not demonstrate a live OpenCode restart or model-driven recovery.
+
+#### Memory manager
+
+The bundled [memory-manager](agent/memory-manager.md) writes explicitly delegated local memory/ticket files. Its default permissions allow local discovery and `memory-file`, not native editing, shell, delegation or remote mutations. Use it at useful milestones with named supported files, facts/decisions and constraints, following the backlog skill's [exclusive ownership handoff](skill/backlog-management/SKILL.md#responsibilities-and-tickets), not on every reminder. No new timer or hook is added.
+
+Its primary mission is useful, deduplicated, topic-organized knowledge adapted to the project, not merely translating or recording updates. Curated prose is in English; identifiers, paths, hashes and exact quotations remain verbatim. Operational status, assignments, build deliveries and planned runs stay in tickets rather than being copied into knowledge. Conflicting placement requests are reported, not silently followed or expanded into unrelated files. Historical archives remain unchanged.
+
+`memory-file` is available only to the `memory-manager` agent. `read` returns content and SHA-256; `write` requires that `expectedHash` (null only when absent) and a current session identity. Targets are restricted to the canonical project's `.opencode/orchestrator/learnings.md` and direct `.opencode/backlog/*.md` files, excluding instruction files and symlinked paths. Check this before delegation: other authoritative paths and remote trackers remain coordinator-written, never silently migrated. Project-wide memory intentionally uses the canonical root across worktrees; loop scheduling belongs to its invoking plugin location. Changed existing files are archived byte-for-byte and verified before locked temporary-file/rename replacement, with source rechecks and saved-content verification. Receipts contain hashes and archive paths, not the full document. Unchanged writes are no-ops. No delete, force or archive-edit operation is exposed.
+
+Reads and saved/unchanged write receipts include `bytes` (UTF-8), `characters` and `characterUnit: "unicode-code-points"`; these are not token or visual-grapheme counts. Only `learnings.md` also returns `budget` with `targetCharacters: 5000`, non-negative `remainingCharacters` and `excessCharacters`, and `hardLimit: false`. An absent knowledge file reports zero usage and the full remaining budget. Over-budget writes remain intact; tickets have no knowledge-budget restriction.
+
+Assignment scope/exclusive handoff is a coordination rule, not a persisted access grant. Locks serialize cooperating writes but cannot prevent external-editor races. Each `.memory-lock` records the host PID, session ID and creation timestamp; contention reports its path, observed age, owner when readable and safe recovery instructions. Legacy, incomplete or unsafe lock metadata is reported as owner unavailable. No TTL or PID-only unlock is used: confirm the owning session/tool has stopped, inspect live files and archives, then the coordinator may remove only a verified abandoned lock. Interrupted jobs can leave partial per-file saves; there is no multi-file transaction or automatic crash recovery. Independent review remains required; receipts prove saved bytes, not semantic correctness. Shorter files do not erase earlier context. Agent configuration can override permissions, but tool identity/path checks remain.
+
+The admission and single-home principles draw on [Hermes memory](https://github.com/NousResearch/hermes-agent/blob/e5eb6b36fe78eb012cefd1f5f436cd458411b8b3/website/docs/user-guide/features/memory.md) and [OMP's decision consolidator](https://github.com/can1357/oh-my-pi/blob/a536558dc21634462c1b2647676953204569779c/packages/coding-agent/src/prompts/memories/sharpshooter-consolidate-system.md). Froggy does not import their storage engines, automatic review forks, or full-file rewrite tools; source and recovery references remain necessary for coding tickets.
 
 #### Periodic coordination
 
@@ -436,7 +461,9 @@ gitingest({
 
 ### list-child-sessions
 
-List all child sessions (subagents) tracked for the current session. Use the session IDs with recorded task and agent associations for native `subagent` follow-ups. The in-memory list may be incomplete after a plugin reload or server restart.
+List persisted direct child sessions (subagents) for the current session, including children created before a plugin reload or service restart. Every call verifies that the CLI addresses the same service and reads all result pages, refreshing titles and timestamps. Children in other worktrees remain discoverable because the query filters by parent, not location. Use session IDs with recorded task and agent associations for native `subagent` follow-ups.
+
+Successful discovery reports **verified** inventory, including an explicitly verified empty result. If discovery fails, a non-empty in-memory cache is reported as **incomplete**, with the error and a stale-metadata warning. Without cached children, the tool fails with **inventory unavailable**, never a false empty result. Failed pagination never publishes a partial page set as verified. The cache itself is not durable. This is session inventory, not live activity, background-tool ownership, or task completion.
 
 #### Parameters
 
@@ -458,12 +485,13 @@ Returns a formatted list of child sessions with:
 
 Example output:
 ```
+Inventory verified from persisted sessions (all pages).
 Child sessions (2):
 
-1. [abc123] Code Review Session
+1. [ses_abc123] Code Review Session
    Created: 2024-01-15T10:30:00Z | Updated: 2024-01-15T10:35:00Z
 
-2. [def456] Architecture Discussion
+2. [ses_def456] Architecture Discussion
    Created: 2024-01-15T11:00:00Z | Updated: 2024-01-15T11:15:00Z
 ```
 
@@ -473,6 +501,8 @@ Child sessions (2):
 
 `start-orchestrator-loop` enables or updates one persistent reminder loop for the current **root orchestrator session**. `stop-orchestrator-loop` disables that session's loop and cancels its still-pending reminders. The stop tool can also be used after switching the session to another agent.
 
+`orchestrator-status` inspects the current session without starting/stopping the loop, waking execution, changing cadence, or writing storage. It works after switching agents too.
+
 #### Parameters
 
 | Tool | Parameter | Type | Required | Default | Description |
@@ -480,6 +510,7 @@ Child sessions (2):
 | `start-orchestrator-loop` | `objective` | `string` | Yes | - | The user's established objective |
 | `start-orchestrator-loop` | `intervalMinutes` | `integer` | No | `10` | Reminder interval, from 1 to 35791 minutes (the timer's supported range) |
 | `stop-orchestrator-loop` | - | - | - | - | Uses the current session; takes no parameters |
+| `orchestrator-status` | - | - | - | - | Read-only status for the current session; takes no parameters |
 
 Example tool arguments:
 
@@ -492,7 +523,7 @@ Example tool arguments:
 
 #### Behavior
 
-- The first reminder arrives after one interval. Calling start again replaces the objective and cadence and cancels obsolete pending reminders.
+- A new or changed loop first reminds after one interval. Repeating normalized settings at the same location is a no-op: it preserves the original deadline, revision, and pending/in-flight reminder. Calling start after a reload reactivates the persisted cadence if necessary. Changed settings or location replace the loop and cancel obsolete pending reminders.
 - Reminders use `steer`, including when the orchestrator is active. Delivery happens at a step boundary; a running model request or tool may delay it.
 - At most one reminder for the loop remains in the session inbox. Later intervals resume that same synthetic input by ID instead of accumulating messages, including after a reload or a failed wake attempt. Obsolete pending reminder text is replaced at the next interval.
 - Each reminder is a fixed, short coordination check. It asks the orchestrator to check current worker/background activity, new results, pending reviews, and blockers, reconcile meaningful backlog changes and verify saved updates, release eligible temporary workspaces, and advance useful work. The loop does not fetch or inject child/shell inventories or repeat the stored objective.
@@ -504,6 +535,19 @@ Example tool arguments:
 - Stopping removes the persisted configuration, waits for an in-flight reminder attempt even when invoked from another loaded location, and cancels reminders still in the inbox. Already delivered inputs and running worker tasks are not interrupted. Deleting the session removes its loop; plugin cleanup stops timers while retaining enabled configurations for reload.
 
 The `opencode` CLI must be on the server's `PATH` and connect to the same OpenCode service. The plugin checks the target session's identity before using `opencode api` for inbox operations that the plugin SDK does not expose. API calls have a 30-second request timeout; this is not a limit on the loop's lifetime.
+
+#### Status and diagnostics
+
+`orchestrator-status` returns JSON with:
+- `enabled`, `objective`, `intervalMinutes`, `ownerDirectory`, and the current `selectedAgent`.
+- `state`: `disabled`, `scheduled`, `paused`, `not-loaded-here`, or `unknown` when session inspection fails; `suspensionReason` explains agent/parent restrictions.
+- `scheduler.loadedHere` and `scheduler.nextCheckAt` (epoch milliseconds, or null). This is the local timer's next coordination check, not a guaranteed reminder delivery. A different location's stored configuration does not prove its scheduler is loaded there.
+- `pending`: verified reminder IDs, or an explicit unavailable state and inspection error.
+- `diagnostics`: last known reminder admission, successful wake request, and delivery error with timestamps. `lastError` remains historical after a successful retry; compare timestamps. Admission and wake requests do not prove that the model processed the reminder or advanced any ticket.
+
+Delivery diagnostics use separate, revision-scoped plugin storage and survive plugin reloads alongside enabled settings. They are not an operational backlog. Changing settings/location starts a fresh diagnostic scope; stopping or deleting a loop clears its diagnostics. Diagnostic saves and startup cleanup run independently of core scheduling: slow or failed diagnostic I/O does not prevent enablement, reconfiguration or subsequent wakes, including during overlapping reloads. Writes and cleanup are serialized separately across plugin locations; changes during a pending save are coalesced. Persistence and status merge each event by observation timestamp, retaining the saved observation on ties, so late older snapshots do not replace newer diagnostics. Stop cancels pending reminders before draining diagnostic writes/cleanup. Graceful plugin cleanup flushes buffered observations and drains dynamically spawned writes while keeping scheduling disabled; failed saves remain best-effort, not a crash-recovery guarantee.
+
+Diagnostic persistence failures are logged and exposed as `persistenceError` while that runtime remains loaded, with unsaved observations retried at later checks. `persistencePending` indicates queued/in-flight diagnostic I/O; `readError` exposes malformed or unreadable diagnostic storage. Unsaved diagnostics cannot be guaranteed after a process exit. Status is a point-in-time observation, not an atomic snapshot of session, inbox and timer state.
 
 ---
 

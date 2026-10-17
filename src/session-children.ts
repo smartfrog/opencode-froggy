@@ -30,4 +30,8 @@ export class ChildSessionTracker {
     if (!children) return []
     return Array.from(children.values()).sort((a, b) => a.created - b.created)
   }
+
+  replaceChildren(parentID: string, children: ChildSessionInfo[]): void {
+    this.childrenByParent.set(parentID, new Map(children.map((child) => [child.id, child])))
+  }
 }

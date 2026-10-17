@@ -3,6 +3,7 @@ export { convertPdfToMarkdown, type PdfToMarkdownArgs } from "./pdf-to-markdown-
 export { pdfToMarkdownTool } from "./pdf-to-markdown"
 export { createListChildSessionsTool } from "./list-child-sessions"
 export { createOrchestratorLoopTools } from "./orchestrator-loop"
+export { createMemoryFileTool } from "./memory-file"
 export {
   createAgentPromoteTool,
   validateGrade,

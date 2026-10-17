@@ -1,20 +1,34 @@
 import { log } from "../logger"
-import type { ChildSessionTracker } from "../session-children"
+import { asRecord } from "../record"
+import type { ChildSessionInfo, ChildSessionTracker } from "../session-children"
 
-export function createListChildSessionsTool(tracker: ChildSessionTracker) {
+export function createListChildSessionsTool(
+  tracker: ChildSessionTracker,
+  listPersistedChildren: (parentID: string) => Promise<ChildSessionInfo[]>,
+) {
   return {
     name: "list-child-sessions",
-    description: "List all child sessions (subagents) of the current session",
+    description: "List persisted direct child sessions of the current session across reloads. Reports verified inventory or an explicitly incomplete cached fallback; inventory is not worker activity or task completion.",
     input: {
       type: "object",
       properties: {},
       additionalProperties: false,
     },
     async execute(_input: unknown, context: unknown) {
-      const ctx = context as { sessionID: string }
-      const childList = tracker.listChildren(ctx.sessionID)
+      const sessionID = asRecord(context).sessionID
+      if (typeof sessionID !== "string" || !sessionID.startsWith("ses")) throw new Error("A current session is required")
+      let inventory = "Inventory verified from persisted sessions (all pages)."
+      let childList: ChildSessionInfo[]
+      try {
+        childList = await listPersistedChildren(sessionID)
+        tracker.replaceChildren(sessionID, childList)
+      } catch (error) {
+        childList = tracker.listChildren(sessionID)
+        if (!childList.length) throw new Error(`Child session inventory unavailable: ${String(error)}`, { cause: error })
+        inventory = `Inventory incomplete: cached sessions only; metadata may be stale. Discovery failed: ${String(error)}`
+      }
       if (childList.length === 0) {
-        return { content: "No child sessions found" }
+        return { content: `${inventory}\nNo child sessions found` }
       }
 
       log("[list-child-sessions] Found child sessions", { count: childList.length })
@@ -28,7 +42,7 @@ export function createListChildSessionsTool(tracker: ChildSessionTracker) {
         })
         .join("\n\n")
 
-      return { content: `Child sessions (${childList.length}):\n\n${formatted}` }
+      return { content: `${inventory}\nChild sessions (${childList.length}):\n\n${formatted}` }
     },
   }
 }

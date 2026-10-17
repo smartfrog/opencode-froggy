@@ -22,6 +22,7 @@ import {
   pdfToMarkdownTool,
   createListChildSessionsTool,
   createOrchestratorLoopTools,
+  createMemoryFileTool,
   createAgentPromoteTool,
   ethTransactionTool,
   ethAddressTxsTool,
@@ -119,6 +120,7 @@ export default Plugin.define({
         "list-child-sessions",
         "start-orchestrator-loop",
         "stop-orchestrator-loop",
+        "orchestrator-status",
         "agent-promote",
         "eth-transaction",
         "eth-address-txs",
@@ -311,16 +313,19 @@ export default Plugin.define({
       storage: ctx.storage,
       session: orchestratorClients.session,
     })
-    const { startTool: startOrchestratorLoopTool, stopTool: stopOrchestratorLoopTool } = createOrchestratorLoopTools(orchestratorLoop)
-    const listChildSessionsTool = createListChildSessionsTool(tracker)
+    const { startTool: startOrchestratorLoopTool, stopTool: stopOrchestratorLoopTool, statusTool: orchestratorStatusTool } = createOrchestratorLoopTools(orchestratorLoop)
+    const listChildSessionsTool = createListChildSessionsTool(tracker, orchestratorClients.listChildren)
     const agentPromoteTool = createAgentPromoteTool(ctx.agent, modes.set, Object.keys(agents))
 
     await ctx.tool.transform((editor) => {
+      // Memory is shared across worktrees; the loop above belongs to this location.
+      editor.add(createMemoryFileTool(ctx.location.project.canonical))
       editor.add(gitingestTool)
       editor.add(pdfToMarkdownTool)
       editor.add(listChildSessionsTool)
       editor.add(startOrchestratorLoopTool)
       editor.add(stopOrchestratorLoopTool)
+      editor.add(orchestratorStatusTool)
       editor.add(agentPromoteTool)
       editor.add(ethTransactionTool)
       editor.add(ethAddressTxsTool)
