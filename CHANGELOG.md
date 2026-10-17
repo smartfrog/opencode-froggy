@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 1.6.0
 - Add read-only `memory-review` topic inventory and `/memory-review` for an on-demand global knowledge review by memory-manager; report proposals and coverage before user validation, without automatically modifying memory or migrating a store
 - Simplify project memory to task title/status/description, short progress notes, and topic-organized knowledge; remove structured history, field ranges, knowledge kinds and supersession metadata
 - Make `memory-manager` the knowledge curator: it decides what to retain, correct, merge, refuse or permanently delete; mutations use version checks and reads use simple bounded pages
