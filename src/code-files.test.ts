@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "bun:test"
 import { CODE_EXTENSIONS, hasCodeExtension } from "./code-files"
 
 describe("hasCodeExtension", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, jest, mock } from "bun:test"
 import { createSessionContextTool } from "./session-context"
 import { type SessionContextClient } from "../session-context-api"
 import { type SessionSummary } from "../session-context"
@@ -35,10 +35,10 @@ const messages = [
 
 function setup() {
   const client: SessionContextClient = {
-    listSessions: vi.fn(async () => [main, child]),
-    getContext: vi.fn(async () => messages),
-    getSession: vi.fn(async (id: string) => ({ id, created: 1 })),
-    listModelLimits: vi.fn(async () => new Map([["deepseek/deepseek-flash", 10_000]])),
+    listSessions: mock(async () => [main, child]),
+    getContext: mock(async () => messages),
+    getSession: mock(async (id: string) => ({ id, created: 1 })),
+    listModelLimits: mock(async () => new Map([["deepseek/deepseek-flash", 10_000]])),
   }
   return { client, tool: createSessionContextTool("project-1", "/repo", { client }) }
 }
@@ -62,7 +62,7 @@ describe("session-context tool", () => {
 
   it("verifies the invoking session against the host service", async () => {
     const { client } = setup()
-    const verifySession = vi.fn(async () => {})
+    const verifySession = mock(async () => {})
     const tool = createSessionContextTool("project-1", "/repo", { client, verifySession })
 
     await tool.execute({}, { sessionID: "ses_main" })

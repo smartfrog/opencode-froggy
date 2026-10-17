@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, jest, mock, type Mock } from "bun:test"
 import { collectSessionContext } from "./session-context-report"
 import { type SessionContextClient } from "./session-context-api"
 import { type SessionSummary } from "./session-context"
+
+const mocked = <T extends (...args: any[]) => any>(fn: T) => fn as unknown as Mock<T>
 
 const tokens = { input: 1000, output: 200, cacheRead: 3000 }
 const main: SessionSummary = {
@@ -35,10 +37,10 @@ const messages = [
 
 function setup(sessions: SessionSummary[] = [main, child]) {
   const client: SessionContextClient = {
-    listSessions: vi.fn(async () => sessions),
-    getContext: vi.fn(async () => messages),
-    getSession: vi.fn(async (id: string) => ({ id, created: 1 })),
-    listModelLimits: vi.fn(async () => new Map([["deepseek/deepseek-flash", 10_000]])),
+    listSessions: mock(async () => sessions),
+    getContext: mock(async () => messages),
+    getSession: mock(async (id: string) => ({ id, created: 1 })),
+    listModelLimits: mock(async () => new Map([["deepseek/deepseek-flash", 10_000]])),
   }
   return { client, report: collectSessionContext(client, "project-1", 10, "/repo") }
 }
@@ -69,7 +71,7 @@ describe("session context report", () => {
 
   it("isolates a context failure to its session", async () => {
     const { client, report } = setup()
-    vi.mocked(client.getContext).mockImplementation(async (id) => {
+    mocked(client.getContext).mockImplementation(async (id) => {
       if (id === child.id) throw new Error("context unavailable")
       return messages
     })
@@ -82,7 +84,7 @@ describe("session context report", () => {
 
   it("keeps rows when model limits are unavailable", async () => {
     const { client, report } = setup([main])
-    vi.mocked(client.listModelLimits).mockRejectedValue(new Error("model offline"))
+    mocked(client.listModelLimits).mockRejectedValue(new Error("model offline"))
 
     const result = await report
 

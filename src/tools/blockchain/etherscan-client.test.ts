@@ -1,17 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach, jest, mock } from "bun:test"
 import { EtherscanClient, EtherscanClientError, weiToEth, formatTimestamp, shortenAddress } from "./etherscan-client"
 
 describe("EtherscanClient", () => {
   const originalEnv = process.env.ETHERSCAN_API_KEY
-  const mockFetch = vi.fn()
+  const originalFetch = globalThis.fetch
+  const mockFetch = mock()
 
   beforeEach(() => {
-    vi.resetAllMocks()
-    vi.stubGlobal("fetch", mockFetch)
+    jest.clearAllMocks()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    globalThis.fetch = originalFetch
     if (originalEnv) {
       process.env.ETHERSCAN_API_KEY = originalEnv
     } else {

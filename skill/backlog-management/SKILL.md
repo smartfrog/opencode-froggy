@@ -9,7 +9,13 @@ Use the backlog to support delivery, not as an approval queue. Keep enough conte
 
 ## Source of truth
 
-Use one authoritative backlog under the agreed project conventions. Without an established choice, use the project's existing backend or local Markdown at `.opencode/backlog/`. State the backend and its location; do not maintain a second operational backlog in memory, coordination journals, or another tracker. When Linear or Trello is requested, discover actual MCP tools, destinations, statuses, and members before writing. An unresolved requested destination blocks publication; retain pending local drafts until it is identified.
+Use one authoritative backlog under the agreed project conventions. Without an established choice, use the project's existing backend or the structured project store at `.opencode/memory/memory.db`. State the backend and its location; do not maintain a second operational backlog in memory, coordination journals, or another tracker. When Linear or Trello is requested, discover actual MCP tools, destinations, statuses, and members before writing. An unresolved requested destination blocks publication; retain pending local drafts until it is identified.
+
+### Structured project store
+
+Use `task-board` for objectives, acceptance, status, blockers, next actions, assignments and evidence references. Use `knowledge` for durable constraints, decisions, facts and lessons. Start knowledge discovery with `overview`, then `search`, then `get` only the matching notes; never load the whole store. Keep essential note ids in the task's `knowledgeRefs`.
+
+`knowledge` history is the archive for note revisions. Do not create a second archive. Detailed reports, logs and measurements stay in files referenced from the task or note.
 
 Keep an existing backlog authoritative until an agreed migration is verified. Reconcile open work against sessions and evidence, including unresolved recovery or workspace cleanup on completed tickets; preserve ticket IDs, constraints, review and recovery references, and retain the original history. Independently check the migrated current state before recording the new authority and stopping updates to the previous backend. Keep the previous tracker accessible as history rather than deleting it or synchronizing both backlogs. If a tracker becomes inaccessible, continue independently actionable work and mark local notes pending reconciliation rather than treating them as remote state.
 
@@ -21,7 +27,7 @@ The product owner clarifies product intent, priorities, acceptance, and initial 
 
 Create only the tickets needed to coordinate delivery. A ticket should have a coherent objective; keep tightly coupled changes together instead of turning test/code/refactor/review steps into separate tickets. Missing administrative fields do not make otherwise clear work unready.
 
-The coordinator owns the backlog. For `memory-manager` curation, keep one active assignment per backlog, record its session and named files, and suspend coordinator edits to those files. Resume ownership after handback, or after confirmed termination and inspection of partial writes; reconcile incoming results afterward. Do not bypass conflicts or clear locks without verifying abandonment. Other workers return evidence without editing coordination files. Distinguish tracker assignees from worker sessions and do not invent platform accounts; retain ticket IDs and link successor work when regrouping.
+The coordinator owns the backlog and saves structured tasks. `memory-manager` may read those tasks and return suggested edits, but saves only knowledge. For a curation pass, record its session and delegated note ids or legacy files; keep one writer per delegated scope until handback. For legacy file curation, suspend coordinator edits to those files. Resume ownership after handback, or after confirmed termination and inspection of partial writes; reconcile incoming results afterward. Do not bypass conflicts or clear locks without verifying abandonment. Other workers return evidence without editing coordination state. Distinguish tracker assignees from worker sessions and do not invent platform accounts; retain ticket IDs and link successor work when regrouping.
 
 Keep tickets minimal: stable ID, title, objective, observable acceptance criteria or investigation question, and status. Add kind (`implementation`, `research`, `analysis`, `verification`), scope, priority, or rationale when useful. Record who is executing, evidence on delivery, and a next step or blocker for unfinished active work.
 
@@ -41,9 +47,9 @@ Record real dependencies: what upstream code, report, or decision is needed and 
 
 Use native fields and existing statuses when practical, descriptions otherwise. Represent pending review or integration with a note when the board has no matching stage; do not require new columns to proceed.
 
-## Local Markdown backlog
+## Legacy local Markdown backlog
 
-One file per stable ticket ID at `.opencode/backlog/<id>.md`, unless project conventions differ. Record one authoritative absolute directory shared across worktrees; do not create divergent copies. The bundled `memory-manager` supports only direct `.md` tickets in the canonical project's `.opencode/backlog/` and its `.opencode/orchestrator/learnings.md`. Check this before delegation: a custom directory or another retained checkout remains coordinator-written, not silently moved. Keep filenames when titles/statuses change; quote YAML values where needed. Do not create a ticket per worker, review, test or trial.
+Use this only for a project that has not migrated to the structured store. One file per stable ticket ID at `.opencode/backlog/<id>.md`, unless project conventions differ. Record one authoritative absolute directory shared across worktrees; do not create divergent copies. The bundled `memory-manager` can still use `memory-file` for direct `.md` tickets in the canonical project's `.opencode/backlog/` and its `.opencode/orchestrator/learnings.md`. Check this before delegation: a custom directory or another retained checkout remains coordinator-written, not silently moved. Keep filenames when titles/statuses change; quote YAML values where needed. Do not create a ticket per worker, review, test or trial.
 
 ```markdown
 ---

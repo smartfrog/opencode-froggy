@@ -2,24 +2,29 @@ import { createHash } from "node:crypto"
 import { closeSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import * as fs from "node:fs"
+import { afterEach, beforeEach, describe, expect, it, jest, mock } from "bun:test"
 import { createMemoryFileTool } from "./memory-file"
 
 const CONTEXT = { agent: "memory-manager", sessionID: "ses_memory" }
 const PATH = ".opencode/backlog/TASK.md"
 const hash = (text: string) => createHash("sha256").update(text).digest("hex")
 
-vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>()
-  return { ...actual, writeFileSync: vi.fn(actual.writeFileSync), unlinkSync: vi.fn(actual.unlinkSync), closeSync: vi.fn(actual.closeSync), renameSync: vi.fn(actual.renameSync) }
-})
+const actualFs = { writeFileSync: fs.writeFileSync, unlinkSync: fs.unlinkSync, closeSync: fs.closeSync, renameSync: fs.renameSync }
+let writeFileSyncSpy: ReturnType<typeof jest.spyOn<typeof fs, "writeFileSync">>
+let unlinkSyncSpy: ReturnType<typeof jest.spyOn<typeof fs, "unlinkSync">>
+let closeSyncSpy: ReturnType<typeof jest.spyOn<typeof fs, "closeSync">>
+let renameSyncSpy: ReturnType<typeof jest.spyOn<typeof fs, "renameSync">>
 
 describe("guarded memory files", () => {
   let directory: string
   let tool: ReturnType<typeof createMemoryFileTool>
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    writeFileSyncSpy = jest.spyOn(fs, "writeFileSync")
+    unlinkSyncSpy = jest.spyOn(fs, "unlinkSync")
+    closeSyncSpy = jest.spyOn(fs, "closeSync")
+    renameSyncSpy = jest.spyOn(fs, "renameSync")
     directory = mkdtempSync(join(tmpdir(), "froggy-memory-"))
     mkdirSync(join(directory, ".opencode/backlog"), { recursive: true })
     writeFileSync(join(directory, PATH), "Original evidence\n")
@@ -27,9 +32,7 @@ describe("guarded memory files", () => {
   })
 
   afterEach(() => {
-    vi.mocked(writeFileSync).mockRestore()
-    vi.mocked(unlinkSync).mockRestore()
-    vi.mocked(renameSync).mockRestore()
+    jest.restoreAllMocks()
     rmSync(directory, { recursive: true, force: true })
   })
 
@@ -158,11 +161,11 @@ describe("guarded memory files", () => {
   })
 
   it("records the owning process and session before replacement", async () => {
-    const actual = await vi.importActual<typeof import("node:fs")>("node:fs")
+    const actual = actualFs
     let owner: unknown
-    vi.mocked(renameSync).mockImplementation((from, to) => {
+    renameSyncSpy.mockImplementation((from, to) => {
       owner = JSON.parse(readFileSync(join(directory, `${PATH}.memory-lock`), "utf8"))
-      actual.renameSync(from, to)
+      actualFs.renameSync(from, to)
     })
 
     await tool.execute({ action: "write", path: PATH, expectedHash: hash("Original evidence\n"), content: "Replacement" }, CONTEXT)
@@ -219,10 +222,10 @@ describe("guarded memory files", () => {
   })
 
   it("releases its lock if writing owner metadata fails", async () => {
-    const actual = await vi.importActual<typeof import("node:fs")>("node:fs")
+    const actual = actualFs
     const failure = new Error("Disk full while recording lock owner")
-    vi.mocked(writeFileSync).mockImplementationOnce((file) => {
-      actual.writeFileSync(file, "{")
+    writeFileSyncSpy.mockImplementationOnce((file) => {
+      actualFs.writeFileSync(file, "{")
       throw failure
     })
 
@@ -230,7 +233,7 @@ describe("guarded memory files", () => {
 
     expect(readFileSync(join(directory, PATH), "utf8")).toBe("Original evidence\n")
     expect(existsSync(join(directory, `${PATH}.memory-lock`))).toBe(false)
-    expect(vi.mocked(closeSync)).toHaveBeenCalledOnce()
+    expect(closeSyncSpy).toHaveBeenCalledTimes(1)
   })
 
   it("leaves live content unchanged if preservation fails", async () => {
@@ -416,17 +419,17 @@ describe("guarded memory files", () => {
   })
 
   it.each([false, true])("releases the lock after partial write failure, even when temporary removal fails: %s", async (cleanupFails) => {
-    const actual = await vi.importActual<typeof import("node:fs")>("node:fs")
+    const actual = actualFs
     const writeError = new Error("Disk full during temporary write")
     const cleanupError = new Error("Cannot remove temporary")
-    vi.mocked(writeFileSync).mockImplementation((file, data, options) => {
+    writeFileSyncSpy.mockImplementation((file, data, options) => {
       if (typeof file === "number" && Buffer.isBuffer(data)) {
-        actual.writeFileSync(file, "partial")
+        actualFs.writeFileSync(file, "partial")
         throw writeError
       }
-      actual.writeFileSync(file, data, options)
+      actualFs.writeFileSync(file, data, options)
     })
-    if (cleanupFails) vi.mocked(unlinkSync).mockImplementation((path) => {
+    if (cleanupFails) unlinkSyncSpy.mockImplementation((path) => {
       if (String(path).endsWith(".tmp")) throw cleanupError
       actual.unlinkSync(path)
     })
@@ -438,7 +441,7 @@ describe("guarded memory files", () => {
     }
     expect(readFileSync(join(directory, PATH), "utf8")).toBe("Original evidence\n")
     expect(existsSync(join(directory, `${PATH}.memory-lock`))).toBe(false)
-    expect(vi.mocked(closeSync)).toHaveBeenCalledTimes(2)
+    expect(closeSyncSpy).toHaveBeenCalledTimes(2)
     expect(readdirSync(join(directory, ".opencode/backlog")).filter((name) => name.endsWith(".tmp"))).toHaveLength(cleanupFails ? 1 : 0)
   })
 })

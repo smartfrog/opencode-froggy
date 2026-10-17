@@ -46,6 +46,8 @@ See [Orchestrator loop](#orchestrator-loop) for tools and configuration.
 - [Tools](#tools)
   - [gitingest](#gitingest)
   - [list-child-sessions](#list-child-sessions)
+  - [task-board](#task-board)
+  - [knowledge](#knowledge)
   - [session-context](#session-context)
   - [Orchestrator loop](#orchestrator-loop)
   - [pdf-to-markdown](#pdf-to-markdown)
@@ -229,11 +231,21 @@ Status and delivery evidence live in the backlog, not memory. Active tickets als
 
 Follow the backlog skill's [conservation policy](skill/backlog-management/SKILL.md#conservation): local files survive a service restart, but this is not a backup. Record explicitly approved Git history, a verified external backup, or `local-only` alongside the authority path. Same-checkout archives and ignore rules do not protect against checkout/disk loss; no automatic backup, commit or ignore-rule change is performed. The isolated recovery tests use fresh Node processes, disk-backed fixture storage and simulated sessions/clock; they do not demonstrate a live OpenCode restart or model-driven recovery.
 
+#### Structured project memory
+
+New projects use one SQLite database per canonical project at `.opencode/memory/memory.db`; worktrees share that database. `task-board` owns objectives, acceptance, status, blockers, next actions, assignments and evidence references. `knowledge` owns durable constraints, decisions, facts and lessons, grouped by topic and kind. Both tools return bounded summaries; detailed reports, logs and measurements stay in files referenced from a task or note.
+
+Start a knowledge pass with `knowledge` action `overview`, which returns the active `project-rules` note and the available topics. Use `search` for a focused query, then `get` only the matching notes. Updates require the expected revision and archive the previous record; a stale write is rejected rather than overwriting concurrent work. Reads are bounded: use `offset`, `limit`, `field` and `item` to continue through accepted long fields, with `expectedRevision` pinning a range to one revision. List, search, overview and history pages honor their page limits and shrink to fit the serialized response budget, including Unicode and escaped text. Only `memory-manager` may change knowledge, and only the orchestrator or build agent may change tasks. The database path rejects symbolic-link and unsafe hard-link escapes before opening.
+
+Both tools expose history on demand. `history` returns at most five archived revision summaries per page with `nextOffset`. `full: true` adds bounded previews, not complete snapshots. Select `revision` with `history` to read one immutable archived snapshot as JSON text ranges: concatenate the `text` values using `nextOffset`, then parse the result. Current and archived reads do not change records or create history. List pagination reflects live state; if records are updated between pages, refresh the list before relying on its completeness.
+
+Markdown memory (`memory-file`) remains supported for legacy projects that have not migrated. Do not maintain both backends for the same project.
+
 #### Memory manager
 
-The bundled [memory-manager](agent/memory-manager.md) writes explicitly delegated local memory/ticket files. Its default permissions allow local discovery and `memory-file`, not native editing, shell, delegation or remote mutations. Use it at useful milestones with named supported files, facts/decisions and constraints, following the backlog skill's [exclusive ownership handoff](skill/backlog-management/SKILL.md#responsibilities-and-tickets), not on every reminder. No new timer or hook is added.
+The bundled [memory-manager](agent/memory-manager.md) writes explicitly delegated structured knowledge or legacy local memory/ticket files. Its default permissions allow local discovery, `knowledge`, read-only `task-board` access and legacy `memory-file`, not native editing, shell, delegation or remote mutations. Use it at useful milestones with named supported files, facts/decisions and constraints, following the backlog skill's [exclusive ownership handoff](skill/backlog-management/SKILL.md#responsibilities-and-tickets), not on every reminder. No new timer or hook is added.
 
-Its primary mission is useful, deduplicated, topic-organized knowledge adapted to the project, not merely translating or recording updates. Curated prose is in English; identifiers, paths, hashes and exact quotations remain verbatim. Operational status, assignments, build deliveries and planned runs stay in tickets rather than being copied into knowledge. Conflicting placement requests are reported, not silently followed or expanded into unrelated files. Historical archives remain unchanged.
+Its primary mission is useful, deduplicated, topic-organized knowledge adapted to the project, not merely translating or recording updates. Curated prose is in English; identifiers, paths, hashes and exact quotations remain verbatim. Operational status, assignments, build deliveries and planned runs stay in tickets rather than being copied into knowledge. Structured task-text suggestions are returned unsaved for the coordinator to apply; the manager saves knowledge itself. Legacy projects keep using their explicitly delegated Markdown files rather than invoking structured discovery. Conflicting placement requests are reported, not silently followed or expanded into unrelated files. Historical archives remain unchanged.
 
 `memory-file` is available only to the `memory-manager` agent. `stat` returns the SHA-256, size, line count and section index; `read` returns content in bounded line ranges with the hash and a continuation offset; `patch` replaces one unique passage; `write` replaces the whole document. `write` and `patch` require that `expectedHash` (null only for an absent file on write) and a current session identity. Targets are restricted to the canonical project's `.opencode/orchestrator/learnings.md` and direct `.opencode/backlog/*.md` files, excluding instruction files and symlinked paths. Check this before delegation: other authoritative paths and remote trackers remain coordinator-written, never silently migrated. Project-wide memory intentionally uses the canonical root across worktrees; loop scheduling belongs to its invoking plugin location. Changed existing files are archived byte-for-byte and verified before locked temporary-file/rename replacement, with source rechecks and saved-content verification. Receipts contain hashes, archive paths, and character/line deltas, not the full document. Unchanged writes are no-ops. No delete, force or archive-edit operation is exposed.
 
@@ -497,6 +509,72 @@ Child sessions (2):
 ```
 
 ---
+
+### task-board
+
+Read and update the project's coordination state in `.opencode/memory/memory.db`. Tasks are shared across worktrees of the same canonical project. `list` and `get` are bounded reads; `save` performs a revision-checked partial update and archives the previous record. Only the `orchestrator` and `build` agents may save tasks.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | `"list" \| "get" \| "save" \| "history"` | Yes | Operation |
+| `id` | `string` | For get/save/history | Stable task id |
+| `revision` | `integer` | No | Archived revision selected by `history`; its JSON snapshot is read with `offset`/`limit` |
+| `field` | `string` | No | One task field for a ranged read |
+| `item` | `integer` | No | Array item index for a ranged read |
+| `status` | `string` | No | List filter or new task status |
+| `offset` | `integer` | No | Character, item or list/history row offset |
+| `limit` | `integer` | No | Range or page limit |
+| `expectedRevision` | `integer \| null` | To update or pin a ranged read | Current revision; omit only to create |
+| `title`, `objective`, `acceptance`, `currentState`, `nextAction`, `blockers` | `string` | No | Partial task fields |
+| `knowledgeRefs`, `evidence`, `assignments` | `string[]` | No | Referenced note ids, evidence paths and compact agent/session/workspace/revision references |
+| `full` | `boolean` | No | Include bounded historical previews; use `revision` for a complete snapshot |
+
+#### Usage Examples
+
+```typescript
+taskBoard({ action: "list", status: "in-progress" })
+taskBoard({ action: "get", id: "GAMEPLAY" })
+taskBoard({ action: "save", id: "GAMEPLAY", expectedRevision: 3, nextAction: "Run trial #14" })
+taskBoard({ action: "get", id: "GAMEPLAY", field: "currentState", offset: 0, limit: 4000, expectedRevision: 4 })
+taskBoard({ action: "history", id: "GAMEPLAY", offset: 5 })
+taskBoard({ action: "history", id: "GAMEPLAY", revision: 1, offset: 0, limit: 4000 })
+```
+
+### knowledge
+
+Read and curate durable project knowledge. `overview` exposes `project-rules` and available topics; `search` returns short hits; `get` reads one note; `save` applies a revision-checked correction; `history` exposes archived revisions. Only `memory-manager` may save.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | `"overview" \| "search" \| "get" \| "save" \| "history"` | Yes | Operation |
+| `id` | `string` | For get/save/history | Stable note id |
+| `revision` | `integer` | No | Archived revision selected by `history`; its JSON snapshot is read with `offset`/`limit` |
+| `field` | `string` | No | One note field for a ranged read |
+| `item` | `integer` | No | Array item index for a ranged read |
+| `query` | `string` | For search | Text matched against topic, title and content |
+| `topic`, `kind`, `status` | `string` | No | Topic filter/field, kind filter/field, note status |
+| `offset` | `integer` | No | Character, item, topic or history row offset |
+| `limit` | `integer` | No | Range or page limit |
+| `expectedRevision` | `integer \| null` | To update or pin a ranged read | Current revision; omit only to create |
+| `title`, `content` | `string` | For create | Note text |
+| `sources` | `string[]` | No | Paths, hashes, sessions or quotations |
+| `supersededBy` | `string \| null` | No | Replacement note id, using the same bounded format as note ids |
+| `full` | `boolean` | No | Include bounded historical previews; use `revision` for a complete snapshot |
+
+#### Usage Examples
+
+```typescript
+knowledge({ action: "overview" })
+knowledge({ action: "search", query: "idle cycles", topic: "runtime" })
+knowledge({ action: "get", id: "runtime-idle-accounting" })
+knowledge({ action: "save", id: "runtime-idle-accounting", expectedRevision: 2, content: "Corrected conclusion." })
+knowledge({ action: "get", id: "runtime-idle-accounting", offset: 0, limit: 10000, expectedRevision: 3 })
+knowledge({ action: "history", id: "runtime-idle-accounting", revision: 1, offset: 0, limit: 4000 })
+```
 
 ### session-context
 

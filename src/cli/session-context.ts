@@ -6,7 +6,7 @@ import { collectSessionContext } from "../session-context-report"
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 50
 const HELP = `Usage: froggy-session-context [--markdown] [limit]
-       npm run session-context -- [--markdown] [limit]
+       bun run session-context -- [--markdown] [limit]
 
 Analyze the most recent sessions in the current project, including subagents.
 limit: integer from 1 to ${MAX_LIMIT}; defaults to ${DEFAULT_LIMIT}.

@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "bun:test"
 import { loadAgents } from "./loaders"
 
 function memoryManager() {
@@ -18,13 +18,15 @@ describe("bundled memory manager", () => {
     ["glob", "allow"],
     ["grep", "allow"],
     ["memory-file", "allow"],
+    ["knowledge", "allow"],
+    ["task-board", "allow"],
     ["edit", "deny"],
     ["shell", "deny"],
     ["execute", "deny"],
     ["subagent", "deny"],
     ["webfetch", "deny"],
     ["trelloWriteCard", "deny"],
-  ])("resolves %s permission to %s", (action, effect) => {
+  ] as [string, "allow" | "deny" | "ask"][])("resolves %s permission to %s", (action, effect) => {
     const rules = memoryManager().permissions
     if (!Array.isArray(rules)) throw new Error("Expected ordered permission rules")
     const rule = [...rules].reverse().find((item) => item.action === action || item.action === "*")

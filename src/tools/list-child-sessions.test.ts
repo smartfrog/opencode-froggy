@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, jest, mock } from "bun:test"
 import { ChildSessionTracker } from "../session-children"
 import { createListChildSessionsTool } from "./list-child-sessions"
 
@@ -7,7 +7,7 @@ const CONTEXT = { sessionID: "ses_parent" }
 
 describe("persisted child inventory tool", () => {
   it("retrieves existing children with an empty event registry", async () => {
-    const read = vi.fn(async () => [CHILD])
+    const read = mock(async () => [CHILD])
     const tool = createListChildSessionsTool(new ChildSessionTracker(), read)
 
     const result = await tool.execute({}, CONTEXT)
@@ -18,7 +18,7 @@ describe("persisted child inventory tool", () => {
   })
 
   it("refreshes cached titles and timestamps on each call", async () => {
-    const read = vi.fn().mockResolvedValueOnce([CHILD]).mockResolvedValueOnce([{ ...CHILD, title: "Renamed", updated: 5000 }])
+    const read = mock().mockResolvedValueOnce([CHILD]).mockResolvedValueOnce([{ ...CHILD, title: "Renamed", updated: 5000 }])
     const tool = createListChildSessionsTool(new ChildSessionTracker(), read)
     await tool.execute({}, CONTEXT)
 
@@ -61,7 +61,7 @@ describe("persisted child inventory tool", () => {
   })
 
   it("validates the invoking session before discovery", async () => {
-    const read = vi.fn(async () => [])
+    const read = mock(async () => [])
     const tool = createListChildSessionsTool(new ChildSessionTracker(), read)
 
     await expect(tool.execute({}, {})).rejects.toThrow("session")

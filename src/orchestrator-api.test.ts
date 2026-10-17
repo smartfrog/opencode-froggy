@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, jest, mock } from "bun:test"
 import { createOrchestratorClients, type OpenCodeRequest } from "./orchestrator-api"
 
 function setup() {
   const native = {
-    get: vi.fn(async () => ({ id: "ses_parent", time: { created: 123 } })),
-    synthetic: vi.fn(async () => ({ id: "msg_reminder" })),
+    get: mock(async () => ({ id: "ses_parent", time: { created: 123 } })),
+    synthetic: mock(async () => ({ id: "msg_reminder" })),
   }
-  const request = vi.fn<OpenCodeRequest>()
+  const request = mock<OpenCodeRequest>()
   return { native, request, ...createOrchestratorClients(native, request) }
 }
 
@@ -82,7 +82,7 @@ describe("orchestrator API bridge", () => {
 
     await expect(session.inbox.list({ sessionID: "ses_parent" })).rejects.toThrow("same OpenCode service")
 
-    expect(request).toHaveBeenCalledOnce()
+    expect(request).toHaveBeenCalledTimes(1)
   })
 
   it("rejects malformed inbox data instead of claiming no reminders are pending", async () => {

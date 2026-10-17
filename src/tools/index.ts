@@ -5,6 +5,8 @@ export { createListChildSessionsTool } from "./list-child-sessions"
 export { createSessionContextTool } from "./session-context"
 export { createOrchestratorLoopTools } from "./orchestrator-loop"
 export { createMemoryFileTool } from "./memory-file"
+export { createTaskBoardTool } from "./task-board"
+export { createKnowledgeTool } from "./knowledge"
 export {
   createAgentPromoteTool,
   validateGrade,

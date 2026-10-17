@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, jest, mock } from "bun:test"
 import { createSessionContextClient, resolveProjectID } from "./session-context-api"
 import { type OpenCodeRequest } from "./orchestrator-api"
 
 function setup() {
-  const request = vi.fn<OpenCodeRequest>()
-  const fetchContext = vi.fn<(url: string, headers?: Record<string, string>) => Promise<unknown>>()
-  const endpoint = vi.fn(async () => ({ url: "http://127.0.0.1:1234", password: "secret" }))
+  const request = mock<OpenCodeRequest>()
+  const fetchContext = mock<(url: string, headers?: Record<string, string>) => Promise<unknown>>()
+  const endpoint = mock(async () => ({ url: "http://127.0.0.1:1234", password: "secret" }))
   return {
     request,
     fetchContext,
@@ -157,7 +157,7 @@ describe("session context API", () => {
 
   it("uses an injected host-bound context reader", async () => {
     const { request } = setup()
-    const readContext = vi.fn(async () => [{ type: "user", text: "host context" }])
+    const readContext = mock(async () => [{ type: "user", text: "host context" }])
     const client = createSessionContextClient({ request, readContext })
 
     await expect(client.getContext("ses_main")).resolves.toEqual([{ type: "user", text: "host context" }])

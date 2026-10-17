@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+- Replace npm, Node and Vitest with Bun for installs, scripts, tests, CI and the lockfile; publication keeps npm only for OIDC provenance
+- Add a per-project SQLite coordination store at `.opencode/memory/memory.db` with `task-board` for revision-checked task state and `knowledge` for topic-organized durable knowledge; both return bounded summaries and archive previous revisions
+- Read and validate revisions inside the write transaction and require exactly one updated row, preventing false success and duplicate history under concurrent writers
+- Reject memory directories, database files and sidecars that escape the canonical project through symbolic links or unsafe hard links
+- Bound summaries, overviews, search results, history and reference arrays; expose truncation metadata and list/search/topic continuations
+- Add revision-pinned `offset`/`limit`/`field`/`item` ranges so accepted long task and note content can be read completely without modifying it
+- Paginate complete task/note histories and expose selected archived revisions as bounded JSON ranges; honor overview limits and fit pages to the actual serialized budget
+- Validate replacement note ids before saving; share field-range, response-budget and history handling between memory tools and clarify structured-versus-legacy ownership
+- Add `knowledge` overview topics, focused search, full-note reads and on-demand history; restrict knowledge writes to `memory-manager` and task writes to the coordinator
+- Update `memory-manager`, `orchestrator` and `backlog-management` to prefer the structured store while keeping legacy Markdown memory supported
 - Add `/session-context` and a read-only `session-context` tool for recent project sessions, including subagents: Markdown table with agent/model, active context size, model-window usage, cumulative tokens/cost and character shares by category; only aggregated results are returned, never raw session messages
 - Fix `memory-file` section indexing for CRLF files and fenced code contained in list items
 - Add `memory-file` structure inspection, bounded range reads, and unique passage patches with the existing hash, archive and lock guarantees; report character/line deltas so the manager avoids whole-file rewrites

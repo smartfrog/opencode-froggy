@@ -1,19 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, jest, beforeEach, afterEach } from "bun:test"
+import * as fs from "node:fs"
 import { join } from "node:path"
+import { getUserConfigDir, getGlobalHookDir, getGlobalCommandDir, getGlobalAgentDir, getProjectHookDir } from "./config-paths"
 import { homedir } from "node:os"
 
 describe("config-paths", () => {
   const originalPlatform = process.platform
   const originalEnv = { ...process.env }
 
-  beforeEach(() => {
-    vi.resetModules()
-  })
-
   afterEach(() => {
     Object.defineProperty(process, "platform", { value: originalPlatform })
     process.env = { ...originalEnv }
-    vi.doUnmock("node:fs")
+    jest.restoreAllMocks()
   })
 
   describe("getUserConfigDir", () => {
@@ -21,7 +19,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "linux" })
       process.env.XDG_CONFIG_HOME = "/custom/config"
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe("/custom/config")
     })
 
@@ -29,7 +26,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "linux" })
       delete process.env.XDG_CONFIG_HOME
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
     })
 
@@ -37,7 +33,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "darwin" })
       process.env.XDG_CONFIG_HOME = "/custom/mac/config"
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe("/custom/mac/config")
     })
 
@@ -45,7 +40,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "darwin" })
       delete process.env.XDG_CONFIG_HOME
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
     })
 
@@ -54,11 +48,8 @@ describe("config-paths", () => {
       delete process.env.XDG_CONFIG_HOME
       process.env.APPDATA = "C:\\Users\\Test\\AppData\\Roaming"
 
-      vi.doMock("node:fs", () => ({
-        existsSync: () => false,
-      }))
+      jest.spyOn(fs, "existsSync").mockReturnValue(false)
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
     })
 
@@ -70,11 +61,8 @@ describe("config-paths", () => {
 
       const appdataHooksPath = join(appdataDir, "opencode", "hook", "hooks.md")
 
-      vi.doMock("node:fs", () => ({
-        existsSync: (path: string) => path === appdataHooksPath,
-      }))
+      jest.spyOn(fs, "existsSync").mockImplementation((path) => path === appdataHooksPath)
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe(appdataDir)
     })
 
@@ -86,11 +74,8 @@ describe("config-paths", () => {
 
       const crossPlatformHooksPath = join(homedir(), ".config", "opencode", "hook", "hooks.md")
 
-      vi.doMock("node:fs", () => ({
-        existsSync: (path: string) => path === crossPlatformHooksPath,
-      }))
+      jest.spyOn(fs, "existsSync").mockImplementation((path) => path === crossPlatformHooksPath)
 
-      const { getUserConfigDir } = await import("./config-paths")
       expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
     })
   })
@@ -100,7 +85,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "linux" })
       delete process.env.XDG_CONFIG_HOME
 
-      const { getGlobalHookDir } = await import("./config-paths")
       expect(getGlobalHookDir()).toBe(join(homedir(), ".config", "opencode", "hook"))
     })
 
@@ -108,7 +92,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "linux" })
       process.env.XDG_CONFIG_HOME = "/custom/config"
 
-      const { getGlobalHookDir } = await import("./config-paths")
       expect(getGlobalHookDir()).toBe("/custom/config/opencode/hook")
     })
   })
@@ -118,7 +101,6 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "linux" })
       delete process.env.XDG_CONFIG_HOME
 
-      const { getGlobalCommandDir } = await import("./config-paths")
       expect(getGlobalCommandDir()).toBe(join(homedir(), ".config", "opencode", "commands"))
     })
   })
@@ -128,19 +110,16 @@ describe("config-paths", () => {
       Object.defineProperty(process, "platform", { value: "linux" })
       delete process.env.XDG_CONFIG_HOME
 
-      const { getGlobalAgentDir } = await import("./config-paths")
       expect(getGlobalAgentDir()).toBe(join(homedir(), ".config", "opencode", "agents"))
     })
   })
 
   describe("getProjectHookDir", () => {
     it("should return correct path for project directory", async () => {
-      const { getProjectHookDir } = await import("./config-paths")
       expect(getProjectHookDir("/my/project")).toBe("/my/project/.opencode/hook")
     })
 
     it("should handle Windows-style paths", async () => {
-      const { getProjectHookDir } = await import("./config-paths")
       const result = getProjectHookDir("C:\\Users\\Test\\project")
       expect(result).toContain(".opencode")
       expect(result).toContain("hook")

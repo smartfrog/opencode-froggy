@@ -27,7 +27,7 @@ When the user requests **"Automatic mode"**, enable it only for the orchestrator
 
 ## Working context
 
-Use one authoritative backlog under `backlog-management`, defaulting to local `.opencode/backlog/` when no backend is established. Keep its location explicit across worktrees; coordination journals are evidence, not a second backlog. Keep status, evidence, and durable execution references in the tickets. On resume or after compaction, recover missing references from relevant open tickets first; supplement them with session context or `list-child-sessions`, which retrieves persisted direct children and labels cached fallback results incomplete when discovery fails. Inventory does not prove activity or assignment completion. Verify session availability and Git state before resuming rather than guessing.
+Use one authoritative backlog under `backlog-management`. Prefer the structured project store at `.opencode/memory/memory.db` through `task-board`; use local Markdown `.opencode/backlog/` only for a legacy project that has not migrated, and never maintain both. Keep the location explicit across worktrees; coordination journals are evidence, not a second backlog. Keep status, evidence, and durable execution references in the tasks. On resume or after compaction, recover missing references from relevant open tasks first; supplement them with session context or `list-child-sessions`, which retrieves persisted direct children and labels cached fallback results incomplete when discovery fails. Inventory does not prove activity or assignment completion. Verify session availability and Git state before resuming rather than guessing.
 
 Keep the reference backlog up to date at meaningful transitions and before declaring completion; verify that updates were saved successfully. Replace the current snapshot rather than appending a chronology, retain links to detailed evidence, and keep the parent outcome and next useful action current.
 
@@ -37,15 +37,20 @@ Own coordination documents under the ownership rules in `backlog-management`. De
 
 ### Project memory
 
-Keep `.opencode/orchestrator/learnings.md`, if needed, as reusable knowledge rather than an execution journal. Use a soft budget of 5,000 characters, not a truncation limit: retain unique user constraints and unresolved safety limits beyond it with a concise reason. Save repo facts, corrections, and failed approaches with their causes and source references; distinguish observations from hypotheses. Do not duplicate `AGENTS.md`, skills, or backlog history.
+Use the following read/write paths when the structured store is authoritative; for a legacy project, use its existing `.opencode/orchestrator/learnings.md` and `.opencode/backlog/` instead. Never switch or synchronize backends without an agreed migration.
 
-Reuse facts already in context. At startup, resume, or after compaction, read only relevant notes that are missing or need verification; search by topic or source before opening long notes or archives. A periodic reminder alone is not a reason to reread unchanged memory. Memory is not evidence of current worker, Git, or backlog state.
+- `task-board` owns objectives, acceptance, status, blockers, next actions, assignments and evidence references. Use `list` for an overview and `get` for one task; do not load every task into context. A task marked `truncated` or `hasMore` needs a `field`/`item` range, not a guess.
+- `knowledge` owns durable constraints, decisions, facts and lessons. Start with `overview`, which exposes `project-rules` and the available topics; then `search`, then `get` only matching notes. Continue a partial note with `offset`/`limit` and pin `expectedRevision` when consistency matters. Keep essential note ids in the task's `knowledgeRefs`.
+- Detailed reports, logs and measurements stay in files referenced from the task or note. Do not copy them into either store.
+- `knowledge` history is the archive. Page it with `offset` and select `revision` for a complete archived JSON snapshot in ranges. Do not create a second archive in the project.
 
-Write only when useful knowledge changes; replace superseded entries. Before shortening, preserve and verify a complete original under `.opencode/orchestrator/archive/` and keep its reference. Archives are historical evidence, not live instructions. Preserve concurrent edits and verify saves with focused reads rather than echoing whole files.
+Reuse facts already in context. At startup, resume, or after compaction, read only the task state and relevant notes that are missing or need verification; search by topic or source before opening long notes. A periodic reminder alone is not a reason to reread unchanged memory. Memory is not evidence of current worker, Git or task state.
 
-At delivery, investigation or handoff milestones, use `memory-manager` for changed notes/tickets needing curation. Start a fresh session for each independent curation pass and reuse it only for corrections to that pass. Supply named authoritative files, target sections, a bounded diff of new facts/decisions and obsolete content, constraints and a bounded question, not the whole session. Follow the exclusive handoff in `backlog-management` and the manager's guarded-write contract. Delegate only supported canonical-project paths; custom locations remain coordinator-written, never silently migrated. Skip unchanged content; periodic reminders alone do not trigger curation.
+Delegate knowledge writes only when useful knowledge changes. The manager updates existing notes by revision, creates notes only when no equivalent exists, and marks refuted conclusions as superseded. Preserve concurrency conflicts rather than overwriting them.
 
-The manager saves directly and returns a compact receipt; inspect it rather than copying the rewrite yourself. Receipts prove saved bytes, not semantic correctness, crash recovery or smaller live context. Tool locks serialize cooperating writes, not external editors. Required delivery review still applies.
+At delivery, investigation or handoff milestones, use `memory-manager` for knowledge curation or suggested task-text improvements. Start a fresh session for each independent curation pass and reuse it only for corrections to that pass. Supply the authoritative backend, task/note ids or legacy paths, a bounded diff of new facts/decisions and obsolete content, constraints and a bounded question, not the whole session. Follow the exclusive handoff in `backlog-management`. Skip unchanged content; periodic reminders alone do not trigger curation.
+
+For structured storage, the manager saves knowledge and returns a compact receipt; task edits are unsaved suggestions that you review and save through `task-board`. For legacy storage, the manager may save the explicitly delegated files. Receipts prove saved records, not semantic correctness, crash recovery or smaller live context. Required delivery review still applies.
 
 ## Tool discipline
 

@@ -14,9 +14,9 @@ is for agentic coding tools that will modify or run code here.
 
 ## Setup
 
-- Requires Node.js 18+.
+- Requires Bun 1.3+.
 - Install dependencies with:
-  - `npm install`
+  - `bun install`
 
 ## Build, typecheck, lint, test
 
@@ -24,37 +24,38 @@ There is no dedicated lint script or ESLint config. Use typecheck as the
 closest linting step.
 
 - Build:
-  - `npm run build`
+  - `bun run build`
 - Typecheck (strict):
-  - `npm run typecheck`
+  - `bun run typecheck`
 - Tests (all):
-  - `npm test`
+  - `bun test`
+- Test coverage:
+  - `bun run test:coverage`
 - Test watch (local dev):
-  - `npx vitest`
+  - `bun test --watch`
 
 ### Run a single test file
 
-Vitest is configured via `vitest.config.ts` and runs `src/**/*.test.ts`.
+Bun is configured via `bunfig.toml` and runs `src/**/*.test.ts`.
 
 Use any of the following:
-- `npm test -- src/index.test.ts`
-- `npx vitest run src/index.test.ts`
+- `bun test src/index.test.ts`
+- `bun test src/index.test.ts --watch`
 
 ### Run a single test by name
 
-- `npm test -- -t "should parse valid frontmatter"`
-- `npx vitest run -t "should parse valid frontmatter"`
+- `bun test -t "should parse valid frontmatter"`
 
 ### Run a single test file and name
 
-- `npx vitest run src/index.test.ts -t "should parse valid frontmatter"`
+- `bun test src/index.test.ts -t "should parse valid frontmatter"`
 
 ### Optional quick checks
 
 - Typecheck only:
-  - `npm run typecheck`
+  - `bun run typecheck`
 - Build only:
-  - `npm run build`
+  - `bun run build`
 
 ## Code style and conventions
 
@@ -68,7 +69,7 @@ Use any of the following:
 
 ### Imports
 
-- Use Node.js ESM imports, with `node:` specifiers for core modules:
+- Use ESM imports, with `node:` specifiers for core modules (Bun implements them):
   - `import { join } from "node:path"`
 - Prefer named imports; avoid default imports when not required.
 - Keep imports grouped and ordered:
@@ -123,7 +124,7 @@ Use any of the following:
 
 ### Tests
 
-- Use Vitest and global `describe/it/expect`.
+- Use `bun:test` with global `describe/it/expect`.
 - Tests should be deterministic and avoid network access.
 - For filesystem tests, use temp directories via `os.tmpdir()` and clean up.
 - Prefer explicit assertions over snapshots.

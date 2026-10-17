@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, jest, mock } from "bun:test"
 import { Agent } from "@opencode/plugin"
 import { applyAgents, createAgentModes } from "./agent-runtime"
 
-function instance(reload = vi.fn<() => Promise<void>>().mockResolvedValue()) {
+function instance(reload = mock<() => Promise<void>>().mockResolvedValue()) {
   return createAgentModes(["reviewer"], reload)
 }
 
@@ -34,7 +34,7 @@ describe("plugin agents", () => {
   })
 
   it("isolates promotions from another active project", async () => {
-    const reload = vi.fn<() => Promise<void>>().mockResolvedValue()
+    const reload = mock<() => Promise<void>>().mockResolvedValue()
     const other = instance(reload)
     const first = instance()
     await first.set("reviewer", "all")
@@ -44,7 +44,7 @@ describe("plugin agents", () => {
   })
 
   it("reports registry reload failures", async () => {
-    const modes = instance(vi.fn().mockRejectedValue(new Error("reload failed")))
+    const modes = instance(mock().mockRejectedValue(new Error("reload failed")))
     await expect(modes.set("reviewer", "primary")).rejects.toThrow("reload failed")
   })
 })
