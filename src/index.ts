@@ -23,9 +23,9 @@ import {
   createListChildSessionsTool,
   createSessionContextTool,
   createOrchestratorLoopTools,
-  createMemoryFileTool,
   createTaskBoardTool,
   createKnowledgeTool,
+  createMemoryReviewTool,
   createAgentPromoteTool,
   ethTransactionTool,
   ethAddressTxsTool,
@@ -339,9 +339,9 @@ export default Plugin.define({
 
     await ctx.tool.transform((editor) => {
       // Memory is shared across worktrees; the loop above belongs to this location.
-      editor.add(createMemoryFileTool(ctx.location.project.canonical))
       editor.add(createTaskBoardTool(ctx.location.project.canonical))
       editor.add(createKnowledgeTool(ctx.location.project.canonical))
+      editor.add(createMemoryReviewTool(ctx.location.project.canonical))
       editor.add(gitingestTool)
       editor.add(pdfToMarkdownTool)
       editor.add(listChildSessionsTool)

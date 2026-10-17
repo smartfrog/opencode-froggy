@@ -1,43 +1,20 @@
-import { mkdtempSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { rmSync } from "node:fs"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
+import { createTemporaryDirectory } from "../test-fixtures/temporary-directory"
 import { openSqlite } from "./sqlite"
 import { MemoryStore } from "./store"
 
 const directories: string[] = []
 const stores: MemoryStore[] = []
 
-function store(): MemoryStore {
-  const directory = mkdtempSync(join(tmpdir(), "froggy-memory-"))
+function store() {
+  const directory = createTemporaryDirectory("froggy-memory-")
   directories.push(directory)
   const database = openSqlite(join(directory, "memory.db"))
-  const instance = new MemoryStore(database)
-  stores.push(instance)
-  return instance
-}
-
-function twoStores() {
-  const directory = mkdtempSync(join(tmpdir(), "froggy-memory-"))
-  directories.push(directory)
-  const path = join(directory, "memory.db")
-  const database = openSqlite(path)
-  let beforeBegin: (() => void) | undefined
-  const first = new MemoryStore({
-    exec(sql) {
-      if (sql === "BEGIN IMMEDIATE" && beforeBegin) {
-        const commit = beforeBegin
-        beforeBegin = undefined
-        commit()
-      }
-      database.exec(sql)
-    },
-    prepare: (sql) => database.prepare(sql),
-    close: () => database.close(),
-  })
-  const second = new MemoryStore(openSqlite(path))
-  stores.push(first, second)
-  return { first, second, beforeNextWrite: (commit: () => void) => { beforeBegin = commit } }
+  const memory = new MemoryStore(database)
+  stores.push(memory)
+  return { database, memory }
 }
 
 afterEach(() => {
@@ -45,181 +22,119 @@ afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
-describe("memory store tasks", () => {
-  it("creates, lists and updates a task with revision history", () => {
-    const memory = store()
-    expect(memory.saveTask("GAMEPLAY", {
-      title: "Reach gameplay",
-      objective: "Run the game",
-      nextAction: "Run trial #14",
-      assignments: ["general ses_worker /tmp/worktree abc123"],
-    }, "build", "ses_test")).toEqual({ id: "GAMEPLAY", revision: 1, created: true })
-
-    expect(memory.listTasks()).toMatchObject([{ id: "GAMEPLAY", status: "todo", nextAction: "Run trial #14" }])
-
-    expect(memory.saveTask("GAMEPLAY", { status: "in-progress", nextAction: "Watch the run" }, "build", "ses_test", 1))
-      .toEqual({ id: "GAMEPLAY", revision: 2, created: false })
-
-    expect(memory.getTask("GAMEPLAY")).toMatchObject({
-      status: "in-progress",
-      nextAction: "Watch the run",
-      assignments: ["general ses_worker /tmp/worktree abc123"],
-      revision: 2,
-    })
-    expect(memory.history("task", "GAMEPLAY")).toMatchObject([{ revision: 1 }])
+describe("memory store", () => {
+  it("updates task status and description together", () => {
+    const { memory } = store()
+    memory.saveTask("T", { title: "Task", status: "blocked", description: "Coordinator hold." })
+    memory.saveTask("T", { status: "in-progress", description: "Hold released; worker dispatched, execution unconfirmed." }, 1)
+    expect(memory.getTask("T")).toMatchObject({ version: 2, status: "in-progress", description: "Hold released; worker dispatched, execution unconfirmed." })
   })
 
-  it("rejects a stale task revision", () => {
-    const memory = store()
-    memory.saveTask("T", { title: "Task" }, "build", "ses_test")
-    memory.saveTask("T", { nextAction: "Second" }, "build", "ses_test", 1)
-
-    expect(() => memory.saveTask("T", { nextAction: "Stale" }, "build", "ses_test", 1))
-      .toThrow("expected revision 1, current 2")
+  it("keeps unrelated task fields when saving a patch", () => {
+    const { memory } = store()
+    memory.saveTask("T", { title: "Task", description: "Scope and acceptance." })
+    memory.saveTask("T", { status: "review" }, 1)
+    expect(memory.getTask("T")).toMatchObject({ title: "Task", description: "Scope and acceptance.", status: "review" })
   })
 
-  it("reads the current revision inside the update transaction", () => {
-    const directory = mkdtempSync(join(tmpdir(), "froggy-memory-"))
-    directories.push(directory)
-    const database = openSqlite(join(directory, "memory.db"))
+  it("filters task status", () => {
+    const { memory } = store()
+    memory.saveTask("T", { title: "Task" })
+    memory.saveTask("R", { title: "Review", status: "review" })
+    expect(memory.listTasks("review").map(({ id }) => id)).toEqual(["R"])
+  })
+
+  it.each(["archived", "unknown"])("rejects unsupported task status %s", (status) => {
+    const { memory } = store()
+    expect(() => memory.saveTask("T", { title: "Task", status })).toThrow("Invalid task status")
+    expect(memory.getTask("T")).toBeNull()
+  })
+
+  it("rejects a competing connection's task update", () => {
+    const { memory: first, database } = store()
+    first.saveTask("T", { title: "Task" })
+    const directory = directories.at(-1)!
+    const second = new MemoryStore(openSqlite(join(directory, "memory.db")))
+    stores.push(second)
+    second.saveTask("T", { description: "Second writer" }, 1)
+    expect(() => first.saveTask("T", { description: "Stale writer" }, 1)).toThrow("expected version 1, current 2")
+    expect(database.prepare("SELECT description FROM tasks WHERE id = 'T'").get()).toEqual({ description: "Second writer" })
+  })
+
+  it("reads task state after beginning its write transaction", () => {
+    const { database } = store()
     const trace: string[] = []
-    const wrapped = {
-      exec(sql: string) {
-        trace.push(`exec:${sql}`)
-        database.exec(sql)
-      },
-      prepare(sql: string) {
-        trace.push(`prepare:${sql}`)
-        return database.prepare(sql)
-      },
-      close() {
-        database.close()
-      },
-    }
-    const memory = new MemoryStore(wrapped)
-    stores.push(memory)
-    memory.saveTask("T", { title: "Task" }, "build", "ses_test")
-    trace.length = 0
-    memory.saveTask("T", { nextAction: "Next" }, "build", "ses_test", 1)
-
-    const begin = trace.findIndex((entry) => entry.includes("BEGIN IMMEDIATE"))
-    const read = trace.findIndex((entry) => entry.includes("SELECT * FROM tasks WHERE id = ?"))
-    expect(begin).not.toBe(-1)
-    expect(read).toBeGreaterThan(begin)
-  })
-
-  it("rejects a competing connection's commit immediately before the task update transaction", () => {
-    const { first, second, beforeNextWrite } = twoStores()
-    first.saveTask("T", { title: "Task", nextAction: "Original" }, "build", "ses_test")
-    beforeNextWrite(() => second.saveTask("T", { nextAction: "Second" }, "build", "ses_test", 1))
-    expect(() => first.saveTask("T", { nextAction: "Stale" }, "build", "ses_test", 1))
-      .toThrow("expected revision 1, current 2")
-
-    expect(first.getTask("T")).toMatchObject({ nextAction: "Second", revision: 2 })
-    expect(first.history("task", "T")).toHaveLength(1)
-  })
-})
-
-describe("memory store knowledge", () => {
-  it("rejects invalid replacement ids on creation", () => {
-    const memory = store()
-    expect(() => memory.saveNote("note", {
-      topic: "runtime", title: "Note", content: "Content", supersededBy: "../outside",
-    }, "memory-manager", "ses_test")).toThrow("Invalid supersededBy")
-    expect(memory.getNote("note")).toBeNull()
-  })
-  it("creates and searches notes by topic", () => {
-    const memory = store()
-    memory.saveNote("runtime-cycles", {
-      topic: "runtime",
-      kind: "lesson",
-      title: "Cycles during idle",
-      content: "Check idle cycle accounting before blaming the renderer.",
-      sources: ["report.md"],
-    }, "memory-manager", "ses_test")
-
-    expect(memory.searchNotes("renderer", { topic: "runtime" })).toMatchObject([
-      { id: "runtime-cycles", topic: "runtime", kind: "lesson" },
-    ])
-    expect(memory.searchNotes("renderer", { topic: "build" })).toEqual([])
-  })
-
-  it("reports topics and project rules in the overview", () => {
-    const memory = store()
-    memory.saveNote("project-rules", {
-      topic: "rules",
-      kind: "constraint",
-      title: "Project rules",
-      content: "Never publish private packages.",
-    }, "memory-manager", "ses_test")
-    memory.saveNote("build-link", {
-      topic: "build",
-      kind: "fact",
-      title: "Linker workaround",
-      content: "Keep the weak symbol.",
-    }, "memory-manager", "ses_test")
-
-    expect(memory.overview()).toMatchObject({
-      total: 2,
-      projectRules: { id: "project-rules", content: "Never publish private packages." },
-      topics: [{ topic: "build", count: 1 }, { topic: "rules", count: 1 }],
+    const memory = new MemoryStore({
+      exec: (sql) => { trace.push(sql); database.exec(sql) },
+      prepare: (sql) => { trace.push(sql); return database.prepare(sql) },
+      serialize: () => database.serialize(),
+      close: () => {},
     })
+    memory.saveTask("T", { title: "Task" })
+    trace.length = 0
+    memory.saveTask("T", { status: "review" }, 1)
+    expect(trace.indexOf("SELECT * FROM tasks WHERE id = ?")).toBeGreaterThan(trace.indexOf("BEGIN IMMEDIATE"))
   })
 
-  it("rejects a competing connection's commit immediately before the note update transaction", () => {
-    const { first, second, beforeNextWrite } = twoStores()
-    first.saveNote("note", {
-      topic: "runtime",
-      kind: "fact",
-      title: "Note",
-      content: "Original",
-    }, "memory-manager", "ses_test")
-
-    beforeNextWrite(() => second.saveNote("note", { content: "Second" }, "memory-manager", "ses_test", 1))
-    expect(() => first.saveNote("note", { content: "Stale" }, "memory-manager", "ses_test", 1))
-      .toThrow("expected revision 1, current 2")
-
-    expect(first.getNote("note")).toMatchObject({ content: "Second", revision: 2 })
-    expect(first.history("note", "note")).toHaveLength(1)
+  it("does not create a history table", () => {
+    const { memory, database } = store()
+    memory.saveTask("T", { title: "Task" })
+    memory.saveTask("T", { status: "done" }, 1)
+    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'history'").get()).toBeNull()
   })
 
-  it("keeps a superseded note out of active search and retains its previous revision", () => {
-    const memory = store()
-    memory.saveNote("decision", {
-      topic: "runtime",
-      kind: "decision",
-      title: "Use option A",
-      content: "Option A is selected.",
-    }, "memory-manager", "ses_test")
-    memory.saveNote("decision", {
-      status: "superseded",
-      supersededBy: "decision-b",
-      content: "Option A is no longer selected.",
-    }, "memory-manager", "ses_test", 1)
-
-    expect(memory.searchNotes("selected")).toEqual([])
-    expect(memory.getNote("decision")).toMatchObject({ status: "superseded", supersededBy: "decision-b" })
-    expect(memory.history("note", "decision")).toMatchObject([{ revision: 1 }])
+  it("searches knowledge by content and topic", () => {
+    const { memory } = store()
+    memory.saveNote("idle", { title: "Idle scheduling", topic: "performance", content: "Measure cycle accounting." })
+    expect(memory.listNotes({ query: "accounting", topic: "performance" }).map(({ id }) => id)).toEqual(["idle"])
+    expect(memory.listNotes({ query: "accounting", topic: "build" })).toEqual([])
   })
-})
 
-describe("conditional memory updates", () => {
-  it.each(["task", "note"] as const)("rejects a zero-row %s update without committing history", (entity) => {
-    const directory = mkdtempSync(join(tmpdir(), "froggy-memory-"))
-    directories.push(directory)
-    const database = openSqlite(join(directory, "memory.db"))
-    const memory = new MemoryStore(database)
-    stores.push(memory)
-    if (entity === "task") memory.saveTask("record", { title: "Original" }, "build", "ses_test")
-    else memory.saveNote("record", { topic: "runtime", title: "Original", content: "Content" }, "memory-manager", "ses_test")
-    database.exec(`CREATE TRIGGER skip_update BEFORE UPDATE ON ${entity === "task" ? "tasks" : "notes"} BEGIN SELECT RAISE(IGNORE); END`)
+  it("requires a version to update existing knowledge", () => {
+    const { memory } = store()
+    memory.saveNote("idle", { title: "Idle scheduling", topic: "performance", content: "Measure." })
+    expect(() => memory.saveNote("idle", { content: "Overwrite." })).toThrow("provide expectedVersion")
+  })
 
-    const update = () => entity === "task"
-      ? memory.saveTask("record", { title: "Lost" }, "build", "ses_test", 1)
-      : memory.saveNote("record", { title: "Lost" }, "memory-manager", "ses_test", 1)
-    expect(update).toThrow("changed: expected revision 1")
-    const record = entity === "task" ? memory.getTask("record") : memory.getNote("record")
-    expect(record).toMatchObject({ title: "Original", revision: 1 })
-    expect(memory.history(entity, "record")).toEqual([])
+  it("does not reuse a deleted knowledge version when its ID is recreated", () => {
+    const { memory } = store()
+    const first = memory.saveNote("rule", { title: "Rule", topic: "constraints", content: "Original." })
+    memory.removeNote("rule", first.version)
+    const replacement = memory.saveNote("rule", { title: "Rule", topic: "constraints", content: "Replacement." })
+    expect(replacement.version).toBeGreaterThan(first.version)
+    expect(() => memory.removeNote("rule", first.version)).toThrow("changed")
+  })
+
+  it("physically removes a knowledge row", () => {
+    const { memory, database } = store()
+    const saved = memory.saveNote("rule", { title: "Rule", topic: "constraints", content: "Refuted." })
+    memory.removeNote("rule", saved.version)
+    expect(database.prepare("SELECT * FROM knowledge").all()).toEqual([])
+  })
+
+  it("rolls back a rejected conditional task update", () => {
+    const { memory, database } = store()
+    memory.saveTask("T", { title: "Original" })
+    database.exec("CREATE TRIGGER skip_update BEFORE UPDATE ON tasks BEGIN SELECT RAISE(IGNORE); END")
+    expect(() => memory.saveTask("T", { title: "Lost" }, 1)).toThrow("changed")
+    expect(memory.getTask("T")).toMatchObject({ title: "Original", version: 1 })
+  })
+
+  it("rolls back a rejected knowledge deletion", () => {
+    const { memory, database } = store()
+    const saved = memory.saveNote("rule", { title: "Rule", topic: "constraints", content: "Keep." })
+    database.exec("CREATE TRIGGER skip_delete BEFORE DELETE ON knowledge BEGIN SELECT RAISE(IGNORE); END")
+    expect(() => memory.removeNote("rule", saved.version)).toThrow("changed")
+    expect(memory.getNote("rule")).toMatchObject({ content: "Keep." })
+  })
+
+  it("rejects progress notes for a missing task", () => {
+    const { memory } = store()
+    expect(() => memory.addTaskNote("missing", "Update.")).toThrow("Task not found")
+  })
+
+  it.each(["", " "])("rejects blank knowledge content %j", (content) => {
+    const { memory } = store()
+    expect(() => memory.saveNote("rule", { title: "Rule", topic: "constraints", content })).toThrow("content is required")
   })
 })

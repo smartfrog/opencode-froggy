@@ -1,220 +1,65 @@
-import { asRecord } from "../record"
+import { capText, response, textRange } from "../memory/bounds"
 import { openProjectMemory } from "../memory/project"
-import { agentContext, stringArray } from "../memory/tool-input"
-import {
-  DETAIL_ARRAY_ITEMS,
-  DETAIL_ARRAY_ITEM_CHARACTERS,
-  NOTE_CONTENT_CHARACTERS,
-  OVERVIEW_TOPICS,
-  RANGE_LIMIT,
-  SEARCH_LIMIT,
-  SUMMARY_TITLE_CHARACTERS,
-  TOPIC_CHARACTERS,
-  TOPIC_TITLE_CHARACTERS,
-  capArray,
-  capText,
-  fieldResponse,
-  pageLimit,
-  pageOffset,
-  pageResponse,
-  response,
-  textRange,
-} from "../memory/bounds"
-import { historyResponse } from "../memory/history-response"
-import { type NotePatch, type NoteRecord } from "../memory/store"
+import { inputRecord, pageNumber, recordId, requireMemoryWriter, textPatch, versionInput } from "../memory/tool-input"
 
-const KNOWLEDGE_WRITERS = new Set(["memory-manager"])
-const NOTE_FIELDS = ["content", "title", "topic", "sources"] as const
-type NoteField = typeof NOTE_FIELDS[number]
-
-function requireWriter(value: unknown): { agent: string; session: string } {
-  const current = agentContext(value)
-  if (!KNOWLEDGE_WRITERS.has(current.agent)) throw new Error("Only memory-manager may change knowledge")
-  if (!current.session) throw new Error("A current session is required to change knowledge")
-  return current
-}
-
-function noteSummary(note: NoteRecord) {
-  const topic = capText(note.topic, TOPIC_CHARACTERS)
-  const title = capText(note.title, SUMMARY_TITLE_CHARACTERS)
-  const excerpt = capText(note.content.replace(/\s+/g, " ").trim(), 240)
-  return {
-    id: note.id,
-    topic: topic.text,
-    kind: note.kind,
-    title: title.text,
-    excerpt: excerpt.text,
-    revision: note.revision,
-    truncated: [
-      ...(topic.truncated ? ["topic"] : []),
-      ...(title.truncated ? ["title"] : []),
-      ...(excerpt.truncated ? ["excerpt"] : []),
-    ],
-  }
-}
-
-function noteField(path: string, note: NoteRecord, field: unknown, offset: number, limit: number | undefined, item: number | undefined) {
-  if (typeof field !== "string" || !NOTE_FIELDS.includes(field as NoteField)) {
-    throw new Error(`field must be one of ${NOTE_FIELDS.join(", ")}`)
-  }
-  return fieldResponse(
-    { path, id: note.id, field, revision: note.revision }, note[field as NoteField],
-    offset, limit, item, field === "content" ? NOTE_CONTENT_CHARACTERS : RANGE_LIMIT,
-  )
-}
-
-function noteDetail(note: NoteRecord, offset: number, limit: number) {
-  const content = textRange(note.content, offset, limit)
-  const topic = capText(note.topic, TOPIC_CHARACTERS)
-  const title = capText(note.title, SUMMARY_TITLE_CHARACTERS)
-  const sources = capArray(note.sources, DETAIL_ARRAY_ITEMS)
-  const sourceItems = sources.items.map((item) => capText(item, DETAIL_ARRAY_ITEM_CHARACTERS))
-  const truncated = [
-    ...(topic.truncated ? ["topic"] : []),
-    ...(title.truncated ? ["title"] : []),
-    ...(sources.omitted > 0 || sourceItems.some((item) => item.truncated) ? ["sources"] : []),
-    ...(content.hasMore ? ["content"] : []),
-  ]
-  return {
-    ...note,
-    topic: topic.text,
-    title: title.text,
-    content: content.text,
-    sources: sourceItems.map((item) => item.text),
-    offset: content.offset,
-    nextOffset: content.nextOffset,
-    hasMore: content.hasMore,
-    totalCharacters: content.totalCharacters,
-    truncated,
-    hint: truncated.length
-      ? "Use get with field, offset and limit to read the complete value"
-      : null,
-  }
-}
-
-function patch(args: Record<string, unknown>): NotePatch {
-  const result: NotePatch = {}
-  for (const field of ["topic", "kind", "title", "content", "status"] as const) {
-    const value = args[field]
-    if (value === undefined) continue
-    if (typeof value !== "string") throw new Error(`Invalid ${field}`)
-    result[field] = value
-  }
-  if (args.sources !== undefined) result.sources = stringArray(args.sources, "sources")
-  if (args.supersededBy !== undefined) {
-    if (args.supersededBy !== null && typeof args.supersededBy !== "string") throw new Error("Invalid supersededBy")
-    result.supersededBy = args.supersededBy
-  }
-  return result
-}
+const RESULTS_PER_PAGE = 5
+const CONTENT_CHARACTERS = 2_000
 
 export function createKnowledgeTool(directory: string) {
   return {
     name: "knowledge",
     options: { codemode: false },
-    description: "Project knowledge for memory-manager and bounded readers. Overview lists topics, search returns short hits, get reads one note or a revision-checked range, save applies a revision-checked correction, and history exposes archived revisions.",
+    description: "Valuable project knowledge grouped by topic: constraints, performance tips, pitfalls and decisions. All agents use list/search/get. Only memory-manager decides what to save, merge or permanently remove. Use nextPage to continue; updates and removals require expectedVersion.",
     input: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["overview", "search", "get", "save", "history"] },
-        id: { type: "string", description: "Stable note id" },
-        revision: { type: "integer", minimum: 1, description: "Select an archived revision with history; read its JSON snapshot by offset/limit" },
-        field: { type: "string", enum: NOTE_FIELDS, description: "Read one field range instead of the bounded note" },
-        item: { type: "integer", minimum: 0, description: "Array item index for a field range" },
-        query: { type: "string", description: "Text to search in topic, title and content" },
-        topic: { type: "string", description: "Optional topic filter or new topic" },
-        kind: { type: "string", enum: ["constraint", "decision", "fact", "lesson"] },
-        status: { type: "string", enum: ["active", "superseded"] },
-        offset: { type: "integer", minimum: 0, description: "Character, array-item, topic or history offset" },
-        limit: { type: "integer", minimum: 1, maximum: RANGE_LIMIT },
-        expectedRevision: { type: ["integer", "null"], minimum: 1, description: "Required to update a note, or to pin a ranged read" },
-        title: { type: "string" },
-        content: { type: "string" },
-        sources: { type: "array", items: { type: "string" } },
-        supersededBy: { type: ["string", "null"] },
-        full: { type: "boolean", description: "Include bounded historical previews; use revision to read an entire archived snapshot" },
+        action: { type: "string", enum: ["list", "search", "get", "save", "remove"] },
+        id: { type: "string", description: "Stable knowledge ID" },
+        topic: { type: "string", maxLength: 80 },
+        title: { type: "string", maxLength: 200 },
+        content: { type: "string", description: "Useful durable knowledge in Markdown; include source links when needed" },
+        query: { type: "string", description: "Search topic, title and content" },
+        expectedVersion: { type: "integer", minimum: 1, description: "Version read by get; required for updates and permanent removal, optional to pin a paged read" },
+        page: { type: "integer", minimum: 0, description: "Use nextPage from the previous response" },
       },
       required: ["action"],
       additionalProperties: false,
     },
-    async execute(input: unknown, toolContext: unknown) {
-      const args = asRecord(input)
-      if (typeof args.action !== "string") throw new Error("A knowledge action is required")
+    async execute(input: unknown, context: unknown) {
+      const args = inputRecord(input, ["action", "id", "topic", "title", "content", "query", "expectedVersion", "page"])
+      if (!["list", "search", "get", "save", "remove"].includes(String(args.action))) throw new Error("action must be list, search, get, save or remove")
+      if (args.action === "save" || args.action === "remove") requireMemoryWriter(context)
+      const page = pageNumber(args.page)
+      const expectedVersion = versionInput(args.expectedVersion)
       const { path, store } = openProjectMemory(directory)
       try {
-        if (args.action === "overview") {
-          const overview = store.overview()
-          const offset = pageOffset(typeof args.offset === "number" ? args.offset : 0)
-          const limit = pageLimit(typeof args.limit === "number" ? args.limit : undefined, OVERVIEW_TOPICS, OVERVIEW_TOPICS)
-          const topics = overview.topics.slice(offset, offset + limit).map((topic) => {
-            const name = capText(topic.topic, TOPIC_CHARACTERS)
-            const titles = topic.titles.map((title) => capText(title, TOPIC_TITLE_CHARACTERS))
-            return {
-              topic: name.text,
-              count: topic.count,
-              titles: titles.map((title) => title.text),
-              truncated: name.truncated || titles.some((title) => title.truncated),
-            }
-          })
-          const rules = overview.projectRules
-          return pageResponse(topics, offset, offset + topics.length < overview.topics.length, (page, nextOffset) => ({
-            path,
-            total: overview.total,
-            totalTopics: overview.topics.length,
-            nextOffset,
-            hasMore: nextOffset !== null,
-            projectRules: rules ? {
-              id: rules.id,
-              title: capText(rules.title, SUMMARY_TITLE_CHARACTERS).text,
-              content: capText(rules.content, 2_000).text,
-              revision: rules.revision,
-              truncated: capText(rules.content, 2_000).truncated,
-            } : null,
-            topics: page,
-          }))
-        }
-        if (args.action === "search") {
-          if (typeof args.query !== "string" || !args.query.trim()) throw new Error("A search query is required")
-          const limit = pageLimit(typeof args.limit === "number" ? args.limit : undefined, 5, SEARCH_LIMIT)
-          const offset = pageOffset(typeof args.offset === "number" ? args.offset : 0)
-          const results = store.searchNotes(args.query, {
+        const metadata = { path, ...(store.migrationBackup ? { migrationBackup: store.migrationBackup } : {}) }
+        if (args.action === "list" || args.action === "search") {
+          if (args.action === "search" && (typeof args.query !== "string" || !args.query.trim())) throw new Error("query is required")
+          const rows = store.listNotes({
+            query: args.action === "search" ? args.query as string : undefined,
             topic: typeof args.topic === "string" ? args.topic : undefined,
-            kind: typeof args.kind === "string" ? args.kind : undefined,
-            limit: limit + 1,
-            offset,
+            limit: RESULTS_PER_PAGE + 1, offset: page * RESULTS_PER_PAGE,
           })
-          return pageResponse(results.slice(0, limit).map(noteSummary), offset, results.length > limit, (page, nextOffset) => ({
-            path,
-            results: page,
-            hasMore: nextOffset !== null,
-            nextOffset,
+          const results = rows.slice(0, RESULTS_PER_PAGE).map(({ id, topic, title, content, version }) => ({
+            id, topic: capText(topic, 80).text, title: capText(title, 200).text, version,
+            ...(args.action === "search" ? { excerpt: capText(content.replace(/\s+/g, " "), 200).text } : {}),
           }))
+          return response({ ...metadata, results, nextPage: rows.length > RESULTS_PER_PAGE ? page + 1 : null })
         }
+        const id = recordId(args.id)
         if (args.action === "get") {
-          if (typeof args.id !== "string" || !args.id) throw new Error("A note id is required")
-          const note = store.getNote(args.id)
-          if (!note) throw new Error(`Note not found: ${args.id}`)
-          if (typeof args.expectedRevision === "number" && note.revision !== args.expectedRevision) {
-            throw new Error(`Note ${args.id} changed: expected revision ${args.expectedRevision}, current ${note.revision}`)
-          }
-          const offset = typeof args.offset === "number" ? args.offset : 0
-          if (args.field !== undefined) {
-            const limit = typeof args.limit === "number" ? args.limit : undefined
-            const item = typeof args.item === "number" ? args.item : undefined
-            return noteField(path, note, args.field, offset, limit, item)
-          }
-          const limit = typeof args.limit === "number" ? Math.min(args.limit, NOTE_CONTENT_CHARACTERS) : NOTE_CONTENT_CHARACTERS
-          return response({ path, note: noteDetail(note, offset, limit) })
+          const note = store.getNote(id)
+          if (!note) throw new Error(`Knowledge not found: ${id}`)
+          if (expectedVersion !== null && note.version !== expectedVersion) throw new Error(`Knowledge ${id} changed: expected version ${expectedVersion}, current ${note.version}`)
+          const content = textRange(note.content, Math.min(page * CONTENT_CHARACTERS, Array.from(note.content).length), CONTENT_CHARACTERS)
+          return response({ ...metadata, note: { ...note, content: content.text }, nextPage: content.hasMore ? page + 1 : null })
         }
-        if (args.action === "history") {
-          return historyResponse(store, path, "note", args)
+        if (args.action === "remove") {
+          if (expectedVersion === null) throw new Error("expectedVersion is required for permanent removal")
+          return response({ ...metadata, ...store.removeNote(id, expectedVersion) })
         }
-        if (args.action !== "save") throw new Error("action must be overview, search, get, save or history")
-        const current = requireWriter(toolContext)
-        if (typeof args.id !== "string" || !args.id) throw new Error("A note id is required")
-        const expectedRevision = typeof args.expectedRevision === "number" ? args.expectedRevision : null
-        const result = store.saveNote(args.id, patch(args), current.agent, current.session, expectedRevision)
-        return response({ path, ...result })
+        return response({ ...metadata, ...store.saveNote(id, textPatch(args, ["topic", "title", "content"]), expectedVersion) })
       } finally {
         store.close()
       }

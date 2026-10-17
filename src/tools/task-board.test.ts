@@ -1,222 +1,88 @@
-import { mkdtempSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { rmSync } from "node:fs"
 import { afterEach, describe, expect, it } from "bun:test"
+import { createTemporaryDirectory } from "../test-fixtures/temporary-directory"
 import { createTaskBoardTool } from "./task-board"
 
 const directories: string[] = []
-const CONTEXT = { agent: "memory-manager", sessionID: "ses_test" }
+const context = { agent: "memory-manager", sessionID: "ses_test" }
 
-function tool(): ReturnType<typeof createTaskBoardTool> {
-  const directory = mkdtempSync(join(tmpdir(), "froggy-task-board-"))
+function tool() {
+  const directory = createTemporaryDirectory("froggy-tasks-")
   directories.push(directory)
   return createTaskBoardTool(directory)
-}
-
-function result(value: { content: string }): Record<string, unknown> {
-  return JSON.parse(value.content) as Record<string, unknown>
 }
 
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
-describe("task-board tool", () => {
-  it("creates and lists compact tasks", async () => {
+describe("task-board bounded reads", () => {
+  it("rejects a stale guarded note without changing notes or task version", async () => {
     const memory = tool()
-    expect(result(await memory.execute({
-      action: "save",
-      id: "GAMEPLAY",
-      title: "Reach gameplay",
-      nextAction: "Run trial #14",
-    }, CONTEXT))).toMatchObject({ id: "GAMEPLAY", revision: 1, created: true })
-
-    expect(result(await memory.execute({ action: "list" }, CONTEXT))).toMatchObject({
-      tasks: [{ id: "GAMEPLAY", title: "Reach gameplay", nextAction: "Run trial #14" }],
-    })
+    await memory.execute({ action: "save", id: "T", title: "Task" }, context)
+    await memory.execute({ action: "save", id: "T", expectedVersion: 1, status: "review" }, context)
+    await expect(memory.execute({ action: "note", id: "T", expectedVersion: 1, note: "Stale progress." }, context)).rejects.toThrow("changed")
+    const value = JSON.parse((await memory.execute({ action: "get", id: "T" }, context)).content)
+    expect(value.task.version).toBe(2)
+    expect(value.notes).toEqual([])
   })
-
-  it("updates with a revision check and archives the previous state", async () => {
+  it("invalidates a pinned read when a new progress note changes its pages", async () => {
     const memory = tool()
-    await memory.execute({ action: "save", id: "T", title: "Task" }, CONTEXT)
-    await memory.execute({ action: "save", id: "T", expectedRevision: 1, nextAction: "Next" }, CONTEXT)
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
-      task: { revision: 2, nextAction: "Next" },
-    })
-    expect(result(await memory.execute({ action: "history", id: "T" }, CONTEXT))).toMatchObject({
-      history: [{ revision: 1 }],
-    })
+    await memory.execute({ action: "save", id: "T", title: "Task" }, context)
+    await memory.execute({ action: "note", id: "T", note: "Baseline measured." }, context)
+    await expect(memory.execute({ action: "get", id: "T", page: 1, expectedVersion: 1 }, context)).rejects.toThrow("changed")
   })
-
-  it("returns a bounded summary instead of full details", async () => {
+  it("lists every task through simple pages without full descriptions", async () => {
     const memory = tool()
-    await memory.execute({
-      action: "save", id: "T", title: "Task", objective: "O".repeat(4_000), nextAction: "Next",
-    }, CONTEXT)
-
-    const body = result(await memory.execute({ action: "get", id: "T", summary: true }, CONTEXT))
-
-    expect(body.task).toEqual({
-      id: "T", title: "Task", status: "todo", nextAction: "Next", revision: 1, truncated: [],
-    })
-  })
-
-  it("rejects a summary combined with a field range", async () => {
-    const memory = tool()
-    await memory.execute({ action: "save", id: "T", title: "Task" }, CONTEXT)
-
-    await expect(memory.execute({ action: "get", id: "T", summary: true, field: "objective" }, CONTEXT))
-      .rejects.toThrow("summary cannot be combined with field")
-  })
-
-  it("bounds long task fields on read", async () => {
-    const memory = tool()
-    await memory.execute({ action: "save", id: "T", title: "Task", currentState: "x".repeat(5_000) }, CONTEXT)
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
-      task: { truncated: ["currentState"] },
-    })
-  })
-
-  it("bounds summary fields and reports truncation", async () => {
-    const memory = tool()
-    for (let index = 0; index < 20; index++) {
-      await memory.execute({
-        action: "save",
-        id: `T${index}`,
-        title: `${"title".repeat(100)}-${index}`,
-        nextAction: "next".repeat(1000),
-      }, CONTEXT)
+    for (let index = 0; index < 24; index++) await memory.execute({ action: "save", id: `T${index}`, title: "\u0000".repeat(200), description: "Detailed evidence." }, context)
+    const ids: string[] = []
+    let page: number | null = 0
+    while (page !== null) {
+      const response = await memory.execute({ action: "list", page }, context)
+      expect(response.content.length).toBeLessThanOrEqual(20_000)
+      const value = JSON.parse(response.content) as { tasks: { id: string; description?: string }[]; nextPage: number | null }
+      expect(value.tasks.every((task) => task.description === undefined)).toBe(true)
+      ids.push(...value.tasks.map(({ id }) => id))
+      page = value.nextPage
     }
-
-    const listed = await memory.execute({ action: "list", limit: 20 }, CONTEXT)
-    const body = result(listed)
-    expect(listed.content.length).toBeLessThanOrEqual(20_000)
-    expect((body.tasks as unknown[])[0]).toMatchObject({ truncated: ["title", "nextAction"] })
-    expect(body.hasMore).toBe(false)
+    expect(new Set(ids).size).toBe(24)
   })
 
-  it("reads an accepted long field completely through revision-checked ranges", async () => {
+  it("reads escaped descriptions and short notes completely through pages", async () => {
     const memory = tool()
-    const objective = "A".repeat(4_500) + "TRAILING"
-    await memory.execute({ action: "save", id: "T", title: "Task", objective }, CONTEXT)
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
-      task: { truncated: ["objective"] },
-    })
-
-    let offset = 0
+    const description = "\u0000😀".repeat(8_000) + "END"
+    await memory.execute({ action: "save", id: "T", title: "Task", description }, context)
+    for (let index = 0; index < 12; index++) await memory.execute({ action: "note", id: "T", note: `${index}:` + "\u0000".repeat(490) }, context)
+    let page: number | null = 0
     let rebuilt = ""
-    while (offset !== null) {
-      const page = result(await memory.execute({
-        action: "get",
-        id: "T",
-        field: "objective",
-        expectedRevision: 1,
-        offset,
-        limit: 1_000,
-      }, CONTEXT)) as { text: string; nextOffset: number | null }
-      rebuilt += page.text
-      offset = page.nextOffset ?? 0
-      if (page.nextOffset === null) break
+    const notes: string[] = []
+    while (page !== null) {
+      const response = await memory.execute({ action: "get", id: "T", page }, context)
+      expect(response.content.length).toBeLessThanOrEqual(20_000)
+      const value = JSON.parse(response.content) as { task: { description: string }; notes: { note: string }[]; nextPage: number | null }
+      rebuilt += value.task.description
+      notes.push(...value.notes.map(({ note }) => note))
+      page = value.nextPage
     }
-    expect(rebuilt).toBe(objective)
+    expect(rebuilt).toBe(description)
+    expect(notes.length).toBe(12)
   })
 
-  it("reads a complete long reference item", async () => {
+  it.each(["orchestrator", "build", "general", "code-reviewer"])("allows reads by %s", async (agent) => {
     const memory = tool()
-    const reference = "R".repeat(2_000) + "END"
-    await memory.execute({ action: "save", id: "T", title: "Task", evidence: [reference] }, CONTEXT)
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
-      task: { truncated: ["evidence"] },
-    })
-    expect(result(await memory.execute({
-      action: "get",
-      id: "T",
-      field: "evidence",
-      item: 0,
-      expectedRevision: 1,
-    }, CONTEXT))).toMatchObject({ text: reference })
-  })
-
-  it.each(["orchestrator", "build", "general", "code-reviewer"])("rejects task writes by %s", async (agent) => {
-    const memory = tool()
-    await expect(memory.execute({
-      action: "save",
-      id: "T",
-      title: "Task",
-    }, { agent, sessionID: "ses_other" })).rejects.toThrow("Only memory-manager may change tasks")
-  })
-
-  it.each(["orchestrator", "build", "general", "code-reviewer"])("allows task reads by %s", async (agent) => {
-    const memory = tool()
-    await memory.execute({ action: "save", id: "T", title: "Task" }, CONTEXT)
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, { agent, sessionID: "ses_other" }))).toMatchObject({
-      task: { id: "T", revision: 1, updatedBy: "memory-manager" },
-    })
-  })
-
-  it("preserves the task when the coordinator attempts an update", async () => {
-    const memory = tool()
-    await memory.execute({ action: "save", id: "T", title: "Task", currentState: "Held" }, CONTEXT)
-
-    await expect(memory.execute({
-      action: "save", id: "T", expectedRevision: 1, currentState: "Released",
-    }, { agent: "orchestrator", sessionID: "ses_other" })).rejects.toThrow("Only memory-manager may change tasks")
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
-      task: { revision: 1, currentState: "Held", updatedBy: "memory-manager" },
-    })
-    expect(result(await memory.execute({ action: "history", id: "T" }, CONTEXT))).toMatchObject({ history: [] })
+    await memory.execute({ action: "save", id: "T", title: "Task" }, context)
+    expect(JSON.parse((await memory.execute({ action: "get", id: "T" }, { agent })).content).task.id).toBe("T")
   })
 
   it("requires a current session for memory-manager writes", async () => {
-    await expect(tool().execute({ action: "save", id: "T", title: "Task" }, {
-      agent: "memory-manager",
-    })).rejects.toThrow("A current session is required")
+    await expect(tool().execute({ action: "save", id: "T", title: "Task" }, { agent: "memory-manager" })).rejects.toThrow("A current session is required")
   })
 
-  it("saves related transition fields together in one revision", async () => {
-    const memory = tool()
-    await memory.execute({
-      action: "save", id: "T", title: "Task", currentState: "Held; no worker assigned",
-      nextAction: "Obtain coordinator release", blockers: "Coordinator hold", assignments: [],
-    }, CONTEXT)
-
-    await memory.execute({
-      action: "save", id: "T", expectedRevision: 1,
-      currentState: "Hold released; worker dispatched; guest execution unconfirmed",
-      nextAction: "Await worker evidence before claiming execution", blockers: "",
-      assignments: ["general / ses_worker / monitored trial"],
-    }, CONTEXT)
-
-    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
-      task: {
-        revision: 2, updatedBy: "memory-manager", updatedSession: "ses_test",
-        currentState: "Hold released; worker dispatched; guest execution unconfirmed",
-        nextAction: "Await worker evidence before claiming execution", blockers: "",
-        assignments: ["general / ses_worker / monitored trial"],
-      },
-    })
-    const archived = result(await memory.execute({ action: "history", id: "T", revision: 1 }, CONTEXT))
-    expect(JSON.parse(archived.text as string)).toMatchObject({
-      revision: 1, currentState: "Held; no worker assigned", blockers: "Coordinator hold", assignments: [],
-    })
+  it.each(["objective", "expectedRevision", "field", "item", "offset"])("rejects removed parameter %s rather than ignoring it", async (field) => {
+    await expect(tool().execute({ action: "save", id: "T", title: "Task", [field]: "old" }, context)).rejects.toThrow("Unsupported memory parameter")
   })
 
-  it("rejects a stale revision", async () => {
-    const memory = tool()
-    await memory.execute({ action: "save", id: "T", title: "Task" }, CONTEXT)
-    await memory.execute({ action: "save", id: "T", expectedRevision: 1, nextAction: "Two" }, CONTEXT)
-
-    await expect(memory.execute({
-      action: "save",
-      id: "T",
-      expectedRevision: 1,
-      nextAction: "Three",
-    }, CONTEXT)).rejects.toThrow("expected revision 1, current 2")
+  it.each([-1, 0.5, Number.MAX_SAFE_INTEGER, "0"])("rejects invalid page %j", async (page) => {
+    await expect(tool().execute({ action: "list", page }, context)).rejects.toThrow("page")
   })
 })

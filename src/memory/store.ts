@@ -1,241 +1,112 @@
 import { asRecord } from "../record"
+import { initializeMemory } from "./migration"
 import { type SqliteDatabase } from "./sqlite"
 
-export const TASK_STATUSES = ["todo", "in-progress", "blocked", "review", "done", "archived"] as const
-export const NOTE_KINDS = ["constraint", "decision", "fact", "lesson"] as const
-export const NOTE_STATUSES = ["active", "superseded"] as const
-
+export const TASK_STATUSES = ["todo", "in-progress", "blocked", "review", "done"] as const
 export type TaskStatus = typeof TASK_STATUSES[number]
-export type NoteKind = typeof NOTE_KINDS[number]
-export type NoteStatus = typeof NOTE_STATUSES[number]
 
 export interface TaskRecord {
   id: string
   title: string
   status: TaskStatus
-  objective: string
-  acceptance: string
-  currentState: string
-  nextAction: string
-  blockers: string
-  knowledgeRefs: string[]
-  evidence: string[]
-  assignments: string[]
-  revision: number
+  description: string
+  version: number
+  createdAt: number
   updatedAt: number
-  updatedBy: string
-  updatedSession: string
+}
+
+export interface TaskNote {
+  id: number
+  taskId: string
+  note: string
+  createdAt: number
 }
 
 export interface NoteRecord {
   id: string
   topic: string
-  kind: NoteKind
   title: string
   content: string
-  sources: string[]
-  status: NoteStatus
-  supersededBy: string | null
-  revision: number
+  version: number
   updatedAt: number
-  updatedBy: string
-  updatedSession: string
-}
-
-export interface HistoryRecord {
-  entity: "task" | "note"
-  entityId: string
-  revision: number
-  snapshot: unknown
-  archivedAt: number
-  archivedBy: string
 }
 
 export interface TaskPatch {
   title?: string
   status?: string
-  objective?: string
-  acceptance?: string
-  currentState?: string
-  nextAction?: string
-  blockers?: string
-  knowledgeRefs?: string[]
-  evidence?: string[]
-  assignments?: string[]
+  description?: string
 }
 
 export interface NotePatch {
   topic?: string
-  kind?: string
   title?: string
   content?: string
-  sources?: string[]
-  status?: string
-  supersededBy?: string | null
 }
 
 export interface SaveResult {
   id: string
-  revision: number
+  version: number
   created: boolean
 }
 
-const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
-
-const text = (value: unknown, field: string): string => {
-  if (typeof value !== "string") throw new Error(`Invalid ${field}`)
-  return value
-}
-
-const optionalText = (value: unknown): string => typeof value === "string" ? value : ""
-
-const number = (value: unknown, field: string): number => {
-  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error(`Invalid ${field}`)
-  return value
-}
-
-const strings = (value: unknown, field: string): string[] => {
-  if (typeof value !== "string") throw new Error(`Invalid ${field}`)
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value)
-  } catch (error) {
-    throw new Error(`Invalid ${field}`, { cause: error })
+export function assertId(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) {
+    throw new Error("Invalid id: use up to 128 letters, numbers, dots, underscores or dashes")
   }
-  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) throw new Error(`Invalid ${field}`)
-  return parsed
-}
-
-const json = (value: string[]): string => JSON.stringify(value)
-
-function assertId(value: string, field: string): string {
-  if (!ID.test(value)) throw new Error(`Invalid ${field}: use letters, numbers, dot, underscore or dash`)
   return value
 }
 
-function assertStatus(value: string): TaskStatus {
+function requiredText(value: unknown, field: string, maximum?: number): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`)
+  if (maximum !== undefined && Array.from(value).length > maximum) throw new Error(`${field} must not exceed ${maximum} characters`)
+  return value.trim()
+}
+
+function taskStatus(value: string): TaskStatus {
   if (!TASK_STATUSES.includes(value as TaskStatus)) throw new Error(`Invalid task status: ${value}`)
   return value as TaskStatus
-}
-
-function assertKind(value: string): NoteKind {
-  if (!NOTE_KINDS.includes(value as NoteKind)) throw new Error(`Invalid note kind: ${value}`)
-  return value as NoteKind
-}
-
-function assertNoteStatus(value: string): NoteStatus {
-  if (!NOTE_STATUSES.includes(value as NoteStatus)) throw new Error(`Invalid note status: ${value}`)
-  return value as NoteStatus
 }
 
 function mapTask(value: unknown): TaskRecord {
   const row = asRecord(value)
   return {
-    id: text(row.id, "task id"),
-    title: text(row.title, "task title"),
-    status: assertStatus(text(row.status, "task status")),
-    objective: optionalText(row.objective),
-    acceptance: optionalText(row.acceptance),
-    currentState: optionalText(row.current_state),
-    nextAction: optionalText(row.next_action),
-    blockers: optionalText(row.blockers),
-    knowledgeRefs: strings(row.knowledge_refs, "task knowledge_refs"),
-    evidence: strings(row.evidence, "task evidence"),
-    assignments: strings(row.assignments, "task assignments"),
-    revision: number(row.revision, "task revision"),
-    updatedAt: number(row.updated_at, "task updated_at"),
-    updatedBy: optionalText(row.updated_by),
-    updatedSession: optionalText(row.updated_session),
+    id: String(row.id), title: String(row.title), status: taskStatus(String(row.status)),
+    description: String(row.description), version: Number(row.version),
+    createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
   }
 }
 
 function mapNote(value: unknown): NoteRecord {
   const row = asRecord(value)
   return {
-    id: text(row.id, "note id"),
-    topic: text(row.topic, "note topic"),
-    kind: assertKind(text(row.kind, "note kind")),
-    title: text(row.title, "note title"),
-    content: text(row.content, "note content"),
-    sources: strings(row.sources, "note sources"),
-    status: assertNoteStatus(text(row.status, "note status")),
-    supersededBy: typeof row.superseded_by === "string" ? row.superseded_by : null,
-    revision: number(row.revision, "note revision"),
-    updatedAt: number(row.updated_at, "note updated_at"),
-    updatedBy: optionalText(row.updated_by),
-    updatedSession: optionalText(row.updated_session),
+    id: String(row.id), topic: String(row.topic), title: String(row.title),
+    content: String(row.content), version: Number(row.version), updatedAt: Number(row.updated_at),
   }
 }
 
-function mapHistory(value: unknown): HistoryRecord {
-  const row = asRecord(value)
-  const entity = text(row.entity, "history entity")
-  if (entity !== "task" && entity !== "note") throw new Error("Invalid history entity")
-  return {
-    entity,
-    entityId: text(row.entity_id, "history entity_id"),
-    revision: number(row.revision, "history revision"),
-    snapshot: JSON.parse(text(row.snapshot, "history snapshot")) as unknown,
-    archivedAt: number(row.archived_at, "history archived_at"),
-    archivedBy: optionalText(row.archived_by),
+function checkVersion(id: string, current: { version: number } | null, expected: number | null): void {
+  if (expected !== null && (!Number.isSafeInteger(expected) || expected < 1)) throw new Error("expectedVersion must be a positive integer")
+  if (!current) {
+    if (expected !== null) throw new Error(`Record ${id} does not exist; omit expectedVersion to create it`)
+    return
   }
+  if (expected === null) throw new Error(`Record ${id} already exists; provide expectedVersion`)
+  if (current.version !== expected) throw new Error(`Record ${id} changed: expected version ${expected}, current ${current.version}`)
 }
 
 export class MemoryStore {
-  constructor(private readonly database: SqliteDatabase) {
-    this.database.exec(`
-      CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        status TEXT NOT NULL,
-        objective TEXT NOT NULL DEFAULT '',
-        acceptance TEXT NOT NULL DEFAULT '',
-        current_state TEXT NOT NULL DEFAULT '',
-        next_action TEXT NOT NULL DEFAULT '',
-        blockers TEXT NOT NULL DEFAULT '',
-        knowledge_refs TEXT NOT NULL DEFAULT '[]',
-        evidence TEXT NOT NULL DEFAULT '[]',
-        assignments TEXT NOT NULL DEFAULT '[]',
-        revision INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        updated_by TEXT NOT NULL,
-        updated_session TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS notes (
-        id TEXT PRIMARY KEY,
-        topic TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        sources TEXT NOT NULL DEFAULT '[]',
-        status TEXT NOT NULL,
-        superseded_by TEXT,
-        revision INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        updated_by TEXT NOT NULL,
-        updated_session TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        entity TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
-        revision INTEGER NOT NULL,
-        snapshot TEXT NOT NULL,
-        archived_at INTEGER NOT NULL,
-        archived_by TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_notes_topic ON notes(topic);
-      CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status);
-      CREATE INDEX IF NOT EXISTS idx_history_entity ON history(entity, entity_id, revision);
-    `)
+  readonly migrationBackup: string | null
+
+  constructor(private readonly database: SqliteDatabase, path?: string, readonly = false) {
+    this.migrationBackup = initializeMemory(database, path, readonly)
   }
 
   close(): void {
     this.database.close()
   }
 
-  private transaction<T>(operation: () => T): T {
-    this.database.exec("BEGIN IMMEDIATE")
+  private transaction<T>(operation: () => T, write = true): T {
+    this.database.exec(write ? "BEGIN IMMEDIATE" : "BEGIN")
     try {
       const result = operation()
       this.database.exec("COMMIT")
@@ -246,257 +117,134 @@ export class MemoryStore {
     }
   }
 
-  private archive(entity: "task" | "note", entityId: string, revision: number, snapshot: unknown, actor: string, now: number): void {
-    this.database.prepare(
-      "INSERT INTO history (entity, entity_id, revision, snapshot, archived_at, archived_by) VALUES (?, ?, ?, ?, ?, ?)",
-    ).run(entity, entityId, revision, JSON.stringify(snapshot), now, actor)
-  }
-
   getTask(id: string): TaskRecord | null {
-    const row = this.database.prepare("SELECT * FROM tasks WHERE id = ?").get(assertId(id, "task id"))
-    return row === undefined || row === null ? null : mapTask(row)
+    const row = this.database.prepare("SELECT * FROM tasks WHERE id = ?").get(assertId(id))
+    return row == null ? null : mapTask(row)
   }
 
-  listTasks(status?: string, limit = 20, offset = 0): TaskRecord[] {
-    const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 50)
-    const safeOffset = Math.max(Math.trunc(offset), 0)
+  listTasks(status?: string, limit = 21, offset = 0): TaskRecord[] {
     const rows = status === undefined
-      ? this.database.prepare("SELECT * FROM tasks WHERE status != 'archived' ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(safeLimit, safeOffset)
-      : this.database.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(assertStatus(status), safeLimit, safeOffset)
+      ? this.database.prepare("SELECT * FROM tasks ORDER BY updated_at DESC, id LIMIT ? OFFSET ?").all(limit, offset)
+      : this.database.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC, id LIMIT ? OFFSET ?").all(taskStatus(status), limit, offset)
     return rows.map(mapTask)
   }
 
-  saveTask(
-    id: string,
-    patch: TaskPatch,
-    actor: string,
-    session: string,
-    expectedRevision: number | null = null,
-  ): SaveResult {
-    assertId(id, "task id")
-    const now = Date.now()
+  saveTask(id: string, patch: TaskPatch, expectedVersion: number | null = null): SaveResult {
+    assertId(id)
     return this.transaction(() => {
       const current = this.getTask(id)
-      if (current === null) {
-        if (expectedRevision !== null) throw new Error("Task does not exist; omit expectedRevision to create it")
-        if (!patch.title?.trim()) throw new Error("A title is required to create a task")
-        const task: TaskRecord = {
-          id,
-          title: patch.title.trim(),
-          status: patch.status === undefined ? "todo" : assertStatus(patch.status),
-          objective: patch.objective ?? "",
-          acceptance: patch.acceptance ?? "",
-          currentState: patch.currentState ?? "",
-          nextAction: patch.nextAction ?? "",
-          blockers: patch.blockers ?? "",
-          knowledgeRefs: patch.knowledgeRefs ?? [],
-          evidence: patch.evidence ?? [],
-          assignments: patch.assignments ?? [],
-          revision: 1,
-          updatedAt: now,
-          updatedBy: actor,
-          updatedSession: session,
-        }
-        const insert = this.database.prepare(`
-          INSERT INTO tasks (
-            id, title, status, objective, acceptance, current_state, next_action, blockers,
-            knowledge_refs, evidence, assignments, revision, updated_at, updated_by, updated_session
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          task.id, task.title, task.status, task.objective, task.acceptance, task.currentState,
-          task.nextAction, task.blockers, json(task.knowledgeRefs), json(task.evidence),
-          json(task.assignments), task.revision, task.updatedAt, task.updatedBy, task.updatedSession,
-        )
-        if (Number(insert.changes) !== 1) throw new Error(`Task ${id} could not be created`)
-        return { id, revision: 1, created: true }
-      }
-
-      if (expectedRevision === null) throw new Error(`Task ${id} already exists; provide expectedRevision`)
-      if (current.revision !== expectedRevision) {
-        throw new Error(`Task ${id} changed: expected revision ${expectedRevision}, current ${current.revision}`)
-      }
-      if (patch.title !== undefined && !patch.title.trim()) throw new Error("Task title cannot be empty")
-      const next: TaskRecord = {
-        ...current,
-        ...patch,
-        status: patch.status === undefined ? current.status : assertStatus(patch.status),
-        revision: current.revision + 1,
-        updatedAt: now,
-        updatedBy: actor,
-        updatedSession: session,
-      }
-      const update = this.database.prepare(`
-        UPDATE tasks SET
-          title = ?, status = ?, objective = ?, acceptance = ?, current_state = ?,
-          next_action = ?, blockers = ?, knowledge_refs = ?, evidence = ?, assignments = ?,
-          revision = ?, updated_at = ?, updated_by = ?, updated_session = ?
-        WHERE id = ? AND revision = ?
-      `).run(
-        next.title, next.status, next.objective, next.acceptance, next.currentState,
-        next.nextAction, next.blockers, json(next.knowledgeRefs), json(next.evidence),
-        json(next.assignments), next.revision, next.updatedAt, next.updatedBy, next.updatedSession,
-        id, current.revision,
-      )
-      if (Number(update.changes) !== 1) {
-        throw new Error(`Task ${id} changed: expected revision ${current.revision}`)
-      }
-      this.archive("task", id, current.revision, current, actor, now)
-      return { id, revision: next.revision, created: false }
+      checkVersion(id, current, expectedVersion)
+      const title = requiredText(patch.title ?? current?.title, "title", 200)
+      const status = taskStatus(patch.status ?? current?.status ?? "todo")
+      const description = patch.description ?? current?.description ?? ""
+      if (typeof description !== "string") throw new Error("Invalid description")
+      const now = Date.now()
+      const version = (current?.version ?? 0) + 1
+      const result = current
+        ? this.database.prepare("UPDATE tasks SET title = ?, status = ?, description = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?")
+          .run(title, status, description, version, now, id, current.version)
+        : this.database.prepare("INSERT INTO tasks (id, title, status, description, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .run(id, title, status, description, version, now, now)
+      if (Number(result.changes) !== 1) throw new Error(`Task ${id} changed; read it again`)
+      return { id, version, created: current === null }
     })
+  }
+
+  addTaskNote(id: string, note: string, expectedVersion: number | null = null): { note: TaskNote; version: number } {
+    assertId(id)
+    const value = requiredText(note, "note", 500)
+    return this.transaction(() => {
+      const task = this.getTask(id)
+      if (!task) throw new Error(`Task not found: ${id}`)
+      if (expectedVersion !== null) checkVersion(id, task, expectedVersion)
+      const createdAt = Date.now()
+      const result = this.database.prepare("INSERT INTO task_notes (task_id, note, created_at) VALUES (?, ?, ?)").run(id, value, createdAt)
+      if (Number(result.changes) !== 1) throw new Error(`Progress note for ${id} could not be saved`)
+      const update = this.database.prepare("UPDATE tasks SET updated_at = ?, version = version + 1 WHERE id = ? AND version = ?").run(createdAt, id, task.version)
+      if (Number(update.changes) !== 1) throw new Error(`Task ${id} changed; progress note was not saved`)
+      return { note: { id: Number(result.lastInsertRowid), taskId: id, note: value, createdAt }, version: task.version + 1 }
+    })
+  }
+
+  taskNotes(id: string, limit = 11, offset = 0): TaskNote[] {
+    return this.database.prepare("SELECT * FROM task_notes WHERE task_id = ? ORDER BY id DESC LIMIT ? OFFSET ?")
+      .all(assertId(id), limit, offset).map((value) => {
+        const row = asRecord(value)
+        return { id: Number(row.id), taskId: String(row.task_id), note: String(row.note), createdAt: Number(row.created_at) }
+      })
+  }
+
+  getTaskWithNotes(id: string, limit: number, offset: number): { task: TaskRecord; notes: TaskNote[] } {
+    return this.transaction(() => {
+      const task = this.getTask(id)
+      if (!task) throw new Error(`Task not found: ${id}`)
+      return { task, notes: this.taskNotes(id, limit, offset) }
+    }, false)
   }
 
   getNote(id: string): NoteRecord | null {
-    const row = this.database.prepare("SELECT * FROM notes WHERE id = ?").get(assertId(id, "note id"))
-    return row === undefined || row === null ? null : mapNote(row)
+    const row = this.database.prepare("SELECT * FROM knowledge WHERE id = ?").get(assertId(id))
+    return row == null ? null : mapNote(row)
   }
 
-  searchNotes(query: string, options: { topic?: string; kind?: string; limit?: number; offset?: number } = {}): NoteRecord[] {
-    if (!query.trim()) throw new Error("A search query is required")
-    const limit = Math.min(Math.max(Math.trunc(options.limit ?? 5), 1), 20)
-    const offset = Math.max(Math.trunc(options.offset ?? 0), 0)
-    const filters = ["status = 'active'", "instr(lower(topic || ' ' || title || ' ' || content), lower(?)) > 0"]
-    const params: unknown[] = [query.trim()]
-    if (options.topic) {
+  listNotes(options: { query?: string; topic?: string; limit?: number; offset?: number } = {}): NoteRecord[] {
+    const filters: string[] = []
+    const params: unknown[] = []
+    if (options.query !== undefined) {
+      filters.push("instr(lower(topic || ' ' || title || ' ' || content), lower(?)) > 0")
+      params.push(requiredText(options.query, "query"))
+    }
+    if (options.topic !== undefined) {
       filters.push("topic = ?")
       params.push(options.topic)
     }
-    if (options.kind) {
-      filters.push("kind = ?")
-      params.push(assertKind(options.kind))
-    }
-    params.push(limit, offset)
-    const rows = this.database.prepare(
-      `SELECT * FROM notes WHERE ${filters.join(" AND ")} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
-    ).all(...params)
-    return rows.map(mapNote)
+    return this.database.prepare(`SELECT * FROM knowledge ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY topic, id LIMIT ? OFFSET ?`)
+      .all(...params, options.limit ?? 21, options.offset ?? 0).map(mapNote)
   }
 
-  saveNote(
-    id: string,
-    patch: NotePatch,
-    actor: string,
-    session: string,
-    expectedRevision: number | null = null,
-  ): SaveResult {
-    assertId(id, "note id")
-    if (patch.supersededBy !== undefined && patch.supersededBy !== null) {
-      assertId(patch.supersededBy, "supersededBy")
-    }
-    const now = Date.now()
+  knowledgeInventory(limit: number, offset: number) {
+    return this.transaction(() => {
+      const totals = asRecord(this.database.prepare("SELECT count(*) AS knowledge_count, count(DISTINCT topic) AS topic_count FROM knowledge").get())
+      const topics = this.database.prepare("SELECT topic, count(*) AS count FROM knowledge GROUP BY topic ORDER BY topic LIMIT ? OFFSET ?")
+        .all(limit, offset).map((value) => {
+          const row = asRecord(value)
+          return { topic: String(row.topic), count: Number(row.count) }
+        })
+      return { knowledgeCount: Number(totals.knowledge_count), topicCount: Number(totals.topic_count), topics }
+    }, false)
+  }
+
+  saveNote(id: string, patch: NotePatch, expectedVersion: number | null = null): SaveResult {
+    assertId(id)
     return this.transaction(() => {
       const current = this.getNote(id)
-      if (current === null) {
-        if (expectedRevision !== null) throw new Error("Note does not exist; omit expectedRevision to create it")
-        if (!patch.topic?.trim()) throw new Error("A topic is required to create a note")
-        if (!patch.title?.trim()) throw new Error("A title is required to create a note")
-        if (!patch.content?.trim()) throw new Error("Content is required to create a note")
-        const note: NoteRecord = {
-          id,
-          topic: patch.topic.trim(),
-          kind: patch.kind === undefined ? "fact" : assertKind(patch.kind),
-          title: patch.title.trim(),
-          content: patch.content,
-          sources: patch.sources ?? [],
-          status: patch.status === undefined ? "active" : assertNoteStatus(patch.status),
-          supersededBy: patch.supersededBy ?? null,
-          revision: 1,
-          updatedAt: now,
-          updatedBy: actor,
-          updatedSession: session,
-        }
-        const insert = this.database.prepare(`
-          INSERT INTO notes (
-            id, topic, kind, title, content, sources, status, superseded_by,
-            revision, updated_at, updated_by, updated_session
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          note.id, note.topic, note.kind, note.title, note.content, json(note.sources),
-          note.status, note.supersededBy, note.revision, note.updatedAt, note.updatedBy, note.updatedSession,
-        )
-        if (Number(insert.changes) !== 1) throw new Error(`Note ${id} could not be created`)
-        return { id, revision: 1, created: true }
-      }
-
-      if (expectedRevision === null) throw new Error(`Note ${id} already exists; provide expectedRevision`)
-      if (current.revision !== expectedRevision) {
-        throw new Error(`Note ${id} changed: expected revision ${expectedRevision}, current ${current.revision}`)
-      }
-      if (patch.topic !== undefined && !patch.topic.trim()) throw new Error("Note topic cannot be empty")
-      if (patch.title !== undefined && !patch.title.trim()) throw new Error("Note title cannot be empty")
-      if (patch.content !== undefined && !patch.content.trim()) throw new Error("Note content cannot be empty")
-      const next: NoteRecord = {
-        ...current,
-        ...patch,
-        kind: patch.kind === undefined ? current.kind : assertKind(patch.kind),
-        status: patch.status === undefined ? current.status : assertNoteStatus(patch.status),
-        revision: current.revision + 1,
-        updatedAt: now,
-        updatedBy: actor,
-        updatedSession: session,
-      }
-      const update = this.database.prepare(`
-        UPDATE notes SET
-          topic = ?, kind = ?, title = ?, content = ?, sources = ?, status = ?,
-          superseded_by = ?, revision = ?, updated_at = ?, updated_by = ?, updated_session = ?
-        WHERE id = ? AND revision = ?
-      `).run(
-        next.topic, next.kind, next.title, next.content, json(next.sources), next.status,
-        next.supersededBy, next.revision, next.updatedAt, next.updatedBy, next.updatedSession,
-        id, current.revision,
-      )
-      if (Number(update.changes) !== 1) {
-        throw new Error(`Note ${id} changed: expected revision ${current.revision}`)
-      }
-      this.archive("note", id, current.revision, current, actor, now)
-      return { id, revision: next.revision, created: false }
+      checkVersion(id, current, expectedVersion)
+      const topic = requiredText(patch.topic ?? current?.topic, "topic", 80)
+      const title = requiredText(patch.title ?? current?.title, "title", 200)
+      const content = patch.content ?? current?.content ?? ""
+      requiredText(content, "content")
+      const result = this.database.prepare(`
+        INSERT INTO knowledge (id, topic, title, content, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET topic = excluded.topic, title = excluded.title,
+          content = excluded.content, version = excluded.version, updated_at = excluded.updated_at
+        WHERE knowledge.version = ?
+      `).run(id, topic, title, content, Date.now(), expectedVersion)
+      if (Number(result.changes) !== 1) throw new Error(`Knowledge ${id} changed; read it again`)
+      const saved = this.getNote(id)
+      if (!saved) throw new Error(`Knowledge ${id} could not be saved`)
+      return { id, version: saved.version, created: current === null }
     })
   }
 
-  overview(limitPerTopic = 3): {
-    projectRules: NoteRecord | null
-    total: number
-    topics: Array<{ topic: string; count: number; titles: string[] }>
-  } {
-    const projectRules = this.getNoteOrNull("project-rules")
-    const totalRow = asRecord(this.database.prepare("SELECT count(*) AS total FROM notes WHERE status = 'active'").get())
-    const total = number(totalRow.total, "note total")
-    const topicRows = this.database.prepare(
-      "SELECT topic, count(*) AS count FROM notes WHERE status = 'active' GROUP BY topic ORDER BY topic",
-    ).all()
-    const topics = topicRows.map((value) => {
-      const row = asRecord(value)
-      const topic = text(row.topic, "note topic")
-      const rows = this.database.prepare(
-        "SELECT title FROM notes WHERE status = 'active' AND topic = ? ORDER BY updated_at DESC LIMIT ?",
-      ).all(topic, Math.min(Math.max(Math.trunc(limitPerTopic), 1), 10))
-      return {
-        topic,
-        count: number(row.count, "topic count"),
-        titles: rows.map((item) => text(asRecord(item).title, "note title")),
-      }
+  removeNote(id: string, expectedVersion: number): { id: string; removed: true } {
+    assertId(id)
+    return this.transaction(() => {
+      const current = this.getNote(id)
+      if (!current) throw new Error(`Knowledge not found: ${id}`)
+      checkVersion(id, current, expectedVersion)
+      const result = this.database.prepare("DELETE FROM knowledge WHERE id = ? AND version = ?").run(id, expectedVersion)
+      if (Number(result.changes) !== 1) throw new Error(`Knowledge ${id} changed; read it again`)
+      return { id, removed: true }
     })
-    return { projectRules, total, topics }
-  }
-
-  private getNoteOrNull(id: string): NoteRecord | null {
-    const row = this.database.prepare("SELECT * FROM notes WHERE id = ? AND status = 'active'").get(id)
-    return row === undefined || row === null ? null : mapNote(row)
-  }
-
-  history(entity: "task" | "note", id: string, limit = 5, offset = 0): HistoryRecord[] {
-    assertId(id, `${entity} id`)
-    const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 20)
-    return this.database.prepare(
-      "SELECT * FROM history WHERE entity = ? AND entity_id = ? ORDER BY revision DESC LIMIT ? OFFSET ?",
-    ).all(entity, id, safeLimit, offset).map(mapHistory)
-  }
-
-  historyRevision(entity: "task" | "note", id: string, revision: number): HistoryRecord | null {
-    assertId(id, `${entity} id`)
-    if (!Number.isSafeInteger(revision) || revision < 1) throw new Error("revision must be a positive integer")
-    const row = this.database.prepare(
-      "SELECT * FROM history WHERE entity = ? AND entity_id = ? AND revision = ?",
-    ).get(entity, id, revision)
-    return row == null ? null : mapHistory(row)
   }
 }

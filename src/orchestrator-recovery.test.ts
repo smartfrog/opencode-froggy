@@ -11,7 +11,7 @@ describe("orchestration recovery across processes", () => {
   beforeEach(() => {
     directory = mkdtempSync(join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), "froggy-recovery-"))
     writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "commonjs" }))
-    for (const name of ["record", "logger", "session-children", "orchestrator-diagnostics", "orchestrator-loop", "tools/memory-file", "test-fixtures/orchestrator-recovery"]) {
+    for (const name of ["record", "logger", "session-children", "orchestrator-diagnostics", "orchestrator-loop", "memory/sqlite", "memory/migration", "memory/store", "memory/project", "memory/path-safety", "memory/bounds", "memory/tool-input", "tools/task-board", "test-fixtures/orchestrator-recovery"]) {
       const source = readFileSync(new URL(`./${name}.ts`, import.meta.url), "utf8")
       const target = join(directory, `${name}.js`)
       mkdirSync(dirname(target), { recursive: true })
@@ -43,23 +43,20 @@ describe("orchestration recovery across processes", () => {
       workspace: join(directory, "worker"),
     })
     expect(recovered.sessionAndWorkspaceVerified).toBe(true)
-    expect(recovered.hash).toBe(prepared.hash)
+    expect(recovered.taskVersion).toBe(prepared.taskVersion)
     expect(recovered.revision).toBe(prepared.revision)
     expect(recovered.delay).toBe(1000)
     expect(recovered.admitted).toBe(1)
     expect(recovered.woken).toBe(1)
   })
 
-  it("preserves and diagnoses an owned lock after its writing process exits before replacement", () => {
+  it("rolls back an interrupted SQLite write and allows subsequent updates", () => {
     run("prepare")
     expect(() => run("crash")).toThrow(expect.objectContaining({ status: 77 }))
 
-    const inspected = run("inspect-lock")
+    const inspected = run("inspect-rollback")
 
-    expect(inspected.error).toContain("ses_fixture_crash")
-    expect(inspected.error).toMatch(/age \d+ms/)
-    expect(inspected.error).toContain("Confirm")
-    expect(inspected.lockRetained).toBe(true)
+    expect(inspected.writesResumed).toBe(true)
     expect(inspected.originalPreserved).toBe(true)
   })
 })

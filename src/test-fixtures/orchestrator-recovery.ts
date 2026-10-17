@@ -3,7 +3,8 @@ import { join } from "node:path"
 import { createOrchestratorLoop, type LoopSessionClient, type LoopStorage } from "../orchestrator-loop"
 import { asRecord } from "../record"
 import { ChildSessionTracker } from "../session-children"
-import { createMemoryFileTool } from "../tools/memory-file"
+import { openSqlite } from "../memory/sqlite"
+import { createTaskBoardTool } from "../tools/task-board"
 
 type StoredValues = Record<string, Parameters<LoopStorage["set"]>[1]>
 
@@ -14,9 +15,8 @@ function readJsonObject(path: string): StoredValues {
 }
 
 const directory = process.cwd()
-const file = ".opencode/backlog/FIXTURE.md"
 const context = { agent: "memory-manager", sessionID: "ses_fixture_manager" }
-const memory = createMemoryFileTool(directory)
+const memory = createTaskBoardTool(directory)
 const tracker = new ChildSessionTracker()
 const storageFile = join(directory, "storage.json")
 const sessionsFile = join(directory, "sessions.json")
@@ -76,30 +76,26 @@ async function main() {
     }))
     tracker.trackChild({ id: "ses_fixture_worker", parentID: "ses_fixture_parent", created: Date.now(), updated: Date.now() })
     const assignment = { id: "FIXTURE", status: "in-progress", workerSessionID: "ses_fixture_worker", workspace, nextAction: "Complete the fixture investigation" }
-    const receipt = asRecord(JSON.parse((await memory.execute({ action: "write", path: file, expectedHash: null, content: `---\n${JSON.stringify(assignment)}\n---\n` }, context)).content))
-    if (typeof receipt.hash !== "string") throw new Error("Fixture save receipt is missing its hash")
+    const receipt = asRecord(JSON.parse((await memory.execute({ action: "save", id: "FIXTURE", title: "Recover assignment", status: "in-progress", description: JSON.stringify(assignment) }, context)).content))
+    if (typeof receipt.version !== "number") throw new Error("Fixture save receipt is missing its version")
     const loop = createOrchestratorLoop({ directory, storage, session })
     await loop.start("ses_fixture_parent", { objective: "Recover the fixture assignment", intervalMinutes: 1 })
-    return { pid: process.pid, hash: receipt.hash, childCount: tracker.listChildren("ses_fixture_parent").length, revision: readSchedule().revision }
+    return { pid: process.pid, taskVersion: receipt.version, childCount: tracker.listChildren("ses_fixture_parent").length, revision: readSchedule().revision }
   }
-  const source = asRecord(JSON.parse((await memory.execute({ action: "read", path: file }, context)).content))
-  if (typeof source.hash !== "string" || typeof source.content !== "string") throw new Error("Fixture memory source is missing or invalid")
+  const source = asRecord(asRecord(JSON.parse((await memory.execute({ action: "get", id: "FIXTURE" }, context)).content)).task)
+  if (typeof source.version !== "number" || typeof source.description !== "string") throw new Error("Fixture memory source is missing or invalid")
   if (stage === "crash") {
-    fs.renameSync = () => process.exit(77)
-    await memory.execute({ action: "write", path: file, expectedHash: source.hash, content: "Interrupted replacement" }, { ...context, sessionID: "ses_fixture_crash" })
-    throw new Error("Fixture crash was not reached")
+    const database = openSqlite(join(directory, ".opencode/memory/memory.db"))
+    database.exec("BEGIN IMMEDIATE")
+    database.prepare("UPDATE tasks SET description = ? WHERE id = ?").run("Interrupted replacement", "FIXTURE")
+    process.exit(77)
   }
-  if (stage === "inspect-lock") {
-    let failure: string | undefined
-    try {
-      await memory.execute({ action: "write", path: file, expectedHash: source.hash, content: "Must remain blocked" }, context)
-    } catch (error) {
-      failure = String(error)
-    }
-    return { error: failure, lockRetained: fs.existsSync(`${file}.memory-lock`), originalPreserved: fs.readFileSync(file, "utf8") === source.content && source.content.includes("Complete the fixture investigation") }
+  if (stage === "inspect-rollback") {
+    const receipt = asRecord(JSON.parse((await memory.execute({ action: "save", id: "FIXTURE", expectedVersion: source.version, status: "review" }, context)).content))
+    return { originalPreserved: source.description.includes("Complete the fixture investigation"), writesResumed: receipt.version === source.version + 1 }
   }
   if (stage !== "recover") throw new Error(`Unknown fixture stage: ${stage}`)
-  const assignment = asRecord(JSON.parse(source.content.split("\n")[1]))
+  const assignment = asRecord(JSON.parse(source.description))
   if (typeof assignment.workerSessionID !== "string" || typeof assignment.workspace !== "string" || typeof assignment.nextAction !== "string") {
     throw new Error("Fixture assignment is missing or invalid")
   }
@@ -127,7 +123,7 @@ async function main() {
   timers[0].callback()
   await new Promise<void>((resolve) => setImmediate(resolve))
   await loop.close()
-  return { pid: process.pid, hash: source.hash, assignment, childCount: tracker.listChildren("ses_fixture_parent").length, sessionAndWorkspaceVerified: worker.agent === "general" && workerLocation.directory === assignment.workspace && fs.statSync(assignment.workspace).isDirectory(), delay, revision: config.revision, admitted, woken }
+  return { pid: process.pid, taskVersion: source.version, assignment, childCount: tracker.listChildren("ses_fixture_parent").length, sessionAndWorkspaceVerified: worker.agent === "general" && workerLocation.directory === assignment.workspace && fs.statSync(assignment.workspace).isDirectory(), delay, revision: config.revision, admitted, woken }
 }
 
 main().then((result) => process.stdout.write(JSON.stringify(result))).catch((error) => {

@@ -4,9 +4,9 @@ export { pdfToMarkdownTool } from "./pdf-to-markdown"
 export { createListChildSessionsTool } from "./list-child-sessions"
 export { createSessionContextTool } from "./session-context"
 export { createOrchestratorLoopTools } from "./orchestrator-loop"
-export { createMemoryFileTool } from "./memory-file"
 export { createTaskBoardTool } from "./task-board"
 export { createKnowledgeTool } from "./knowledge"
+export { createMemoryReviewTool } from "./memory-review"
 export {
   createAgentPromoteTool,
   validateGrade,

@@ -74,22 +74,24 @@ Froggy separates **current execution state** from **durable knowledge**:
 
 | Store | Purpose |
 |---|---|
-| `task-board` | Objectives, status, blockers, next actions, assignments, evidence references |
-| `knowledge` | Constraints, decisions, facts, and lessons grouped by topic |
+| `task-board` | Title, status, detailed description and short progress notes |
+| `knowledge` | Valuable constraints, performance tips, pitfalls and decisions grouped by topic |
 
-Both live in one SQLite database per canonical project and are shared across its worktrees. All agents may read. Only `memory-manager` may save tasks or knowledge; coordinators delegate verified facts and decisions to it.
+Both live in one SQLite database per canonical project, shared across worktrees. All agents may read. Only `memory-manager` writes; it decides which knowledge to keep, correct, merge or permanently delete. Coordinators supply verified facts and execution decisions, not final memory prose.
 
-Read the affected task first, then use `knowledge` `overview`, search, and get only the notes you need. Do not load the whole store.
+Read the affected task first, then use knowledge `list`/`search` and `get` only what you need. Follow `nextPage` with `page` for incomplete results. Do not load the whole store.
 
-See [Project memory](docs/memory.md) for the system model, diagrams, revision semantics, placement rules, anti-patterns, and a compact tool reference. Utility tool parameters are in [Reference](docs/reference.md#utility-tools).
+See [Project memory](docs/memory.md) for the model, curation rules, tools and upgrades. Utility tool parameters are in [Reference](docs/reference.md#utility-tools).
 
 ### task-board
 
-Compact, revision-checked operational state for the project. Use `list`/`get` for bounded reads, `history` for prior revisions, and delegate `save` to `memory-manager`.
+Simple task tracking with `todo`, `in-progress`, `blocked`, `review` and `done`. Use `list`/`get` to read; the manager uses `save` and `note`. Updates require the version just read, without keeping old revisions.
 
 ### knowledge
 
-Topic-organized durable knowledge. Use `overview`, `search`, and `get` for discovery; delegate `save` to `memory-manager`. A note may be marked `superseded` and linked to its replacement.
+Topic-organized durable knowledge. Use `list`, `search` and `get` for discovery. The manager uses `save` or version-checked `remove`; removal is permanent, not archival. It may also refuse low-value material or return `No change`.
+
+Run `/memory-review` on demand for a global knowledge review. The read-only `memory-review` tool inventories topics; the manager reads all entries and proposes corrections, merges or removals for your validation. Nothing is applied during the review.
 
 ## Ethereum and EVM
 
@@ -131,7 +133,7 @@ See [Hooks](docs/hooks.md) for all events, conditions, actions, context, exit co
 | `doc-writer` | subagent | Technical writer for README, API, architecture, and user documentation. |
 | `code-reviewer` | subagent | Independent review of correctness, regressions, security, and maintainability. |
 | `code-simplifier` | subagent | Simplifies recently modified code while preserving behavior. |
-| `memory-manager` | subagent | Sole structured task/knowledge writer; reconciles delegated transitions and curates durable memory. |
+| `memory-manager` | subagent | Sole task/knowledge writer; decides what knowledge to retain, correct, merge or permanently remove. |
 | `partner` | subagent | Strategic ideation partner that expands solution spaces. Read-only. |
 | `rubber-duck` | subagent | Thinking partner that listens, reflects, and asks focused questions. Read-only. |
 
@@ -150,6 +152,7 @@ The `orchestrator` is a primary agent that owns execution decisions. It does not
 | `/doc-changes` | Update documentation for new uncommitted features. | `doc-writer` |
 | `/gh-create-pr` | Commit, push, and create a GitHub pull request. | `build` |
 | `/linear-stale-check` | Review open Linear issues for likely relevance. | `plan` |
+| `/memory-review` | Review all project knowledge and propose cleanup for user validation. | `memory-manager` |
 | `/release` | Prepare and execute a release with explicit confirmation. | — |
 | `/review-changes` | Review staged, unstaged, and untracked changes. | `code-reviewer` |
 | `/review-pr <source> <target>` | Review a branch diff into a target branch. | `code-reviewer` |
@@ -164,7 +167,7 @@ Selected command details are in [Reference](docs/reference.md#commands).
 
 | Domain | Tools | Guide |
 |---|---|---|
-| Memory | `task-board`, `knowledge`, `memory-file` (legacy) | [Project memory](docs/memory.md) |
+| Memory | `task-board`, `knowledge`, `memory-review` | [Project memory](docs/memory.md) |
 | Orchestration | `start-orchestrator-loop`, `stop-orchestrator-loop`, `orchestrator-status` | [Orchestration](docs/orchestration.md#coordination-loop) |
 | Ethereum/EVM | `eth-transaction`, `eth-address-balance`, `eth-address-txs`, `eth-token-transfers` | [Ethereum and EVM](docs/ethereum.md) |
 | Utilities | `gitingest`, `list-child-sessions`, `session-context`, `pdf-to-markdown`, `agent-promote` | [Reference](docs/reference.md#utility-tools) |

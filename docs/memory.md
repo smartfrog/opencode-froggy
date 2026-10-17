@@ -1,408 +1,125 @@
 # Project memory
 
-Project memory exists so that a later session can answer two different questions without rereading an entire conversation or a giant Markdown file:
-
-1. **What are we doing now, and what should happen next?**
-2. **What durable knowledge should change a future decision?**
-
-Froggy separates those questions into an operational task board and a durable knowledge store. Detailed evidence stays in files, and conversation history stays in sessions.
-
-[Back to README](../README.md)
-
-## Contents
-
-- [Two stores, one authority](#two-stores-one-authority)
-- [What lives where](#what-lives-where)
-- [Who can do what](#who-can-do-what)
-- [System architecture](#system-architecture)
-- [Record model](#record-model)
-- [Reading memory](#reading-memory)
-- [Recording a transition](#recording-a-transition)
-- [Task lifecycle](#task-lifecycle)
-- [Knowledge organization](#knowledge-organization)
-- [Revisions, history, and conflicts](#revisions-history-and-conflicts)
-- [A coherent update](#a-coherent-update)
-- [Tool reference](#tool-reference)
-- [Placement rules](#placement-rules)
-- [Anti-patterns](#anti-patterns)
-- [Legacy Markdown](#legacy-markdown)
-- [Persistence and scope](#persistence-and-scope)
-- [Quick checklist](#quick-checklist)
-
-## Two stores, one authority
-
-New projects use one database per canonical project:
-
-```text
-<canonical-project>/.opencode/memory/memory.db
-```
-
-Worktrees of the same project share that database. Separate projects get separate databases. There is no cross-project memory and no automatic synchronization with a remote tracker.
-
-| Store | Question it answers | Example content |
-|---|---|---|
-| `task-board` | What is happening now? | Objective, status, blocker, next action, assignments, evidence references |
-| `knowledge` | What should future work remember? | Constraints, decisions, facts, lessons, source references |
-| Evidence files | What proves it? | Reports, logs, measurements, test output |
-| Session history | What was said and done? | Messages, child sessions, prior investigations |
-
-The database is the operational authority for migrated projects. Evidence files and sessions remain authoritative for their own content; the task or note should point to them instead of copying them.
-
-## What lives where
-
-### Task-board content
-
-A task is a compact current snapshot. It is not a diary.
-
-| Field | Meaning |
-|---|---|
-| `title` | Short stable description |
-| `status` | `todo`, `in-progress`, `blocked`, `review`, `done`, or `archived` |
-| `objective` | Why the work exists and what outcome is wanted |
-| `acceptance` | Observable conditions for completion |
-| `currentState` | What is established now |
-| `nextAction` | The next useful action, or the next decision needed |
-| `blockers` | Actual unresolved obstacles |
-| `knowledgeRefs` | IDs of relevant durable notes |
-| `evidence` | Paths to reports, logs, measurements, or other durable proof |
-| `assignments` | Current owners and their bounded work |
-| revision | Version used for safe concurrent updates |
-
-### Knowledge content
-
-A note is organized by topic and kind:
-
-| Kind | Use it for |
-|---|---|
-| `constraint` | A rule, safety limit, user requirement, or durable boundary |
-| `decision` | A deliberate choice and its scope |
-| `fact` | A verified project or environment fact |
-| `lesson` | A reusable failure cause, correction, or non-obvious lesson |
-
-Notes also have a title, content, source references, status (`active` or `superseded`), and an optional replacement note.
-
-### What does not belong in memory
-
-- Full logs, reports, or measurements. Put them in evidence files and link them.
-- Every completed action or chronological milestone.
-- Raw conversation transcripts.
-- Secrets, keys, personal data, or private build artifacts.
-- A second live backlog in Markdown or a remote tracker.
-- A claim that a dispatched worker has already executed a run.
-
-## Who can do what
-
-| Actor | Read tasks | Read knowledge | Decide priority or acceptance | Save tasks | Save knowledge |
-|---|---:|---:|---:|---:|---:|
-| Any agent | Yes | Yes | No | No | No |
-| `product-owner` | Yes | Yes | Product intent | No | No |
-| `orchestrator` | Yes | Yes | Execution decisions | No | No |
-| Workers | Yes | Yes | No | No | No |
-| `memory-manager` | Yes | Yes | No | Yes | Yes |
-
-The coordinator owns **decisions**. The memory-manager owns **representation and placement**.
-
-That distinction prevents two failure modes:
-
-- a coordinator quietly turning the task board into an unstructured diary;
-- a curator inventing a decision, authorization, or execution result that the coordinator never supplied.
-
-The tools do not invoke a model automatically. A meaningful transition must be delegated explicitly. Unchanged reminders and individual log lines do not trigger a curation pass.
-
-## System architecture
+Froggy keeps two things: **simple task tracking** and **valuable project knowledge**.
+The goal is to recover what matters, not to preserve a journal of everything that happened.
 
 ```mermaid
 flowchart LR
-    U[User objective] --> P[Primary agents]
-    P -->|delegate bounded work| W[Workers]
-    W -->|result, checks, evidence| P
-    P -->|verified facts and decisions| M[memory-manager]
-    M -->|task updates| T[task-board]
-    M -->|knowledge updates| K[knowledge]
-    T --> DB[(canonical project memory)]
-    K --> DB
-    DB -->|bounded reads| P
-    DB -->|bounded reads| W
-    W -->|detailed reports and logs| E[project evidence files]
-    P -->|conversation and child sessions| S[OpenCode session history]
+    C[Coordinator: facts and decisions] --> M[Memory manager: curate]
+    M --> T[Tasks and short progress notes]
+    M --> K[Project knowledge]
+    A[All agents] -->|read| T
+    A -->|read| K
 ```
 
-The database stores the **current record**, not the full history of the project. Previous revisions are archived inside the same store and can be read on demand.
+## Tasks
 
-## Record model
+A task has a stable **ID**, **title**, **status**, and **detailed description**.
+Statuses are `todo`, `in-progress`, `blocked`, `review`, and `done`.
 
-This is a conceptual model, not a database schema.
+The description holds scope, acceptance, current state, next step and useful evidence links.
+Keep session/workspace references there when needed to resume work.
+Short progress notes record meaningful advances or blockers, at most 500 characters each.
+They are not a log: update an obsolete description rather than burying corrections in notes.
 
-```mermaid
-erDiagram
-    TASK ||--o{ HISTORY : archives
-    NOTE ||--o{ HISTORY : archives
-    TASK }o--o{ NOTE : references
-    TASK }o--o{ EVIDENCE : cites
-    NOTE }o--o{ EVIDENCE : sources
-    NOTE ||--o| NOTE : supersedes
-```
+The coordinator decides assignments and acceptance. A dispatched worker is not proof of
+execution, and a passing static check is not proof that the product objective is achieved.
 
-A task points to the knowledge it needs and to the files that prove it. A note points to its sources and may point to a replacement note. History belongs to the record that changed.
+## Project knowledge
 
-## Reading memory
+Each entry has an **ID**, **topic**, **title**, and **content** in Markdown.
+Topics fit the project: for example `constraints`, `performance`, `build` or `runtime`.
+Include useful source links in the content, not separate metadata fields.
 
-Start from the question, not from the whole store.
+Keep information that can change a future decision:
 
-```mermaid
-flowchart TD
-    A[Start or resume] --> B[Read the affected task]
-    B --> C[Read knowledge overview]
-    C --> D{Need a specific fact?}
-    D -- No --> E[Act on the task]
-    D -- Yes --> F[Search by topic or text]
-    F --> G[Get only matching notes]
-    G --> H[Open detailed evidence only for a decision]
-    H --> E
-```
+- user constraints and safety limits;
+- reproducible performance tips and their conditions;
+- build pitfalls, failure causes and recovery procedures;
+- non-obvious project facts and design decisions with their reasons.
 
-Recommended discovery path:
+For example, a 6 GiB memory ceiling or a measured scheduler optimization belongs here.
+“Trial #14 launched; results pending” belongs in the task. Raw logs stay in linked files.
+Do not duplicate facts already adequately covered by project instructions or documentation.
 
-1. **Read the task** with `task-board` `list` or `get`.
-2. **Get the knowledge overview** to see `project-rules` and available topics.
-3. **Search** for the specific subject.
-4. **Get only the matching notes**.
-5. **Open a report or log** only when a decision or verification requires it.
+## The memory manager decides
 
-Do not load every task and note at startup. A periodic reminder alone is not a reason to reread unchanged memory. Reuse facts already in context, and verify references against actual Git and session state when they matter.
+All agents read directly. **Only `memory-manager` writes tasks and knowledge.**
+The coordinator supplies verified facts, decisions, bounded scope and evidence—not final
+prose to copy. The manager decides what to add, correct, merge, refuse or remove.
+`No change` is a valid result; quantity is not a quality measure.
 
-If a result reports truncation or more pages, continue with the provided ranges or pages. Do not infer missing content.
+Before creating an entry, the manager searches for an existing home. It preserves uncertainty
+and does not invent acceptance or authorization. Old or rarely read knowledge is not
+automatically useless. Unique constraints, unresolved risks and recovery information stay
+unless explicit evidence supersedes them.
 
-## Recording a transition
+`knowledge remove` is **permanent deletion**, with no archive or undo. Read the full entry
+first. Save and verify merged content before deleting duplicates, and reconcile affected
+references. When uncertain, keep the entry. The handback lists changed IDs, returned
+versions, deletion reasons, conflicts and partial writes.
 
-A meaningful transition is more than a status change. It may affect the current state, next action, blocker, assignments, evidence, and related knowledge.
+Tool checks restrict mutations to the manager's agent context. This is not an OS sandbox:
+agents must not bypass the tools with SQL, shell or file edits.
 
-```mermaid
-sequenceDiagram
-    participant C as Coordinator
-    participant M as memory-manager
-    participant T as task-board
-    participant K as knowledge
-    participant H as history
+## Reading and writing
 
-    C->>M: Affected IDs, verified facts, decision, obsolete state, evidence
-    M->>T: Read current task and revision
-    M->>M: Reconcile all affected fields
-    M->>T: Save with expected revision
-    T->>H: Archive previous revision
-    M->>K: Search and update only affected notes
-    K->>H: Archive previous revision when changed
-    M-->>C: Compact receipt: IDs, revisions, changes, conflicts
-```
+Read the relevant task with `task-board get`. Discover knowledge with `list` or `search`,
+then `get` only matching entries. Do not load the whole project on every reminder.
+`project-rules`, if present, is an ordinary knowledge entry, not a special backend.
 
-The handoff should contain:
+Results are bounded. When `nextPage` is not null, pass it as `page` to continue.
+Task `get` pages the description and newest-first progress notes together; knowledge
+`get` pages content. Read all pages before replacing a description or content.
+Pin `expectedVersion` to the version returned by `get` when continuing a record read.
+Lists are discovery views, not immutable snapshots while other sessions write.
 
-- the affected task and note IDs;
-- verified new facts;
-- the coordinator's decision;
-- the state that is now obsolete;
-- evidence references;
-- any unresolved contradiction.
+Create records without `expectedVersion`. Updating or removing an existing record requires
+its current version. Versions are opaque conflict guards, not public history; never calculate
+the next value. On conflict, report it and reread before deciding how to reconcile.
+Progress-note appends can also supply `expectedVersion`; an append advances the task's version.
 
-It should not contain the whole conversation or prewritten memory prose.
+## On-demand global review
 
-### Reconciliation rules
+Run `/memory-review` to ask the manager for a **report before any changes**. The read-only
+`memory-review` tool inventories all topics and counts, in pages; it does not judge content
+or invoke an agent. The manager then reads every knowledge entry with the existing tools,
+checking duplicates across topics, contradictions, obsolete claims and useful missing facts.
+Tasks are consulted only for context or affected references, not audited or changed.
 
-- Read the current record before saving.
-- Use the current revision.
-- Save related task fields together in one update.
-- Update an existing note instead of creating a duplicate.
-- Mark a refuted note as superseded and link its replacement.
-- Stop on a revision conflict instead of overwriting concurrent work.
-- Report a contradiction before saving a disputed transition.
-- Verify the saved result with a focused read.
-
-## Task lifecycle
-
-The statuses are a useful workflow, not an automatic state machine enforced by the storage layer.
-
-```mermaid
-stateDiagram-v2
-    state "todo" as todo
-    state "in-progress" as in_progress
-    state "blocked" as blocked
-    state "review" as review
-    state "done" as done
-    state "archived" as archived
-    [*] --> todo
-    todo --> in_progress
-    in_progress --> blocked
-    blocked --> in_progress
-    in_progress --> review
-    review --> in_progress: corrections
-    review --> done: accepted
-    todo --> archived
-    done --> archived
-```
-
-Use the project's real process when it differs. The important rule is that `done` reflects verified acceptance, and that the task remains a current snapshot rather than a history of every attempt.
-
-## Knowledge organization
-
-Knowledge is grouped by broad topic. The exact topics adapt to the project; common examples are:
-
-- `workflow`: how agents coordinate and record decisions;
-- `safety`: limits, authorization, privacy, and run ownership;
-- `build`: toolchain, packaging, and reproducible inputs;
-- `runtime`: behavior of the system under test;
-- `rendering`: graphics and presentation;
-- `performance`: measurement and optimization;
-- `workspaces`: worktrees, custody, and recovery.
-
-Keep one authoritative home per fact. A task should link to a note rather than repeat its full content. A note should link to evidence rather than paste a report.
-
-A good note changes a future decision. It is not a summary of the latest conversation.
-
-## Revisions, history, and conflicts
-
-Every successful update creates a new revision and archives the previous record. The current record stays small; history is read only when needed.
-
-```mermaid
-flowchart LR
-    R1[Current revision N] -->|save with expectedRevision N| R2[New revision N+1]
-    R1 --> H[Archived revision N]
-    R1 -->|stale save with older revision| X[Rejected]
-    X -->|reread and reconcile| R1
-```
-
-Rules:
-
-- **Current** means the present state.
-- **History** means evidence of an earlier state, not a current instruction.
-- A stale write is rejected rather than silently overwriting a concurrent update.
-- Reading history does not create a new revision.
-- Migration or initial import may start at revision 1 with no synthetic old history; later real updates create history normally.
-
-## A coherent update
-
-Suppose a coordinator releases a hold and dispatches a worker, but no run has started yet.
-
-**Before**
-
-```text
-currentState : HOLD active; no worker assigned
-nextAction   : Obtain coordinator release
-blockers     : Coordinator hold
-assignments  : []
-```
-
-**Decision**
-
-```text
-HOLD released.
-A worker is dispatched for a bounded verification.
-Guest execution is not yet confirmed.
-```
-
-**After — one coherent save**
-
-```text
-currentState : HOLD released; worker dispatched; guest execution not confirmed
-nextAction   : Await worker evidence before claiming execution
-blockers     : (empty)
-assignments  : general / ses_worker / bounded verification
-```
-
-The next action describes what to do next, not a narrative of what just happened. The old hold is removed from `blockers`; the assignment records the current owner; execution remains explicitly unconfirmed.
+The report states actual coverage, proposed changes with IDs/versions and reasons, and any
+uncertainty or incomplete reads. It is not a frozen snapshot. No review changes are applied
+until the user validates the proposals; application is a separate manager pass using fresh
+versions. There is no scheduled global sweep. Without a database or the current schema,
+the inventory reports a blocker instead of creating or migrating a store.
 
 ## Tool reference
 
-### `task-board`
-
-| Action | Purpose |
-|---|---|
-| `list` | Bounded task overview; filter by status |
-| `get` | Read one task, a bounded summary (`summary: true`), or one long field range |
-| `save` | Create or update a task with a revision check |
-| `history` | Page through prior revisions; select one revision to read it in ranges |
-
-Common fields for `get`/`save` are `id`, `title`, `objective`, `acceptance`, `currentState`, `nextAction`, `blockers`, `knowledgeRefs`, `evidence`, `assignments`, and `expectedRevision`. Use `offset`, `limit`, `field`, and `item` for bounded reads. Prefer `summary` when only the title, status, next action and revision are needed; do not read a whole field to answer one question about it.
-
-### `knowledge`
-
-| Action | Purpose |
-|---|---|
-| `overview` | Show `project-rules` and available topics |
-| `search` | Find short matching notes |
-| `get` | Read one note or one long field range |
-| `save` | Create or correct a note with a revision check |
-| `history` | Page through prior revisions; select one revision to read it in ranges |
-
-Common fields are `id`, `topic`, `kind`, `title`, `content`, `sources`, `status`, `supersededBy`, and `expectedRevision`. Available kinds are `constraint`, `decision`, `fact`, and `lesson`; status is `active` or `superseded`.
-
-Only `memory-manager` may use `save`. Exact parameter tables for the other tools are in [Reference](reference.md#utility-tools).
-
-## Placement rules
-
-| Information | Home |
-|---|---|
-| Current objective, status, next step | Task |
-| Durable rule or safety limit | Knowledge note (`constraint`) |
-| Accepted design choice | Knowledge note (`decision`) |
-| Verified non-obvious fact | Knowledge note (`fact`) |
-| Failure cause or reusable correction | Knowledge note (`lesson`) |
-| Test output, logs, measurements | Evidence file |
-| Conversation and worker messages | Session history |
-| Temporary speculation | Conversation or a report, not durable memory |
-
-A useful test: **if this disappeared, would a future decision become worse?** If not, it probably does not need a separate note.
-
-## Anti-patterns
-
-| Anti-pattern | Why it fails | Better behavior |
+| Tool | Actions | Record fields |
 |---|---|---|
-| Append every event to a ticket | The current state disappears in a chronology | Keep a current snapshot and link evidence |
-| Leave an old hold in `blockers` | Contradictory state confuses the next agent | Reconcile every affected field |
-| Treat a dispatched worker as a running process | Dispatch is not execution | Wait for evidence and state what is confirmed |
-| Copy a report into a note | Duplicates the source and grows unbounded | Link the evidence path |
-| Store the same fact in task and knowledge | Two authorities drift apart | Pick one home and reference it |
-| Load the entire store at startup | Wastes context and hides the relevant fact | Overview, search, then get |
-| Read every field when one answer is needed | Long prose consumes context without adding a decision | `summary` or a `field` range |
-| Save directly from the coordinator | Bypasses curation and consistency checks | Delegate to the memory-manager |
-| Keep a Markdown and SQLite backlog together | Two live authorities | Migrate once and keep one backend |
-| Trust a stale revision | Overwrites concurrent work | Re-read and reconcile |
+| `task-board` | `list`, `get`, `save`, `note` | `id`, `title`, `status`, `description`; `note` adds a short progress note |
+| `knowledge` | `list`, `search`, `get`, `save`, `remove` | `id`, `topic`, `title`, `content`; `query` searches text |
 
-## Legacy Markdown
+Both accept `page` and `expectedVersion`. Task lists can filter by `status`;
+knowledge lists/searches can filter by `topic`. The live tool schemas are the parameter reference.
+`memory-review` accepts only `page` and returns `knowledgeCount`, `topicCount`, `topics` and `nextPage`.
 
-Markdown memory remains supported for projects that have not migrated. It is a compatibility path, not a second authority for a migrated project.
+## Storage and upgrades
 
-- Use the existing `.opencode/orchestrator/learnings.md` and `.opencode/backlog/` only while that project uses the legacy backend.
-- The memory-manager may write explicitly delegated legacy files.
-- Do not maintain Markdown and SQLite copies of the same live state.
-- Before switching backends, reconcile open work, preserve IDs, constraints, review and recovery references, and verify the migrated state.
-- Historical archives are evidence, not live instructions.
+One SQLite database lives at `<canonical-project>/.opencode/memory/memory.db`, shared
+across project worktrees. It contains `tasks`, `task_notes`, and `knowledge`, with internal
+versions and timestamps. Reports and session history remain separate.
 
-The structured store is the normal path for new projects.
+On first access to the previous structured schema, Froggy creates and verifies a standalone
+`memory.db.pre-simple-<unique-id>.bak` before converting in a transaction. Task details and
+references move into the description; active knowledge retains content and source links.
+Oversized legacy titles/topics get bounded labels with their full originals retained in the content.
+Archived tasks become `done` with an explanatory description. Superseded notes and old
+revisions remain in the backup, not the current store. IDs are preserved; versions reset.
+Failed conversions roll back. Stop old plugin instances before upgrading; mixing schemas
+is unsupported. Backups are never automatically deleted or published.
 
-## Persistence and scope
-
-- The database is project data, not a replacement for Git history, reports, or session history.
-- It is shared by worktrees of the same canonical project, but not by unrelated projects.
-- Do not commit private memory, build artifacts, game data, credentials, or player data.
-- Follow the project's backup and retention policy. A readable database is not automatically a backup.
-- Reading the store does not prove that a worker is active, a run happened, or an experiment succeeded.
-
-## Quick checklist
-
-Before recording a transition:
-
-- [ ] I know which task and notes are affected.
-- [ ] I have verified facts and a coordinator decision.
-- [ ] I have identified obsolete state.
-- [ ] I have the exact evidence references.
-- [ ] I will save related fields together with the current revision.
-- [ ] I will search before creating a note.
-- [ ] I will report conflicts instead of overwriting them.
-- [ ] I will verify the saved result with a focused read.
-
-## Related
-
-- [Orchestration](orchestration.md)
-- [Reference](reference.md)
-- [Memory manager guidance](../agent/memory-manager.md)
-- [Backlog management](../skill/backlog-management/SKILL.md)
+The Markdown memory tool has been removed. Existing Markdown files are neither imported
+nor deleted automatically. A project still using them needs an explicit migration, not two
+simultaneously authoritative stores. The database and its backups are local project data:
+code commits do not protect them unless explicitly included.

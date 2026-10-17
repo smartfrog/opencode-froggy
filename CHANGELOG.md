@@ -1,22 +1,17 @@
 # Changelog
 
 ## Unreleased
+- Add read-only `memory-review` topic inventory and `/memory-review` for an on-demand global knowledge review by memory-manager; report proposals and coverage before user validation, without automatically modifying memory or migrating a store
+- Simplify project memory to task title/status/description, short progress notes, and topic-organized knowledge; remove structured history, field ranges, knowledge kinds and supersession metadata
+- Make `memory-manager` the knowledge curator: it decides what to retain, correct, merge, refuse or permanently delete; mutations use version checks and reads use simple bounded pages
+- Back up and transactionally convert the previous SQLite schema on first access, preserving task details and source links; retain migration backups without automatic cleanup
+- Remove the `memory-file` tool and Markdown backend compatibility; existing project Markdown files are not automatically imported or deleted
 - Reorganize documentation into a concise README hub with dedicated guides for orchestration, project memory, Ethereum/EVM tools, hooks, and reference material
-- Make `memory-manager` the sole writer for structured tasks and knowledge while all agents retain direct reads; coordinators delegate verified transitions and decisions, and the manager reconciles related fields in one revision-checked task save
 - Replace npm, Node and Vitest with Bun for installs, scripts, tests, CI and the lockfile; publication keeps npm only for OIDC provenance
-- Add a per-project SQLite coordination store at `.opencode/memory/memory.db` with `task-board` for revision-checked task state and `knowledge` for topic-organized durable knowledge; both return bounded summaries and archive previous revisions
-- Read and validate revisions inside the write transaction and require exactly one updated row, preventing false success and duplicate history under concurrent writers
+- Add a per-project SQLite coordination store at `.opencode/memory/memory.db`, shared across canonical-project worktrees; all agents read and only `memory-manager` writes
 - Reject memory directories, database files and sidecars that escape the canonical project through symbolic links or unsafe hard links
-- Bound summaries, overviews, search results, history and reference arrays; expose truncation metadata and list/search/topic continuations
-- Add revision-pinned `offset`/`limit`/`field`/`item` ranges so accepted long task and note content can be read completely without modifying it
-- Paginate complete task/note histories and expose selected archived revisions as bounded JSON ranges; honor overview limits and fit pages to the actual serialized budget
-- Validate replacement note ids before saving; share field-range, response-budget and history handling between memory tools and clarify structured-versus-legacy ownership
-- Add `knowledge` overview topics, focused search, full-note reads and on-demand history; restrict structured task and knowledge writes to `memory-manager`
-- Update `memory-manager`, `orchestrator` and `backlog-management` to prefer the structured store while keeping legacy Markdown memory supported
 - Add `/session-context` and a read-only `session-context` tool for recent project sessions, including subagents: Markdown table with agent/model, active context size, model-window usage, top tool, cumulative tokens/cost and character shares by category; only aggregated results are returned, never raw session messages
 - Add a per-tool character breakdown to `session-context`, separating call input from result output so oversized shell, read or memory payloads are visible without ad-hoc scripts
-- Fix `memory-file` section indexing for CRLF files and fenced code contained in list items
-- Add `memory-file` structure inspection, bounded range reads, and unique passage patches with the existing hash, archive and lock guarantees; report character/line deltas so the manager avoids whole-file rewrites
 - Add orchestrator tool discipline and a compact worker return contract to reduce tool round trips and oversized handbacks
 - Remove `code-reviewer` permission restrictions and document that its read-only behavior is no longer enforced
 

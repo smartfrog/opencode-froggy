@@ -24,7 +24,7 @@ describe("project memory paths", () => {
   it("rejects a memory directory symlinked into another project", () => {
     const target = project()
     const opened = openProjectMemory(target)
-    opened.store.saveTask("B", { title: "Other project" }, "build", "ses_test")
+    opened.store.saveTask("B", { title: "Other project" })
     opened.store.close()
 
     const source = project()
@@ -37,7 +37,7 @@ describe("project memory paths", () => {
   it("rejects a database file symlinked into another project", () => {
     const target = project()
     const opened = openProjectMemory(target)
-    opened.store.saveTask("B", { title: "Other project" }, "build", "ses_test")
+    opened.store.saveTask("B", { title: "Other project" })
     opened.store.close()
     const targetDatabase = join(memoryDirectory(target), "memory.db")
 
@@ -54,7 +54,7 @@ describe("project memory paths", () => {
   it("rejects a database file with multiple hard links", () => {
     const target = project()
     const opened = openProjectMemory(target)
-    opened.store.saveTask("B", { title: "Other project" }, "build", "ses_test")
+    opened.store.saveTask("B", { title: "Other project" })
     opened.store.close()
     const targetDatabase = join(memoryDirectory(target), "memory.db")
 

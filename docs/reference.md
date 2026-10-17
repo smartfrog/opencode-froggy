@@ -22,6 +22,7 @@ Detailed reference for commands, skills, and utility tools. For system behavior,
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
 | `/gh-create-pr` | Commit, push, and create a GitHub pull request | `build` |
 | `/linear-stale-check` | Review open Linear issues for the configured team and report whether they are likely active, uncertain, or obsolete | `plan` |
+| `/memory-review` | Review all project knowledge and propose corrections, merges or removals for user validation | `memory-manager` |
 | `/release` | Prepare and execute a release with explicit confirmation | - |
 | `/review-changes` | Review uncommitted changes (staged, unstaged, untracked) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review diff from source branch into target branch | `code-reviewer` |
@@ -49,6 +50,14 @@ Shows staged changes, unstaged changes, and untracked file contents.
 /diff-summary feature-branch main
 ```
 Shows stats overview, commits, files changed, and full diff between branches.
+
+### /memory-review
+
+Runs an on-demand global knowledge review in a `memory-manager` child session. It uses the
+read-only `memory-review` inventory, then reads all entries with `knowledge list/get`.
+The result is a coverage summary and reasoned proposals, not applied changes. The user must
+validate proposals before a separate manager pass can apply them. Tasks are read only for
+context or reference checks. See [Project memory](memory.md#on-demand-global-review).
 
 ### /linear-stale-check
 

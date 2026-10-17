@@ -191,7 +191,7 @@ sequenceDiagram
     O->>W: Inspect activity and results
     W-->>O: Evidence, blockers, next facts
     O->>M: Delegate meaningful transition
-    M-->>O: Saved IDs, revisions, conflicts
+    M-->>O: Changed IDs, versions, curation decisions
     O->>O: Choose next useful action
 ```
 
