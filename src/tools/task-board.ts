@@ -19,7 +19,7 @@ import {
 import { historyResponse } from "../memory/history-response"
 import { type TaskPatch, type TaskRecord } from "../memory/store"
 
-const TASK_WRITERS = new Set(["orchestrator", "build"])
+const TASK_WRITERS = new Set(["memory-manager"])
 const TASK_FIELDS = [
   "title", "objective", "acceptance", "currentState", "nextAction", "blockers",
   "knowledgeRefs", "evidence", "assignments",
@@ -28,7 +28,7 @@ type TaskField = typeof TASK_FIELDS[number]
 
 function requireWriter(value: unknown): { agent: string; session: string } {
   const current = agentContext(value)
-  if (!TASK_WRITERS.has(current.agent)) throw new Error("Only the coordinator may change tasks")
+  if (!TASK_WRITERS.has(current.agent)) throw new Error("Only memory-manager may change tasks; delegate verified facts and decisions to it")
   if (!current.session) throw new Error("A current session is required to change tasks")
   return current
 }
@@ -106,7 +106,7 @@ export function createTaskBoardTool(directory: string) {
   return {
     name: "task-board",
     options: { codemode: false },
-    description: "Coordinator-owned project task state. List or read bounded task summaries, save partial task updates with revision checks, and read long fields through revision-aware ranges.",
+    description: "Project task state curated by memory-manager. All agents may read bounded summaries, fields and history. Only memory-manager may save revision-checked updates; coordinators delegate verified facts and execution decisions.",
     input: {
       type: "object",
       properties: {

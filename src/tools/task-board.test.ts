@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "bun:test"
 import { createTaskBoardTool } from "./task-board"
 
 const directories: string[] = []
-const CONTEXT = { agent: "orchestrator", sessionID: "ses_test" }
+const CONTEXT = { agent: "memory-manager", sessionID: "ses_test" }
 
 function tool(): ReturnType<typeof createTaskBoardTool> {
   const directory = mkdtempSync(join(tmpdir(), "froggy-task-board-"))
@@ -120,13 +120,70 @@ describe("task-board tool", () => {
     }, CONTEXT))).toMatchObject({ text: reference })
   })
 
-  it("rejects a worker that is not the coordinator", async () => {
+  it.each(["orchestrator", "build", "general", "code-reviewer"])("rejects task writes by %s", async (agent) => {
     const memory = tool()
     await expect(memory.execute({
       action: "save",
       id: "T",
       title: "Task",
-    }, { agent: "general", sessionID: "ses_test" })).rejects.toThrow("Only the coordinator")
+    }, { agent, sessionID: "ses_other" })).rejects.toThrow("Only memory-manager may change tasks")
+  })
+
+  it.each(["orchestrator", "build", "general", "code-reviewer"])("allows task reads by %s", async (agent) => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "T", title: "Task" }, CONTEXT)
+
+    expect(result(await memory.execute({ action: "get", id: "T" }, { agent, sessionID: "ses_other" }))).toMatchObject({
+      task: { id: "T", revision: 1, updatedBy: "memory-manager" },
+    })
+  })
+
+  it("preserves the task when the coordinator attempts an update", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "T", title: "Task", currentState: "Held" }, CONTEXT)
+
+    await expect(memory.execute({
+      action: "save", id: "T", expectedRevision: 1, currentState: "Released",
+    }, { agent: "orchestrator", sessionID: "ses_other" })).rejects.toThrow("Only memory-manager may change tasks")
+
+    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
+      task: { revision: 1, currentState: "Held", updatedBy: "memory-manager" },
+    })
+    expect(result(await memory.execute({ action: "history", id: "T" }, CONTEXT))).toMatchObject({ history: [] })
+  })
+
+  it("requires a current session for memory-manager writes", async () => {
+    await expect(tool().execute({ action: "save", id: "T", title: "Task" }, {
+      agent: "memory-manager",
+    })).rejects.toThrow("A current session is required")
+  })
+
+  it("saves related transition fields together in one revision", async () => {
+    const memory = tool()
+    await memory.execute({
+      action: "save", id: "T", title: "Task", currentState: "Held; no worker assigned",
+      nextAction: "Obtain coordinator release", blockers: "Coordinator hold", assignments: [],
+    }, CONTEXT)
+
+    await memory.execute({
+      action: "save", id: "T", expectedRevision: 1,
+      currentState: "Hold released; worker dispatched; guest execution unconfirmed",
+      nextAction: "Await worker evidence before claiming execution", blockers: "",
+      assignments: ["general / ses_worker / monitored trial"],
+    }, CONTEXT)
+
+    expect(result(await memory.execute({ action: "get", id: "T" }, CONTEXT))).toMatchObject({
+      task: {
+        revision: 2, updatedBy: "memory-manager", updatedSession: "ses_test",
+        currentState: "Hold released; worker dispatched; guest execution unconfirmed",
+        nextAction: "Await worker evidence before claiming execution", blockers: "",
+        assignments: ["general / ses_worker / monitored trial"],
+      },
+    })
+    const archived = result(await memory.execute({ action: "history", id: "T", revision: 1 }, CONTEXT))
+    expect(JSON.parse(archived.text as string)).toMatchObject({
+      revision: 1, currentState: "Held; no worker assigned", blockers: "Coordinator hold", assignments: [],
+    })
   })
 
   it("rejects a stale revision", async () => {

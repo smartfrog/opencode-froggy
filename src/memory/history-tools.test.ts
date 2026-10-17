@@ -8,7 +8,7 @@ import { createTaskBoardTool } from "../tools/task-board"
 const directories: string[] = []
 const fixtures = [
   { name: "knowledge", createTool: createKnowledgeTool, agent: "memory-manager", field: "content", create: { topic: "runtime" } },
-  { name: "task-board", createTool: createTaskBoardTool, agent: "orchestrator", field: "objective", create: {} },
+  { name: "task-board", createTool: createTaskBoardTool, agent: "memory-manager", field: "objective", create: {} },
 ]
 
 afterEach(() => {
