@@ -22,7 +22,7 @@ export function openProjectMemory(directory: string, options: { readonly?: boole
   assertSafeFile(root, `${path}-wal`)
   assertSafeFile(root, `${path}-shm`)
   assertSafeFile(root, `${path}-journal`)
-  if (options.readonly && !existsSync(path)) throw new Error("No project memory database exists; there is no knowledge to review")
+  if (options.readonly && !existsSync(path)) throw new Error("No project memory database exists")
   const database = openSqlite(path, options.readonly)
   try {
     assertSafeFile(root, path)

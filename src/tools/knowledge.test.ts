@@ -1,4 +1,5 @@
-import { rmSync } from "node:fs"
+import { existsSync, rmSync } from "node:fs"
+import { join } from "node:path"
 import { afterEach, describe, expect, it } from "bun:test"
 import { createTemporaryDirectory } from "../test-fixtures/temporary-directory"
 import { createKnowledgeTool } from "./knowledge"
@@ -16,49 +17,73 @@ afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
-describe("knowledge bounded reads", () => {
+describe("knowledge read safety", () => {
+  it.each([
+    { action: "topics" },
+    { action: "list" },
+    { action: "search", query: "anything" },
+    { action: "get", id: "K" },
+  ])("does not create a database for %j", async (input) => {
+    const memory = tool()
+    await expect(memory.execute(input, context)).rejects.toThrow("No project memory database exists")
+    expect(existsSync(join(directories[0], ".opencode"))).toBe(false)
+  })
+})
+
+describe("knowledge markdown reads", () => {
   it("preserves Markdown indentation and trailing whitespace exactly", async () => {
     const memory = tool()
     const content = "    bun test\n    bun run typecheck\n"
     await memory.execute({ action: "save", id: "K", title: "Checks", topic: "build", content }, context)
-    expect(JSON.parse((await memory.execute({ action: "get", id: "K" }, context)).content).note.content).toBe(content)
-  })
-  it("finds every matching entry through bounded search pages", async () => {
-    const memory = tool()
-    for (let index = 0; index < 17; index++) await memory.execute({ action: "save", id: `K${index}`, title: "\u0000".repeat(200), topic: "\u0000".repeat(80), content: "Find me " + "\u0000".repeat(300) }, context)
-    const ids: string[] = []
-    let page: number | null = 0
-    while (page !== null) {
-      const response = await memory.execute({ action: "search", query: "Find me", page }, context)
-      expect(response.content.length).toBeLessThanOrEqual(20_000)
-      const value = JSON.parse(response.content) as { results: { id: string }[]; nextPage: number | null }
-      ids.push(...value.results.map(({ id }) => id))
-      page = value.nextPage
-    }
-    expect(new Set(ids).size).toBe(17)
+    expect((await memory.execute({ action: "get", id: "K" }, context)).content).toContain(content)
   })
 
-  it("reads an escaped knowledge entry completely through version-pinned pages", async () => {
+  it("lists every matching entry in one search", async () => {
     const memory = tool()
-    const content = "\u0000😀".repeat(9_000) + "END"
-    const saved = JSON.parse((await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content }, context)).content) as { version: number }
-    let page: number | null = 0
-    let rebuilt = ""
-    while (page !== null) {
-      const response = await memory.execute({ action: "get", id: "K", page, expectedVersion: saved.version }, context)
-      expect(response.content.length).toBeLessThanOrEqual(20_000)
-      const value = JSON.parse(response.content) as { note: { content: string }; nextPage: number | null }
-      rebuilt += value.note.content
-      page = value.nextPage
+    for (let index = 0; index < 17; index++) {
+      await memory.execute({ action: "save", id: `K${index}`, title: `Note ${index}`, topic: "build", content: "Find me" }, context)
     }
-    expect(rebuilt).toBe(content)
+    const content = (await memory.execute({ action: "search", query: "Find me" }, context)).content
+    expect(content.match(/\| K\d+ \|/g)).toHaveLength(17)
   })
 
-  it("rejects a read pinned to an outdated version", async () => {
+  it("summarises topics and renders a list", async () => {
     const memory = tool()
-    await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content: "Original." }, context)
-    await memory.execute({ action: "save", id: "K", expectedVersion: 1, content: "Corrected." }, context)
-    await expect(memory.execute({ action: "get", id: "K", expectedVersion: 1 }, context)).rejects.toThrow("changed")
+    await memory.execute({ action: "save", id: "K", title: "Checks", topic: "build", content: "Run bun test." }, context)
+    expect((await memory.execute({ action: "topics" }, context)).content).toContain("| build | 1 |")
+    expect((await memory.execute({ action: "list" }, context)).content).toContain("| K | build | Checks |")
+  })
+
+  it("reads an escaped knowledge entry completely", async () => {
+    const memory = tool()
+    const content = "\u0000😀".repeat(5_000) + "END"
+    await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content }, context)
+    expect((await memory.execute({ action: "get", id: "K" }, context)).content).toContain(content)
+  })
+
+  it("rejects expectedVersion on reads", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content: "Keep." }, context)
+    await expect(memory.execute({ action: "get", id: "K", expectedVersion: 1 }, context)).rejects.toThrow("only valid for writes")
+  })
+
+  it("preserves a large entry through a title update", async () => {
+    const memory = tool()
+    const content = "x".repeat(70_000)
+    await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content }, context)
+    await memory.execute({ action: "save", id: "K", expectedVersion: 1, title: "Renamed" }, context)
+    const rendered = (await memory.execute({ action: "get", id: "K" }, context)).content
+    expect(rendered).toContain(content)
+    expect(rendered).toContain("Renamed")
+  })
+
+  it("filters search results by topic", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "build", title: "Build", topic: "build", content: "Shared text" }, context)
+    await memory.execute({ action: "save", id: "runtime", title: "Runtime", topic: "runtime", content: "Shared text" }, context)
+    const content = (await memory.execute({ action: "search", query: "Shared text", topic: "build" }, context)).content
+    expect(content).toContain("| build | build | Build |")
+    expect(content).not.toContain("| runtime |")
   })
 
   it("requires a version for permanent removal", async () => {
@@ -71,7 +96,7 @@ describe("knowledge bounded reads", () => {
     await expect(tool().execute({ action }, context)).rejects.toThrow("action must be")
   })
 
-  it.each(["kind", "status", "sources", "supersededBy", "expectedRevision"])("rejects removed parameter %s", async (field) => {
+  it.each(["kind", "status", "sources", "supersededBy", "expectedRevision", "page", "format"])("rejects removed parameter %s", async (field) => {
     await expect(tool().execute({ action: "list", [field]: "old" }, context)).rejects.toThrow("Unsupported memory parameter")
   })
 

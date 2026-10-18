@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Keep memory reads complete without display-driven size limits; preserve topic filters on knowledge searches and read each task with its notes from one database snapshot
+- Return Markdown from every `task-board`, `knowledge` and `memory-overview` read, so `/memory`, `/task-board` and `/knowledge` relay one tool output instead of reformatting JSON; writes still return JSON receipts and task boards use status columns excluding `done` by default
+- Add a read-only `memory-overview` tool for store path, task counts and knowledge topics, keeping `/memory` and `/knowledge` separate from the `memory-review` cleanup audit
+- Keep `task-board` and `knowledge` reads read-only, so inspection never creates or upgrades a store; schema upgrades now happen on the first write
 
 ## 1.6.0
 - Add read-only `memory-review` topic inventory and `/memory-review` for an on-demand global knowledge review by memory-manager; report proposals and coverage before user validation, without automatically modifying memory or migrating a store

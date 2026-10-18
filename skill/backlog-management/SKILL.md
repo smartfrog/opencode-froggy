@@ -19,7 +19,7 @@ Each task has an ID, title, status and detailed Markdown description. Statuses a
 
 Keep scope, observable acceptance, established state, next action and necessary evidence/recovery links in the description. Include worker/session/workspace references when needed to resume. Add short progress notes for meaningful advances or blockers, not every log line or reminder. Update stale descriptions so old holds and assignments do not contradict new notes. Dispatch is not proof of execution; an experiment or static check does not establish product acceptance.
 
-Search before creating, preserve IDs and concurrent work, and verify writes. Follow `nextPage` with `page` when a read is incomplete. Read full affected records before replacing content and use the returned version for updates.
+Search before creating, preserve IDs and concurrent work, and verify writes. Reads return complete Markdown; narrow with a status, topic or query when a result is too large. Read full affected records before replacing content and use the returned version for updates.
 
 ## Ownership and knowledge
 

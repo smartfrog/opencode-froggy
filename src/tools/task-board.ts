@@ -1,17 +1,28 @@
-import { capText, response, textRange } from "../memory/bounds"
-import { openProjectMemory } from "../memory/project"
-import { TASK_STATUSES } from "../memory/store"
-import { inputRecord, pageNumber, recordId, requireMemoryWriter, textPatch, versionInput } from "../memory/tool-input"
+import { response, textResponse } from "../memory/bounds"
+import { openProjectMemory, type ProjectMemory } from "../memory/project"
+import { TASK_STATUSES, type TaskStatus } from "../memory/store"
+import { inputRecord, recordId, requireMemoryWriter, textPatch, versionInput } from "../memory/tool-input"
+import { allTasks, formatBoard, formatTaskDetails } from "../memory/views"
 
-const TASKS_PER_PAGE = 10
-const NOTES_PER_PAGE = 3
-const DESCRIPTION_CHARACTERS = 1_000
+const BOARD_STATUSES = TASK_STATUSES.filter((status) => status !== "done")
+
+function renderList(store: ProjectMemory["store"], status: unknown): { content: string } {
+  const filter = typeof status === "string" ? status as TaskStatus : undefined
+  if (filter && !TASK_STATUSES.includes(filter)) throw new Error(`Invalid task status: ${status}`)
+  const columns: readonly TaskStatus[] = filter ? [filter] : BOARD_STATUSES
+  return textResponse(formatBoard(columns.flatMap((column) => allTasks(store, column)), [...columns]))
+}
+
+function renderGet(store: ProjectMemory["store"], id: string): { content: string } {
+  const { task, notes } = store.getTaskWithNotes(id)
+  return textResponse(formatTaskDetails(task, notes))
+}
 
 export function createTaskBoardTool(directory: string) {
   return {
     name: "task-board",
     options: { codemode: false },
-    description: "Simple project tasks: title, status, detailed description and short progress notes. All agents read with list/get; only memory-manager may save or add a note. Pass nextPage to continue, and expectedVersion to update safely.",
+    description: "Simple project tasks rendered as Markdown: a status board without done by default, or one task with its notes. All agents read with list/get; only memory-manager may save or add a note, and those return JSON receipts with expectedVersion checks.",
     input: {
       type: "object",
       properties: {
@@ -21,40 +32,24 @@ export function createTaskBoardTool(directory: string) {
         status: { type: "string", enum: TASK_STATUSES },
         description: { type: "string", description: "Detailed task description in Markdown, including useful evidence links" },
         note: { type: "string", maxLength: 500, description: "Short, meaningful progress update; not a log" },
-        expectedVersion: { type: "integer", minimum: 1, description: "Version read by get; required for updates, optional to pin a paged read" },
-        page: { type: "integer", minimum: 0, description: "Use nextPage from the previous response" },
+        expectedVersion: { type: "integer", minimum: 1, description: "Version from a previous write receipt; required for updates" },
       },
       required: ["action"],
       additionalProperties: false,
     },
     async execute(input: unknown, context: unknown) {
-      const args = inputRecord(input, ["action", "id", "title", "status", "description", "note", "expectedVersion", "page"])
+      const args = inputRecord(input, ["action", "id", "title", "status", "description", "note", "expectedVersion"])
       if (!["list", "get", "save", "note"].includes(String(args.action))) throw new Error("action must be list, get, save or note")
       if (args.action === "save" || args.action === "note") requireMemoryWriter(context)
-      const page = pageNumber(args.page)
       const expectedVersion = versionInput(args.expectedVersion)
-      const { path, store } = openProjectMemory(directory)
+      const read = args.action === "list" || args.action === "get"
+      if (read && expectedVersion !== null) throw new Error("expectedVersion is only valid for writes")
+      const { path, store } = openProjectMemory(directory, { readonly: read })
       try {
         const metadata = { path, ...(store.migrationBackup ? { migrationBackup: store.migrationBackup } : {}) }
-        if (args.action === "list") {
-          const status = typeof args.status === "string" ? args.status : undefined
-          const rows = store.listTasks(status, TASKS_PER_PAGE + 1, page * TASKS_PER_PAGE)
-          const tasks = rows.slice(0, TASKS_PER_PAGE).map(({ id, title, status, version }) => ({
-            id, title: capText(title, 200).text, status, version,
-          }))
-          return response({ ...metadata, tasks, nextPage: rows.length > TASKS_PER_PAGE ? page + 1 : null })
-        }
+        if (args.action === "list") return renderList(store, args.status)
         const id = recordId(args.id)
-        if (args.action === "get") {
-          const { task, notes } = store.getTaskWithNotes(id, NOTES_PER_PAGE + 1, page * NOTES_PER_PAGE)
-          if (expectedVersion !== null && task.version !== expectedVersion) throw new Error(`Task ${id} changed: expected version ${expectedVersion}, current ${task.version}`)
-          const length = Array.from(task.description).length
-          const description = textRange(task.description, Math.min(page * DESCRIPTION_CHARACTERS, length), DESCRIPTION_CHARACTERS)
-          return response({
-            ...metadata, task: { ...task, description: description.text }, notes: notes.slice(0, NOTES_PER_PAGE),
-            nextPage: description.hasMore || notes.length > NOTES_PER_PAGE ? page + 1 : null,
-          })
-        }
+        if (args.action === "get") return renderGet(store, id)
         if (args.action === "note") {
           if (typeof args.note !== "string") throw new Error("note is required")
           return response({ ...metadata, ...store.addTaskNote(id, args.note, expectedVersion) })

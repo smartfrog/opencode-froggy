@@ -64,15 +64,16 @@ agents must not bypass the tools with SQL, shell or file edits.
 
 ## Reading and writing
 
-Read the relevant task with `task-board get`. Discover knowledge with `list` or `search`,
+Use `/memory`, `/task-board` and `/knowledge` to inspect tasks and knowledge without modifying them. Each command calls one tool; the tool returns Markdown and the model relays it unchanged. Read the relevant task with `task-board get`. Discover knowledge with `topics`/`list`/`search`,
 then `get` only matching entries. Do not load the whole project on every reminder.
 `project-rules`, if present, is an ordinary knowledge entry, not a special backend.
 
-Results are bounded. When `nextPage` is not null, pass it as `page` to continue.
-Task `get` pages the description and newest-first progress notes together; knowledge
-`get` pages content. Read all pages before replacing a description or content.
-Pin `expectedVersion` to the version returned by `get` when continuing a record read.
-Lists are discovery views, not immutable snapshots while other sessions write.
+Reads return complete Markdown. Narrow with a status, topic or query when a result is too
+large. Record `get` shows the current version. Lists are discovery views, not immutable
+snapshots while other sessions write.
+
+Task details and progress notes are read from one database snapshot. The plugin does not
+cap Markdown responses or impose a display-driven limit on descriptions or knowledge content.
 
 Create records without `expectedVersion`. Updating or removing an existing record requires
 its current version. Versions are opaque conflict guards, not public history; never calculate
@@ -98,11 +99,14 @@ the inventory reports a blocker instead of creating or migrating a store.
 | Tool | Actions | Record fields |
 |---|---|---|
 | `task-board` | `list`, `get`, `save`, `note` | `id`, `title`, `status`, `description`; `note` adds a short progress note |
-| `knowledge` | `list`, `search`, `get`, `save`, `remove` | `id`, `topic`, `title`, `content`; `query` searches text |
+| `knowledge` | `topics`, `list`, `search`, `get`, `save`, `remove` | `id`, `topic`, `title`, `content`; `query` searches text |
+| `memory-overview` | none | Read-only store path, task counts by status and knowledge topics |
+| `memory-review` | `page` | Read-only inventory: `knowledgeCount`, `topicCount`, `topics` and `nextPage` |
 
-Both accept `page` and `expectedVersion`. Task lists can filter by `status`;
-knowledge lists/searches can filter by `topic`. The live tool schemas are the parameter reference.
-`memory-review` accepts only `page` and returns `knowledgeCount`, `topicCount`, `topics` and `nextPage`.
+`task-board`, `knowledge` and `memory-overview` return Markdown; their write actions return
+JSON receipts. `expectedVersion` guards updates. Task lists filter by `status`; knowledge
+lists/searches filter by `topic`. The live tool schemas are the parameter reference.
+Use `memory-overview` to consult memory and `memory-review` only to prepare a cleanup audit.
 
 ## Storage and upgrades
 
@@ -110,14 +114,15 @@ One SQLite database lives at `<canonical-project>/.opencode/memory/memory.db`, s
 across project worktrees. It contains `tasks`, `task_notes`, and `knowledge`, with internal
 versions and timestamps. Reports and session history remain separate.
 
-On first access to the previous structured schema, Froggy creates and verifies a standalone
+On first write access to the previous structured schema, Froggy creates and verifies a standalone
 `memory.db.pre-simple-<unique-id>.bak` before converting in a transaction. Task details and
 references move into the description; active knowledge retains content and source links.
 Oversized legacy titles/topics get bounded labels with their full originals retained in the content.
 Archived tasks become `done` with an explanatory description. Superseded notes and old
 revisions remain in the backup, not the current store. IDs are preserved; versions reset.
 Failed conversions roll back. Stop old plugin instances before upgrading; mixing schemas
-is unsupported. Backups are never automatically deleted or published.
+is unsupported. Backups are never automatically deleted or published. Reads never create or
+upgrade the store: they report a missing database or an outdated schema instead.
 
 The Markdown memory tool has been removed. Existing Markdown files are neither imported
 nor deleted automatically. A project still using them needs an explicit migration, not two

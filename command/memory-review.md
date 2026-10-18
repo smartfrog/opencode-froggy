@@ -11,7 +11,7 @@ Review all project knowledge on explicit user request. This assignment overrides
 ## Read the whole scope
 
 1. Call `memory-review` and follow every `nextPage` using `page` to inventory all topics and counts. If there is no database, report that there is nothing to review. If its schema needs an upgrade, report the blocker rather than migrating it during this review.
-2. For each topic, use `knowledge list` with that exact `topic`, following every page. Use `knowledge get` for each entry and read all content pages, pinning the returned `version` with `expectedVersion`. Retain IDs, versions and source references for the report. Titles and excerpts alone are not a content review.
+2. For each topic, use `knowledge list` with that exact `topic`; it returns every matching entry. Use `knowledge get` for each entry and read its complete content, recording the version it shows. Retain IDs, versions and source references for the report. Titles and excerpts alone are not a content review.
 3. Look for duplicates and contradictions both within and across topics. Read relevant evidence when needed. Consult tasks only to check context or references affected by a proposed knowledge change; do not review task statuses or progress notes as a separate audit.
 4. Assess durable decision value, correctness, useful scope/conditions, topic placement and recoverability. Preserve unique user constraints, unresolved risks and recovery information. Age or low read frequency is not a reason to remove an entry. Missing evidence means uncertainty, not permission to guess or delete.
 

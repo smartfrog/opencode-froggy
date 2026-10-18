@@ -26,6 +26,7 @@ import {
   createTaskBoardTool,
   createKnowledgeTool,
   createMemoryReviewTool,
+  createMemoryOverviewTool,
   createAgentPromoteTool,
   ethTransactionTool,
   ethAddressTxsTool,
@@ -124,6 +125,8 @@ export default Plugin.define({
         "list-child-sessions",
         "task-board",
         "knowledge",
+        "memory-overview",
+        "memory-review",
         "start-orchestrator-loop",
         "stop-orchestrator-loop",
         "orchestrator-status",
@@ -342,6 +345,7 @@ export default Plugin.define({
       editor.add(createTaskBoardTool(ctx.location.project.canonical))
       editor.add(createKnowledgeTool(ctx.location.project.canonical))
       editor.add(createMemoryReviewTool(ctx.location.project.canonical))
+      editor.add(createMemoryOverviewTool(ctx.location.project.canonical))
       editor.add(gitingestTool)
       editor.add(pdfToMarkdownTool)
       editor.add(listChildSessionsTool)

@@ -14,10 +14,6 @@ function tools() {
   return { directory, tasks: createTaskBoardTool(directory), knowledge: createKnowledgeTool(directory) }
 }
 
-function body(value: { content: string }) {
-  return JSON.parse(value.content)
-}
-
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
@@ -26,18 +22,19 @@ describe("simple project memory", () => {
   it("stores a detailed task description", async () => {
     const { tasks } = tools()
     await tasks.execute({ action: "save", id: "PERF", title: "Measure idle", description: "Measure before changing the scheduler.", status: "review" }, manager)
-    expect(body(await tasks.execute({ action: "get", id: "PERF" }, reader))).toMatchObject({
-      task: { description: "Measure before changing the scheduler.", status: "review", version: 1 }, notes: [],
-    })
+    const content = (await tasks.execute({ action: "get", id: "PERF" }, reader)).content
+    expect(content).toContain("Status: review")
+    expect(content).toContain("Version: 1")
+    expect(content).toContain("Measure before changing the scheduler.")
   })
 
   it("adds a short progress note without changing the task description", async () => {
     const { tasks } = tools()
     await tasks.execute({ action: "save", id: "PERF", title: "Measure idle", description: "Keep the original scope." }, manager)
     await tasks.execute({ action: "note", id: "PERF", note: "Baseline measured; report: reports/idle.md" }, manager)
-    expect(body(await tasks.execute({ action: "get", id: "PERF" }, reader))).toMatchObject({
-      task: { description: "Keep the original scope." }, notes: [{ note: "Baseline measured; report: reports/idle.md" }],
-    })
+    const content = (await tasks.execute({ action: "get", id: "PERF" }, reader)).content
+    expect(content).toContain("Keep the original scope.")
+    expect(content).toContain("Baseline measured; report: reports/idle.md")
   })
 
   it("rejects progress logs longer than 500 characters", async () => {
@@ -56,17 +53,17 @@ describe("simple project memory", () => {
   it("lists knowledge titles and topics without returning full contents", async () => {
     const { knowledge } = tools()
     await knowledge.execute({ action: "save", id: "idle", title: "Idle scheduling", topic: "performance", content: "Measure cycle accounting." }, manager)
-    const listed = body(await knowledge.execute({ action: "list" }, reader))
-    expect(listed.results).toMatchObject([{ id: "idle", topic: "performance", title: "Idle scheduling" }])
-    expect(listed.results[0]).not.toHaveProperty("content")
+    const listed = (await knowledge.execute({ action: "list" }, reader)).content
+    expect(listed).toContain("| idle | performance | Idle scheduling |")
+    expect(listed).not.toContain("Measure cycle accounting.")
   })
 
   it("permanently removes knowledge from reads and search", async () => {
     const { knowledge } = tools()
     await knowledge.execute({ action: "save", id: "wrong", title: "Refuted trick", topic: "performance", content: "Unnecessary workaround." }, manager)
-    expect(body(await knowledge.execute({ action: "remove", id: "wrong", expectedVersion: 1 }, manager))).toMatchObject({ id: "wrong", removed: true })
+    expect(JSON.parse((await knowledge.execute({ action: "remove", id: "wrong", expectedVersion: 1 }, manager)).content)).toMatchObject({ id: "wrong", removed: true })
     await expect(knowledge.execute({ action: "get", id: "wrong" }, reader)).rejects.toThrow("not found")
-    expect(body(await knowledge.execute({ action: "search", query: "workaround" }, reader)).results).toEqual([])
+    expect((await knowledge.execute({ action: "search", query: "workaround" }, reader)).content).not.toContain("| wrong |")
   })
 
   it("rejects stale deletion without removing changed knowledge", async () => {
@@ -74,7 +71,7 @@ describe("simple project memory", () => {
     await knowledge.execute({ action: "save", id: "rule", title: "Memory limit", topic: "constraints", content: "6 GiB limit." }, manager)
     await knowledge.execute({ action: "save", id: "rule", expectedVersion: 1, content: "6 GiB hard ceiling." }, manager)
     await expect(knowledge.execute({ action: "remove", id: "rule", expectedVersion: 1 }, manager)).rejects.toThrow("expected version 1, current 2")
-    expect(body(await knowledge.execute({ action: "get", id: "rule" }, reader)).note.content).toBe("6 GiB hard ceiling.")
+    expect((await knowledge.execute({ action: "get", id: "rule" }, reader)).content).toContain("6 GiB hard ceiling.")
   })
 
   it.each(["save", "remove"])("rejects knowledge %s by other agents", async (action) => {

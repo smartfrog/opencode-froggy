@@ -79,7 +79,7 @@ Froggy separates **current execution state** from **durable knowledge**:
 
 Both live in one SQLite database per canonical project, shared across worktrees. All agents may read. Only `memory-manager` writes; it decides which knowledge to keep, correct, merge or permanently delete. Coordinators supply verified facts and execution decisions, not final memory prose.
 
-Read the affected task first, then use knowledge `list`/`search` and `get` only what you need. Follow `nextPage` with `page` for incomplete results. Do not load the whole store.
+Read the affected task first, then use knowledge `topics`/`list`/`search` and `get` only what you need. Reads return complete Markdown; narrow with a status, topic or query when a result is too large. Do not load the whole store.
 
 See [Project memory](docs/memory.md) for the model, curation rules, tools and upgrades. Utility tool parameters are in [Reference](docs/reference.md#utility-tools).
 
@@ -151,7 +151,9 @@ The `orchestrator` is a primary agent that owns execution decisions. It does not
 | `/diff-summary [source] [target]` | Show working-tree changes or branch diffs. | — |
 | `/doc-changes` | Update documentation for new uncommitted features. | `doc-writer` |
 | `/gh-create-pr` | Commit, push, and create a GitHub pull request. | `build` |
+| `/knowledge [list\|search\|get] ...` | Browse or search project knowledge without modifying it. | — |
 | `/linear-stale-check` | Review open Linear issues for likely relevance. | `plan` |
+| `/memory` | Show task counts by status and knowledge topics with totals. | — |
 | `/memory-review` | Review all project knowledge and propose cleanup for user validation. | `memory-manager` |
 | `/release` | Prepare and execute a release with explicit confirmation. | — |
 | `/review-changes` | Review staged, unstaged, and untracked changes. | `code-reviewer` |
@@ -159,7 +161,11 @@ The `orchestrator` is a primary agent that owns execution decisions. It does not
 | `/send-to [agent] <message>` | Continue a child session through the native subagent tool. | — |
 | `/session-context [limit]` | Analyze context usage for recent sessions. | — |
 | `/simplify-changes` | Simplify uncommitted changes. | `code-simplifier` |
+| `/task-board [list <status>\|done\|get <ID>]` | Show tasks as status columns without `done`, filter one status, or show one task. | — |
 | `/tests-coverage` | Run coverage and suggest fixes for failures. | `build` |
+
+The `/memory`, `/task-board` and `/knowledge` commands call a tool that returns Markdown.
+The tool does the formatting; the model only relays its output without reformatting it.
 
 Selected command details are in [Reference](docs/reference.md#commands).
 
@@ -167,7 +173,7 @@ Selected command details are in [Reference](docs/reference.md#commands).
 
 | Domain | Tools | Guide |
 |---|---|---|
-| Memory | `task-board`, `knowledge`, `memory-review` | [Project memory](docs/memory.md) |
+| Memory | `memory-overview`, `task-board`, `knowledge`, `memory-review` | [Project memory](docs/memory.md) |
 | Orchestration | `start-orchestrator-loop`, `stop-orchestrator-loop`, `orchestrator-status` | [Orchestration](docs/orchestration.md#coordination-loop) |
 | Ethereum/EVM | `eth-transaction`, `eth-address-balance`, `eth-address-txs`, `eth-token-transfers` | [Ethereum and EVM](docs/ethereum.md) |
 | Utilities | `gitingest`, `list-child-sessions`, `session-context`, `pdf-to-markdown`, `agent-promote` | [Reference](docs/reference.md#utility-tools) |

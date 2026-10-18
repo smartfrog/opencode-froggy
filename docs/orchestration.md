@@ -10,6 +10,7 @@ This page explains the working model. It intentionally avoids plugin internals.
 
 - [Roles](#roles)
 - [Product owner](#product-owner)
+- [Git flow](#git-flow)
 - [The delivery loop](#the-delivery-loop)
 - [Delegation and sessions](#delegation-and-sessions)
 - [Review and integration](#review-and-integration)
@@ -65,6 +66,18 @@ Use the product owner when the objective is ambiguous, when priorities or accept
 
 The product owner also does not write task or knowledge records directly. It delegates meaningful transitions through the same memory path as every other coordinator.
 
+## Git flow
+
+The orchestrator uses a simplified Git flow: `development` is the long-lived integration branch, and every code-changing task starts on `task/<id>` from its verified current head. `main` is left unchanged. This workflow does not authorize pushes or releases.
+
+Before dispatching implementation, verify that `development` exists and record its SHA. If it is missing, establish the intended base from project evidence and the user's mandate before creating it; do not guess. Record each task's base SHA, branch, and workspace in the reference backlog. On resume, verify the recorded state rather than recreating or resetting branches.
+
+Implementation stays on task branches, with one writer per branch and workspace. Existing POCs are evidence to port selectively onto a task branch, not bases for new tasks; preserve their original work and refs.
+
+Merge into `development` serially, only after acceptance, required independent review, and checks at the exact delivery revision. If `development` advances, synchronize and revalidate first. After integration, verify `git merge-base --is-ancestor <validated-task-tip> refs/heads/development` and check the resulting integrated revision. Record the task tip, integration SHA, review, and check results before marking the task `done`. A finished implementation alone is not a finished task; read-only assignments do not need a merge.
+
+A saved policy is not proof of execution: report branches and merges as completed only after verifying their actual refs and SHAs. These are agent instructions, not a technical lock on Git operations.
+
 ## The delivery loop
 
 ```mermaid
@@ -89,9 +102,11 @@ Read the request, relevant project state, and existing evidence. Establish obser
 
 ### 2. Prepare the workspace
 
-Choose an isolated branch or worktree for parallel or conflicting work. Sequential work may use the current workspace when existing work is preserved. Record the starting revision and keep one writer per workspace.
+For code-changing tasks, prepare `task/<id>` from the verified `development` head using the Git flow above. Sequential tasks may reuse a workspace only after preserving existing work and switching to the assigned task branch. Use separate worktrees for concurrent or conflicting work. Record the starting revision and keep one writer per branch and workspace; workers verify their assigned branch and SHA before changes.
 
 ### 3. Delegate
+
+Choose `explore` for bounded read-only discovery and `general` when a worker must save a report; `explore` cannot write files.
 
 Give each worker:
 
@@ -111,7 +126,7 @@ The reviewer receives the acceptance criteria, workspace, base and target revisi
 
 ### 5. Integrate incrementally
 
-Use project conventions, preferably a fast-forward of a validated revision that includes the current target. Never force, reset, or overwrite another contributor's work. Re-run relevant checks after every synchronization, even when there are no conflicts.
+Integrate serially into `development`, preferably a fast-forward of a validated revision that includes its current head. Never force, reset, or overwrite another contributor's work. Re-run relevant checks after every synchronization, even when there are no conflicts. Verify task-tip ancestry and the resulting integrated revision before recording completion.
 
 ### 6. Finish
 

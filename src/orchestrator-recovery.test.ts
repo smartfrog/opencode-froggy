@@ -11,7 +11,7 @@ describe("orchestration recovery across processes", () => {
   beforeEach(() => {
     directory = mkdtempSync(join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), "froggy-recovery-"))
     writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "commonjs" }))
-    for (const name of ["record", "logger", "session-children", "orchestrator-diagnostics", "orchestrator-loop", "memory/sqlite", "memory/migration", "memory/store", "memory/project", "memory/path-safety", "memory/bounds", "memory/tool-input", "tools/task-board", "test-fixtures/orchestrator-recovery"]) {
+    for (const name of ["record", "logger", "session-children", "orchestrator-diagnostics", "orchestrator-loop", "memory/sqlite", "memory/migration", "memory/store", "memory/project", "memory/path-safety", "memory/bounds", "memory/tool-input", "memory/views", "tools/task-board", "test-fixtures/orchestrator-recovery"]) {
       const source = readFileSync(new URL(`./${name}.ts`, import.meta.url), "utf8")
       const target = join(directory, `${name}.js`)
       mkdirSync(dirname(target), { recursive: true })

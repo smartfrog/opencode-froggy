@@ -2,7 +2,7 @@ import { asRecord } from "../record"
 import { initializeMemory } from "./migration"
 import { type SqliteDatabase } from "./sqlite"
 
-export const TASK_STATUSES = ["todo", "in-progress", "blocked", "review", "done"] as const
+export const TASK_STATUSES = ["todo", "in-progress", "review", "blocked", "done"] as const
 export type TaskStatus = typeof TASK_STATUSES[number]
 
 export interface TaskRecord {
@@ -122,6 +122,16 @@ export class MemoryStore {
     return row == null ? null : mapTask(row)
   }
 
+  taskCounts(): { status: TaskStatus; count: number }[] {
+    const rows = this.database.prepare("SELECT status, count(*) AS count FROM tasks GROUP BY status").all()
+    const counts = new Map<TaskStatus, number>(TASK_STATUSES.map((status): [TaskStatus, number] => [status, 0]))
+    for (const row of rows) {
+      const record = asRecord(row)
+      counts.set(taskStatus(String(record.status)), Number(record.count))
+    }
+    return TASK_STATUSES.map((status) => ({ status, count: counts.get(status) ?? 0 }))
+  }
+
   listTasks(status?: string, limit = 21, offset = 0): TaskRecord[] {
     const rows = status === undefined
       ? this.database.prepare("SELECT * FROM tasks ORDER BY updated_at DESC, id LIMIT ? OFFSET ?").all(limit, offset)
@@ -174,11 +184,11 @@ export class MemoryStore {
       })
   }
 
-  getTaskWithNotes(id: string, limit: number, offset: number): { task: TaskRecord; notes: TaskNote[] } {
+  getTaskWithNotes(id: string): { task: TaskRecord; notes: TaskNote[] } {
     return this.transaction(() => {
       const task = this.getTask(id)
       if (!task) throw new Error(`Task not found: ${id}`)
-      return { task, notes: this.taskNotes(id, limit, offset) }
+      return { task, notes: this.taskNotes(id, -1) }
     }, false)
   }
 

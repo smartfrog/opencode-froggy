@@ -21,7 +21,9 @@ Detailed reference for commands, skills, and utility tools. For system behavior,
 | `/diff-summary [source] [target]` | Show working tree changes or diff between branches | - |
 | `/doc-changes` | Update documentation based on uncommitted changes (new features only) | `doc-writer` |
 | `/gh-create-pr` | Commit, push, and create a GitHub pull request | `build` |
+| `/knowledge [list\|search\|get] ...` | Browse or search project knowledge without modifying it | - |
 | `/linear-stale-check` | Review open Linear issues for the configured team and report whether they are likely active, uncertain, or obsolete | `plan` |
+| `/memory` | Show task counts by status and knowledge topics with totals | - |
 | `/memory-review` | Review all project knowledge and propose corrections, merges or removals for user validation | `memory-manager` |
 | `/release` | Prepare and execute a release with explicit confirmation | - |
 | `/review-changes` | Review uncommitted changes (staged, unstaged, untracked) | `code-reviewer` |
@@ -29,6 +31,7 @@ Detailed reference for commands, skills, and utility tools. For system behavior,
 | `/send-to [agent] <message>` | Continue a child session using the native `subagent` tool | - |
 | `/session-context [limit]` | Analyze context usage for recent sessions | - |
 | `/simplify-changes` | Simplify uncommitted changes (staged, unstaged, untracked) | `code-simplifier` |
+| `/task-board [list <status>\|done\|get <ID>]` | Show tasks as status columns without `done`, filter one status, or show one task | - |
 | `/tests-coverage` | Run the full test suite with coverage report and suggest fixes for failures | `build` |
 
 ### /diff-summary
@@ -58,6 +61,21 @@ read-only `memory-review` inventory, then reads all entries with `knowledge list
 The result is a coverage summary and reasoned proposals, not applied changes. The user must
 validate proposals before a separate manager pass can apply them. Tasks are read only for
 context or reference checks. See [Project memory](memory.md#on-demand-global-review).
+
+### /memory, /task-board, /knowledge
+
+Read-only inspection commands. Each calls one tool and returns its Markdown output unchanged:
+the tool formats, the model only relays. They never save, note or remove memory and never create
+or upgrade a missing store.
+
+- `/memory` reports the store path, task counts by status and a knowledge topic inventory through
+  the read-only `memory-overview` tool.
+- `/task-board` shows every task except `done` as columns in the order `todo`, `in-progress`,
+  `review`, `blocked`, with `ID — Title` cells; `list <status>` filters (including `done`, also
+  available as bare `done`), and `get <ID>` shows one task with its progress notes.
+- `/knowledge` lists topics, lists or searches entries, and `get <ID>` shows one entry.
+
+Use `/memory-review` when the goal is to assess and propose changes, not merely to consult memory.
 
 ### /linear-stale-check
 

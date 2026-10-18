@@ -7,6 +7,7 @@ export { createOrchestratorLoopTools } from "./orchestrator-loop"
 export { createTaskBoardTool } from "./task-board"
 export { createKnowledgeTool } from "./knowledge"
 export { createMemoryReviewTool } from "./memory-review"
+export { createMemoryOverviewTool } from "./memory-overview"
 export {
   createAgentPromoteTool,
   validateGrade,

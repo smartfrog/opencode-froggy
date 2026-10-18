@@ -73,7 +73,7 @@ function backup(database: SqliteDatabase, path?: string): string {
 export function initializeMemory(database: SqliteDatabase, path?: string, readonly = false): string | null {
   if (readonly) {
     const version = Number(asRecord(database.prepare("PRAGMA user_version").get()).user_version)
-    if (version !== 2) throw new Error("A review requires the current memory schema; upgrade separately before reviewing")
+    if (version !== 2) throw new Error("A read requires the current memory schema; upgrade it separately before reading")
     return null
   }
   database.exec("BEGIN IMMEDIATE")

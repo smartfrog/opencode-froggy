@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { createOrchestratorLoop, type LoopSessionClient, type LoopStorage } from "../orchestrator-loop"
 import { asRecord } from "../record"
 import { ChildSessionTracker } from "../session-children"
+import { openProjectMemory } from "../memory/project"
 import { openSqlite } from "../memory/sqlite"
 import { createTaskBoardTool } from "../tools/task-board"
 
@@ -82,8 +83,14 @@ async function main() {
     await loop.start("ses_fixture_parent", { objective: "Recover the fixture assignment", intervalMinutes: 1 })
     return { pid: process.pid, taskVersion: receipt.version, childCount: tracker.listChildren("ses_fixture_parent").length, revision: readSchedule().revision }
   }
-  const source = asRecord(asRecord(JSON.parse((await memory.execute({ action: "get", id: "FIXTURE" }, context)).content)).task)
-  if (typeof source.version !== "number" || typeof source.description !== "string") throw new Error("Fixture memory source is missing or invalid")
+  const { store } = openProjectMemory(directory, { readonly: true })
+  let source
+  try {
+    source = store.getTask("FIXTURE")
+  } finally {
+    store.close()
+  }
+  if (!source) throw new Error("Fixture memory source is missing")
   if (stage === "crash") {
     const database = openSqlite(join(directory, ".opencode/memory/memory.db"))
     database.exec("BEGIN IMMEDIATE")

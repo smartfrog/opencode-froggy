@@ -62,8 +62,8 @@ Add a short progress note only for a meaningful advance, result or blocker. Each
 ## Read and write
 
 1. Read the affected task and search/list relevant knowledge; get only matching entries. Read `project-rules` if present and relevant. Reuse facts already in context.
-2. `nextPage` means the result is incomplete. Pass it as `page`; pin `expectedVersion` when continuing a record read. Read the full affected record before replacing its description or content.
-3. Save new records without `expectedVersion`. For updates or removal, pass the version just read. Treat versions as opaque; do not calculate them.
+2. Reads render complete Markdown and show the current version; narrow with a status, topic or query when a result is too large. Read the full affected record before replacing its description or content.
+3. Save new records without `expectedVersion`. For updates or removal, pass the version from the record you just read or from the previous write receipt. Treat versions as opaque; do not calculate them.
 4. On a version conflict, stop that write and report it. Do not force or blindly retry. Report partial completion if earlier writes succeeded.
 
 ## Permanent removal
