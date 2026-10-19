@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 1.6.1
 - Keep memory reads complete without display-driven size limits; preserve topic filters on knowledge searches and read each task with its notes from one database snapshot
 - Return Markdown from every `task-board`, `knowledge` and `memory-overview` read, so `/memory`, `/task-board` and `/knowledge` relay one tool output instead of reformatting JSON; writes still return JSON receipts and task boards use status columns excluding `done` by default
 - Add a read-only `memory-overview` tool for store path, task counts and knowledge topics, keeping `/memory` and `/knowledge` separate from the `memory-review` cleanup audit
