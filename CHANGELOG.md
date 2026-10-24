@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.6.2
+- Remove task progress notes and the `note` action; keep one current task description and durable knowledge, without a new migration or rewriting existing databases
+- Simplify memory-manager and orchestrator memory/delegation guidance; replace obsolete state instead of accumulating update histories
+
 ## 1.6.1
 - Keep memory reads complete without display-driven size limits; preserve topic filters on knowledge searches and read each task with its notes from one database snapshot
 - Return Markdown from every `task-board`, `knowledge` and `memory-overview` read, so `/memory`, `/task-board` and `/knowledge` relay one tool output instead of reformatting JSON; writes still return JSON receipts and task boards use status columns excluding `done` by default

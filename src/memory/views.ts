@@ -1,4 +1,4 @@
-import { type MemoryStore, type NoteRecord, type TaskNote, type TaskRecord, type TaskStatus } from "./store"
+import { type MemoryStore, type NoteRecord, type TaskRecord, type TaskStatus } from "./store"
 
 const PAGE = 500
 
@@ -65,14 +65,11 @@ export function formatOverview(path: string, counts: { status: TaskStatus; count
   ].join("\n")
 }
 
-export function formatTaskDetails(task: TaskRecord, notes: TaskNote[]): string {
-  const lines = [`**${task.id}** — ${text(task.title)}`, "", `Status: ${task.status}`, `Version: ${task.version}`, ""]
-  lines.push(task.description.trim() ? task.description : "_(no description)_")
-  if (notes.length) {
-    lines.push("", "### Notes")
-    for (const note of notes) lines.push(`- ${new Date(note.createdAt).toISOString()} — ${note.note}`)
-  }
-  return lines.join("\n")
+export function formatTaskDetails(task: TaskRecord): string {
+  return [
+    `**${task.id}** — ${text(task.title)}`, "", `Status: ${task.status}`, `Version: ${task.version}`, "",
+    task.description.trim() ? task.description : "_(no description)_",
+  ].join("\n")
 }
 
 export function formatKnowledgeTopics(topics: { topic: string; count: number }[], knowledgeCount: number): string {

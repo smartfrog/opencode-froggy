@@ -10,12 +10,6 @@ const SCHEMA = `
     description TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL,
     created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
   );
-  CREATE TABLE task_notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    note TEXT NOT NULL, created_at INTEGER NOT NULL
-  );
-  CREATE INDEX idx_task_notes_task ON task_notes(task_id, id);
   CREATE TABLE knowledge (
     version INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL UNIQUE, topic TEXT NOT NULL, title TEXT NOT NULL,

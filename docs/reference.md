@@ -65,14 +65,14 @@ context or reference checks. See [Project memory](memory.md#on-demand-global-rev
 ### /memory, /task-board, /knowledge
 
 Read-only inspection commands. Each calls one tool and returns its Markdown output unchanged:
-the tool formats, the model only relays. They never save, note or remove memory and never create
+the tool formats, the model only relays. They never save or remove memory and never create
 or upgrade a missing store.
 
 - `/memory` reports the store path, task counts by status and a knowledge topic inventory through
   the read-only `memory-overview` tool.
 - `/task-board` shows every task except `done` as columns in the order `todo`, `in-progress`,
   `review`, `blocked`, with `ID — Title` cells; `list <status>` filters (including `done`, also
-  available as bare `done`), and `get <ID>` shows one task with its progress notes.
+  available as bare `done`), and `get <ID>` shows one task's current description and version.
 - `/knowledge` lists topics, lists or searches entries, and `get <ID>` shows one entry.
 
 Use `/memory-review` when the goal is to assess and propose changes, not merely to consult memory.

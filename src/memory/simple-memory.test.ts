@@ -28,19 +28,13 @@ describe("simple project memory", () => {
     expect(content).toContain("Measure before changing the scheduler.")
   })
 
-  it("adds a short progress note without changing the task description", async () => {
+  it("updates the task synthesis without preserving the obsolete state", async () => {
     const { tasks } = tools()
-    await tasks.execute({ action: "save", id: "PERF", title: "Measure idle", description: "Keep the original scope." }, manager)
-    await tasks.execute({ action: "note", id: "PERF", note: "Baseline measured; report: reports/idle.md" }, manager)
+    await tasks.execute({ action: "save", id: "PERF", title: "Measure idle", description: "Baseline pending." }, manager)
+    await tasks.execute({ action: "save", id: "PERF", description: "Baseline measured; report: reports/idle.md", expectedVersion: 1 }, manager)
     const content = (await tasks.execute({ action: "get", id: "PERF" }, reader)).content
-    expect(content).toContain("Keep the original scope.")
+    expect(content).not.toContain("Baseline pending.")
     expect(content).toContain("Baseline measured; report: reports/idle.md")
-  })
-
-  it("rejects progress logs longer than 500 characters", async () => {
-    const { tasks } = tools()
-    await tasks.execute({ action: "save", id: "T", title: "Task" }, manager)
-    await expect(tasks.execute({ action: "note", id: "T", note: "x".repeat(501) }, manager)).rejects.toThrow("500")
   })
 
   it("rejects stale task updates", async () => {
@@ -79,8 +73,8 @@ describe("simple project memory", () => {
     await expect(knowledge.execute({ action, id: "rule", title: "Rule", topic: "constraints", content: "Keep.", expectedVersion: 1 }, reader)).rejects.toThrow("Only memory-manager")
   })
 
-  it.each(["save", "note"])("rejects task %s by other agents", async (action) => {
+  it("rejects task saves by other agents", async () => {
     const { tasks } = tools()
-    await expect(tasks.execute({ action, id: "T", title: "Task", note: "Done." }, reader)).rejects.toThrow("Only memory-manager")
+    await expect(tasks.execute({ action: "save", id: "T", title: "Task" }, reader)).rejects.toThrow("Only memory-manager")
   })
 })

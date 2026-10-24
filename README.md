@@ -74,18 +74,18 @@ Froggy separates **current execution state** from **durable knowledge**:
 
 | Store | Purpose |
 |---|---|
-| `task-board` | Title, status, detailed description and short progress notes |
+| `task-board` | Title, status and one current task description |
 | `knowledge` | Valuable constraints, performance tips, pitfalls and decisions grouped by topic |
 
 Both live in one SQLite database per canonical project, shared across worktrees. All agents may read. Only `memory-manager` writes; it decides which knowledge to keep, correct, merge or permanently delete. Coordinators supply verified facts and execution decisions, not final memory prose.
 
-Read the affected task first, then use knowledge `topics`/`list`/`search` and `get` only what you need. Reads return complete Markdown; narrow with a status, topic or query when a result is too large. Do not load the whole store.
+Read the affected task first, then use knowledge `topics`/`list`/`search` and `get` only what you need. Tools return complete Markdown, but rendering may be truncated: narrow discovery with a status, topic or query and obtain any missing content before replacing a record. If the full read is blocked, report it instead of rewriting from excerpts. Do not load the whole store.
 
 See [Project memory](docs/memory.md) for the model, curation rules, tools and upgrades. Utility tool parameters are in [Reference](docs/reference.md#utility-tools).
 
 ### task-board
 
-Simple task tracking with `todo`, `in-progress`, `blocked`, `review` and `done`. Use `list`/`get` to read; the manager uses `save` and `note`. Updates require the version just read, without keeping old revisions.
+Simple task tracking with `todo`, `in-progress`, `blocked`, `review` and `done`. All agents read with `list`/`get`; the manager writes with `save`, using the current `expectedVersion` for an existing task. Descriptions are current syntheses, not histories: replace obsolete state instead of appending updates. There are no task notes or stored old revisions.
 
 ### knowledge
 

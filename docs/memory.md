@@ -6,7 +6,7 @@ The goal is to recover what matters, not to preserve a journal of everything tha
 ```mermaid
 flowchart LR
     C[Coordinator: facts and decisions] --> M[Memory manager: curate]
-    M --> T[Tasks and short progress notes]
+    M --> T[Current task descriptions]
     M --> K[Project knowledge]
     A[All agents] -->|read| T
     A -->|read| K
@@ -18,9 +18,14 @@ A task has a stable **ID**, **title**, **status**, and **detailed description**.
 Statuses are `todo`, `in-progress`, `blocked`, `review`, and `done`.
 
 The description holds scope, acceptance, current state, next step and useful evidence links.
-Keep session/workspace references there when needed to resume work.
-Short progress notes record meaningful advances or blockers, at most 500 characters each.
-They are not a log: update an obsolete description rather than burying corrections in notes.
+Keep session/workspace references there when needed to resume work. Title, status and
+description must agree with the current established state: replace obsolete blockers,
+assignments and former current-state sections rather than keeping a succession of snapshots.
+There are no task notes, update feeds or history sections. `save` replaces supplied fields;
+it does not append a timeline. Read the current task with `get`, then replace its description
+using the returned `expectedVersion`. Keep unique constraints, unresolved risks and recovery
+links when removing obsolete prose. Detailed trials stay in linked reports; do not create
+reports merely to relocate redundant updates.
 
 The coordinator decides assignments and acceptance. A dispatched worker is not proof of
 execution, and a passing static check is not proof that the product objective is achieved.
@@ -42,22 +47,40 @@ For example, a 6 GiB memory ceiling or a measured scheduler optimization belongs
 “Trial #14 launched; results pending” belongs in the task. Raw logs stay in linked files.
 Do not duplicate facts already adequately covered by project instructions or documentation.
 
+A knowledge entry states the current conclusion, its conditions and uncertainty, and evidence
+links, not the investigation chronology. Replace obsolete explanations when evidence establishes
+the replacement instead of appending contradictory verdicts. Keep a refuted lead only when it
+helps avoid repeating a mistake: summarize the failed approach, its conditions and the reason,
+with a source link. Keep detailed trial sequences, timestamps and measurements in linked reports.
+
+For example, when several trials isolate a capture-only crash and validate a local fix,
+retain the failure mechanism, affected configuration, fix, validation limits and report link.
+The task holds the remaining blocker and next action, not another copy of each trial.
+
 ## The memory manager decides
 
 All agents read directly. **Only `memory-manager` writes tasks and knowledge.**
-The coordinator supplies verified facts, decisions, bounded scope and evidence—not final
-prose to copy. The manager decides what to add, correct, merge, refuse or remove.
+The coordinator supplies verified new facts, decisions, obsolete conclusions, bounded scope
+and evidence—not final prose to copy or a requirement to preserve every previous chain.
+The manager decides what to add, correct, merge, refuse or remove.
 `No change` is a valid result; quantity is not a quality measure.
 
 Before creating an entry, the manager searches for an existing home. It preserves uncertainty
 and does not invent acceptance or authorization. Old or rarely read knowledge is not
 automatically useless. Unique constraints, unresolved risks and recovery information stay
-unless explicit evidence supersedes them.
+unless explicit evidence supersedes them. Preserve recoverability, not exhaustive chronology;
+size alone is not a deletion criterion. Explicit user retention instructions still apply.
+If unique information cannot safely be condensed or its evidence is missing, report the
+limitation rather than discarding it or inventing a report.
 
 `knowledge remove` is **permanent deletion**, with no archive or undo. Read the full entry
 first. Save and verify merged content before deleting duplicates, and reconcile affected
 references. When uncertain, keep the entry. The handback lists changed IDs, returned
 versions, deletion reasons, conflicts and partial writes.
+
+The coordinator checks the resulting affected titles, statuses, blockers and next steps against
+its decisions and the supplied evidence, including necessary recovery references. A saved-record
+receipt proves persistence, not that the updated state is coherent or that acceptance was met.
 
 Tool checks restrict mutations to the manager's agent context. This is not an OS sandbox:
 agents must not bypass the tools with SQL, shell or file edits.
@@ -68,17 +91,19 @@ Use `/memory`, `/task-board` and `/knowledge` to inspect tasks and knowledge wit
 then `get` only matching entries. Do not load the whole project on every reminder.
 `project-rules`, if present, is an ordinary knowledge entry, not a special backend.
 
-Reads return complete Markdown. Narrow with a status, topic or query when a result is too
-large. Record `get` shows the current version. Lists are discovery views, not immutable
-snapshots while other sessions write.
+Tools return complete Markdown, but rendering may be truncated. Narrow discovery with a
+status, topic or query. Before replacing a description or content, read the full affected
+record and obtain any missing text through an authorized path. If any part remains unread
+or inaccessible, stop that replacement and report incomplete coverage; excerpts and summaries
+are not enough. Record `get` shows the current version. Lists are discovery views, not
+immutable snapshots while other sessions write.
 
-Task details and progress notes are read from one database snapshot. The plugin does not
-cap Markdown responses or impose a display-driven limit on descriptions or knowledge content.
+Each task's metadata and description are read together. The plugin does not cap Markdown
+responses or impose a display-driven limit on descriptions or knowledge content.
 
 Create records without `expectedVersion`. Updating or removing an existing record requires
 its current version. Versions are opaque conflict guards, not public history; never calculate
 the next value. On conflict, report it and reread before deciding how to reconcile.
-Progress-note appends can also supply `expectedVersion`; an append advances the task's version.
 
 ## On-demand global review
 
@@ -98,7 +123,7 @@ the inventory reports a blocker instead of creating or migrating a store.
 
 | Tool | Actions | Record fields |
 |---|---|---|
-| `task-board` | `list`, `get`, `save`, `note` | `id`, `title`, `status`, `description`; `note` adds a short progress note |
+| `task-board` | `list`, `get`, `save` | `id`, `title`, `status`, `description`; updates require the task's `expectedVersion` |
 | `knowledge` | `topics`, `list`, `search`, `get`, `save`, `remove` | `id`, `topic`, `title`, `content`; `query` searches text |
 | `memory-overview` | none | Read-only store path, task counts by status and knowledge topics |
 | `memory-review` | `page` | Read-only inventory: `knowledgeCount`, `topicCount`, `topics` and `nextPage` |
@@ -111,7 +136,7 @@ Use `memory-overview` to consult memory and `memory-review` only to prepare a cl
 ## Storage and upgrades
 
 One SQLite database lives at `<canonical-project>/.opencode/memory/memory.db`, shared
-across project worktrees. It contains `tasks`, `task_notes`, and `knowledge`, with internal
+across project worktrees. New stores contain only `tasks` and `knowledge`, with internal
 versions and timestamps. Reports and session history remain separate.
 
 On first write access to the previous structured schema, Froggy creates and verifies a standalone
@@ -128,3 +153,7 @@ The Markdown memory tool has been removed. Existing Markdown files are neither i
 nor deleted automatically. A project still using them needs an explicit migration, not two
 simultaneously authoritative stores. The database and its backups are local project data:
 code commits do not protect them unless explicitly included.
+
+Progress-note removal adds no migration, schema version or compatibility layer. Existing
+databases and backups are not rewritten, and former task-note content is not copied into
+descriptions. The removed actions and fields are rejected rather than silently ignored.

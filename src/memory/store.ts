@@ -15,13 +15,6 @@ export interface TaskRecord {
   updatedAt: number
 }
 
-export interface TaskNote {
-  id: number
-  taskId: string
-  note: string
-  createdAt: number
-}
-
 export interface NoteRecord {
   id: string
   topic: string
@@ -158,38 +151,6 @@ export class MemoryStore {
       if (Number(result.changes) !== 1) throw new Error(`Task ${id} changed; read it again`)
       return { id, version, created: current === null }
     })
-  }
-
-  addTaskNote(id: string, note: string, expectedVersion: number | null = null): { note: TaskNote; version: number } {
-    assertId(id)
-    const value = requiredText(note, "note", 500)
-    return this.transaction(() => {
-      const task = this.getTask(id)
-      if (!task) throw new Error(`Task not found: ${id}`)
-      if (expectedVersion !== null) checkVersion(id, task, expectedVersion)
-      const createdAt = Date.now()
-      const result = this.database.prepare("INSERT INTO task_notes (task_id, note, created_at) VALUES (?, ?, ?)").run(id, value, createdAt)
-      if (Number(result.changes) !== 1) throw new Error(`Progress note for ${id} could not be saved`)
-      const update = this.database.prepare("UPDATE tasks SET updated_at = ?, version = version + 1 WHERE id = ? AND version = ?").run(createdAt, id, task.version)
-      if (Number(update.changes) !== 1) throw new Error(`Task ${id} changed; progress note was not saved`)
-      return { note: { id: Number(result.lastInsertRowid), taskId: id, note: value, createdAt }, version: task.version + 1 }
-    })
-  }
-
-  taskNotes(id: string, limit = 11, offset = 0): TaskNote[] {
-    return this.database.prepare("SELECT * FROM task_notes WHERE task_id = ? ORDER BY id DESC LIMIT ? OFFSET ?")
-      .all(assertId(id), limit, offset).map((value) => {
-        const row = asRecord(value)
-        return { id: Number(row.id), taskId: String(row.task_id), note: String(row.note), createdAt: Number(row.created_at) }
-      })
-  }
-
-  getTaskWithNotes(id: string): { task: TaskRecord; notes: TaskNote[] } {
-    return this.transaction(() => {
-      const task = this.getTask(id)
-      if (!task) throw new Error(`Task not found: ${id}`)
-      return { task, notes: this.taskNotes(id, -1) }
-    }, false)
   }
 
   getNote(id: string): NoteRecord | null {

@@ -18,7 +18,6 @@ async function setup(seed = false) {
     const tasks = createTaskBoardTool(directory)
     const knowledge = createKnowledgeTool(directory)
     await tasks.execute({ action: "save", id: "T1", title: "Fix crash", status: "review", description: "Crash details." }, writer)
-    await tasks.execute({ action: "note", id: "T1", note: "Checked the logs." }, writer)
     await tasks.execute({ action: "save", id: "T2", title: "Finished task", status: "done" }, writer)
     await knowledge.execute({ action: "save", id: "K1", topic: "build", title: "Build notes", content: "Folders and files are copied." }, writer)
   }
@@ -62,11 +61,12 @@ describe("tool output used by the commands", () => {
     expect(output).not.toContain("T1")
   })
 
-  it("shows one task with description and notes", async () => {
+  it("shows one task with its current description and version", async () => {
     const output = await run(createTaskBoardTool(await setup(true)), { action: "get", id: "T1" })
     expect(output).toContain("**T1** — Fix crash")
     expect(output).toContain("Crash details.")
-    expect(output).toContain("Checked the logs.")
+    expect(output).toContain("Version: 1")
+    expect(output).not.toContain("### Notes")
   })
 
   it("renders the memory overview", async () => {

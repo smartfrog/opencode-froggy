@@ -83,6 +83,11 @@ describe("memory store", () => {
     expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'history'").get()).toBeNull()
   })
 
+  it("does not create a progress-note table", () => {
+    const { database } = store()
+    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'task_notes'").get()).toBeNull()
+  })
+
   it("searches knowledge by content and topic", () => {
     const { memory } = store()
     memory.saveNote("idle", { title: "Idle scheduling", topic: "performance", content: "Measure cycle accounting." })
@@ -126,11 +131,6 @@ describe("memory store", () => {
     database.exec("CREATE TRIGGER skip_delete BEFORE DELETE ON knowledge BEGIN SELECT RAISE(IGNORE); END")
     expect(() => memory.removeNote("rule", saved.version)).toThrow("changed")
     expect(memory.getNote("rule")).toMatchObject({ content: "Keep." })
-  })
-
-  it("rejects progress notes for a missing task", () => {
-    const { memory } = store()
-    expect(() => memory.addTaskNote("missing", "Update.")).toThrow("Task not found")
   })
 
   it.each(["", " "])("rejects blank knowledge content %j", (content) => {
