@@ -1,6 +1,6 @@
 # Reference
 
-Detailed reference for commands, skills, and utility tools. For system behavior, start with [Orchestration](orchestration.md) or [Project memory](memory.md); for chain queries, see [Ethereum and EVM tools](ethereum.md).
+Detailed reference for commands, skills, and utility tools. For system behavior, start with [Orchestration](orchestration.md) or [Project memory](memory.md).
 
 [Back to README](../README.md)
 
@@ -473,11 +473,9 @@ Promote an agent to primary (default) or specify a grade.
 
 ## Configuration
 
-The plugin loads agents, commands, and skills automatically from the `agent/`, `command/`, and `skill/` directories. Hooks are loaded from the standard OpenCode configuration directories (see [Hooks](hooks.md)). The only tool-specific setting is the optional `ETHERSCAN_API_KEY` described in [Ethereum and EVM](ethereum.md#configuration); Etherscan-backed queries require it.
+The plugin loads agents, commands, and skills automatically from the `agent/`, `command/`, and `skill/` directories.
 
-### Supported Code File Extensions
-
-The `hasCodeChange` condition checks file extensions against the default set listed in the [Hooks conditions](hooks.md#conditions) section. Hooks without conditions run on every matching event; `hasCodeChange` is only needed to filter on modified code files. Tracked files come from `write`, `edit`, and `patch`.
+Bundled commands are installed under `<config-home>/opencode/commands/`, and legacy agent copies are checked under `<config-home>/opencode/agents/`. On every platform, `<config-home>` is `XDG_CONFIG_HOME` when set, otherwise `~/.config`.
 
 ---
 
@@ -485,4 +483,3 @@ The `hasCodeChange` condition checks file extensions against the default set lis
 
 - [Orchestration](orchestration.md)
 - [Project memory](memory.md)
-- [Ethereum and EVM tools](ethereum.md)

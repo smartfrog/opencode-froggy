@@ -8,7 +8,6 @@ is for agentic coding tools that will modify or run code here.
 - Source code lives in `src/`.
 - Tests live alongside sources in `src/**/*.test.ts`.
 - Build output goes to `dist/`.
-- Hooks configuration lives in `hook/hooks.md` (YAML frontmatter).
 - Agents, commands, and skills are loaded from `agent/`, `command/`, and `skill/`.
 - Skills are discovered by `skill/<name>/SKILL.md`.
 
@@ -91,7 +90,6 @@ Use any of the following:
 - Types and interfaces: `PascalCase`.
 - Constants: `SCREAMING_SNAKE_CASE` for module-level constants.
 - Filenames: `kebab-case` or existing file names (do not rename casually).
-- Hook events and conditions use `snake.case` style strings.
 
 ### Error handling and logging
 
@@ -106,15 +104,11 @@ Use any of the following:
 - Keep functions small and focused; avoid deep nesting.
 - Avoid mutating inputs; create new objects when transforming data.
 - When iterating, prefer `for...of` where `await` is used.
-- Keep hook execution order deterministic (iterate in declaration order).
+- Keep plugin registration order deterministic (iterate in declaration order).
 
 ### Plugin behavior conventions
 
-- Hooks are declared in `hook/hooks.md` frontmatter.
-- When adding new hook events, update `VALID_HOOK_EVENTS` and docs.
-- Action errors should not stop later actions.
 - Do not change session lifecycle behavior without updating tests.
-- Tool hooks track files modified by `write` and `edit` tools.
 
 ### Data parsing
 
@@ -131,9 +125,8 @@ Use any of the following:
 
 ## Documentation expectations
 
-- Keep README and hook docs consistent with implementation.
-- If you change supported events or actions, update `README.md` accordingly.
-- Update `hook/hooks.md` frontmatter examples if behavior changes.
+- Keep README and the guides in `docs/` consistent with implementation.
+- If you change supported tools or session behavior, update the relevant documentation.
 
 ## Cursor and Copilot rules
 
@@ -143,7 +136,7 @@ Use any of the following:
 ## Working agreement for agents
 
 - Be surgical: change only what is required for the task.
-- Preserve existing behaviors, especially around hook execution order.
+- Preserve existing behaviors, especially around session lifecycle and orchestration.
 - Avoid broad refactors unless explicitly requested.
 - Do not add new dependencies without user approval.
 - Prefer adding or updating tests alongside behavior changes.

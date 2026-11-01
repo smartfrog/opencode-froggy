@@ -56,46 +56,6 @@ export interface LoadedSkill {
   body: string
 }
 
-// ============================================================================
-// HOOK TYPES
-// ============================================================================
-
-export type HookEvent =
-  | "session.idle"
-  | "session.created"
-  | "session.deleted"
-  | `tool.before.${string}`
-  | `tool.after.${string}`
-
-export type HookCondition = "isMainSession" | "hasCodeChange"
-
-export interface HookActionCommand {
-  command: string | { name: string; args: string }
-}
-
-export interface HookActionTool {
-  tool: { name: string; args: Record<string, unknown> }
-}
-
-export interface HookActionBash {
-  bash: string | { command: string; timeout?: number }
-}
-
-export type HookAction = HookActionCommand | HookActionTool | HookActionBash
-
-export interface HookConfig {
-  event: HookEvent
-  conditions?: HookCondition[]
-  actions: HookAction[]
-}
-
-interface HooksFileFrontmatter {
-  hooks?: HookConfig[]
-}
-
-const SESSION_HOOK_EVENTS = ["session.idle", "session.created", "session.deleted"]
-const TOOL_HOOK_PATTERN = /^tool\.(before|after)\..+$/
-
 export interface AgentConfigOutput {
   description: string
   mode: "subagent" | "primary" | "all"
@@ -218,55 +178,4 @@ export function loadCommands(commandDir: string): Record<string, CommandConfig> 
   }
 
   return commands
-}
-
-function isValidHookEvent(event: string): event is HookEvent {
-  return SESSION_HOOK_EVENTS.includes(event) || TOOL_HOOK_PATTERN.test(event)
-}
-
-export function loadHooks(hookDir: string): Map<HookEvent, HookConfig[]> {
-  const hooks = new Map<HookEvent, HookConfig[]>()
-
-  const hooksFilePath = join(hookDir, "hooks.md")
-  if (!existsSync(hooksFilePath)) return hooks
-
-  const content = readFileSync(hooksFilePath, "utf-8")
-  const { data } = parseFrontmatter<HooksFileFrontmatter>(content)
-
-  if (!data.hooks || !Array.isArray(data.hooks)) return hooks
-
-  for (const hookDef of data.hooks) {
-    if (!hookDef.event || !isValidHookEvent(hookDef.event)) continue
-    if (!hookDef.actions || !Array.isArray(hookDef.actions)) continue
-
-    const hookConfig: HookConfig = {
-      event: hookDef.event,
-      conditions: Array.isArray(hookDef.conditions) ? hookDef.conditions : undefined,
-      actions: hookDef.actions,
-    }
-
-    const existing = hooks.get(hookDef.event)
-    if (existing) {
-      existing.push(hookConfig)
-    } else {
-      hooks.set(hookDef.event, [hookConfig])
-    }
-  }
-
-  return hooks
-}
-
-export function mergeHooks(
-  ...hookMaps: Map<HookEvent, HookConfig[]>[]
-): Map<HookEvent, HookConfig[]> {
-  const merged = new Map<HookEvent, HookConfig[]>()
-
-  for (const hookMap of hookMaps) {
-    for (const [event, configs] of hookMap) {
-      const existing = merged.get(event) ?? []
-      merged.set(event, [...existing, ...configs])
-    }
-  }
-
-  return merged
 }

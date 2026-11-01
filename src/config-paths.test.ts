@@ -1,8 +1,7 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from "bun:test"
-import * as fs from "node:fs"
-import { join } from "node:path"
-import { getUserConfigDir, getGlobalHookDir, getGlobalCommandDir, getGlobalAgentDir, getProjectHookDir } from "./config-paths"
 import { homedir } from "node:os"
+import { join } from "node:path"
+import { describe, it, expect, afterEach } from "bun:test"
+import { getUserConfigDir, getGlobalCommandDir, getGlobalAgentDir } from "./config-paths"
 
 describe("config-paths", () => {
   const originalPlatform = process.platform
@@ -11,7 +10,6 @@ describe("config-paths", () => {
   afterEach(() => {
     Object.defineProperty(process, "platform", { value: originalPlatform })
     process.env = { ...originalEnv }
-    jest.restoreAllMocks()
   })
 
   describe("getUserConfigDir", () => {
@@ -43,56 +41,20 @@ describe("config-paths", () => {
       expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
     })
 
-    it("should return ~/.config on Windows by default", async () => {
+    it("should ignore APPDATA on Windows when XDG_CONFIG_HOME is not set", async () => {
       Object.defineProperty(process, "platform", { value: "win32" })
       delete process.env.XDG_CONFIG_HOME
       process.env.APPDATA = "C:\\Users\\Test\\AppData\\Roaming"
 
-      jest.spyOn(fs, "existsSync").mockReturnValue(false)
-
       expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
     })
 
-    it("should return APPDATA on Windows when hooks.md exists there but not in ~/.config", async () => {
+    it("should honor XDG_CONFIG_HOME on Windows regardless of APPDATA", () => {
       Object.defineProperty(process, "platform", { value: "win32" })
-      delete process.env.XDG_CONFIG_HOME
-      const appdataDir = "C:\\Users\\Test\\AppData\\Roaming"
-      process.env.APPDATA = appdataDir
+      process.env.XDG_CONFIG_HOME = "/custom/windows/config"
+      process.env.APPDATA = "C:\\Users\\Test\\AppData\\Roaming"
 
-      const appdataHooksPath = join(appdataDir, "opencode", "hook", "hooks.md")
-
-      jest.spyOn(fs, "existsSync").mockImplementation((path) => path === appdataHooksPath)
-
-      expect(getUserConfigDir()).toBe(appdataDir)
-    })
-
-    it("should prefer ~/.config on Windows when hooks.md exists in both locations", async () => {
-      Object.defineProperty(process, "platform", { value: "win32" })
-      delete process.env.XDG_CONFIG_HOME
-      const appdataDir = "C:\\Users\\Test\\AppData\\Roaming"
-      process.env.APPDATA = appdataDir
-
-      const crossPlatformHooksPath = join(homedir(), ".config", "opencode", "hook", "hooks.md")
-
-      jest.spyOn(fs, "existsSync").mockImplementation((path) => path === crossPlatformHooksPath)
-
-      expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
-    })
-  })
-
-  describe("getGlobalHookDir", () => {
-    it("should return correct path on Linux", async () => {
-      Object.defineProperty(process, "platform", { value: "linux" })
-      delete process.env.XDG_CONFIG_HOME
-
-      expect(getGlobalHookDir()).toBe(join(homedir(), ".config", "opencode", "hook"))
-    })
-
-    it("should return correct path with XDG_CONFIG_HOME", async () => {
-      Object.defineProperty(process, "platform", { value: "linux" })
-      process.env.XDG_CONFIG_HOME = "/custom/config"
-
-      expect(getGlobalHookDir()).toBe("/custom/config/opencode/hook")
+      expect(getUserConfigDir()).toBe("/custom/windows/config")
     })
   })
 
@@ -114,15 +76,13 @@ describe("config-paths", () => {
     })
   })
 
-  describe("getProjectHookDir", () => {
-    it("should return correct path for project directory", async () => {
-      expect(getProjectHookDir("/my/project")).toBe("/my/project/.opencode/hook")
-    })
+  it.each([
+    ["agents", getGlobalAgentDir],
+    ["commands", getGlobalCommandDir],
+  ] as const)("should resolve Windows %s using XDG_CONFIG_HOME", (name, resolveDirectory) => {
+    Object.defineProperty(process, "platform", { value: "win32" })
+    process.env.XDG_CONFIG_HOME = "/custom/config"
 
-    it("should handle Windows-style paths", async () => {
-      const result = getProjectHookDir("C:\\Users\\Test\\project")
-      expect(result).toContain(".opencode")
-      expect(result).toContain("hook")
-    })
+    expect(resolveDirectory()).toBe(join("/custom/config", "opencode", name))
   })
 })

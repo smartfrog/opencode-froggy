@@ -1,7 +1,7 @@
 {
   "name": "opencode-froggy",
   "version": "1.6.2",
-  "description": "OpenCode plugin with a hook layer (tool.before.*, session.idle...), agents (code-reviewer, doc-writer), and commands (/review-pr, /commit)",
+  "description": "OpenCode plugin for multi-agent orchestration, durable project memory, and general-purpose tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -40,7 +40,6 @@
     "opencode",
     "opencode-plugin",
     "plugin",
-    "hooks",
     "code-review",
     "code-simplification",
     "ai-agent",
@@ -58,8 +57,7 @@
   "dependencies": {
     "@opencode/plugin": "^2.0.5",
     "js-yaml": "^4.1.0",
-    "pdfjs-dist": "^4.8.69",
-    "viem": "^2.44.1"
+    "pdfjs-dist": "^4.8.69"
   },
   "devDependencies": {
     "@types/bun": "latest",

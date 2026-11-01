@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Breaking change: remove configurable session/tool hooks, their bash actions and modified-file tracking; existing global and project `hook/hooks.md` files are no longer loaded
+- Remove the `eth-transaction`, `eth-address-balance`, `eth-address-txs` and `eth-token-transfers` tools and the `viem` dependency
+- Resolve global command and agent directories from `XDG_CONFIG_HOME` or `~/.config` on every platform; Windows no longer selects `%APPDATA%` based on legacy hook files, so move any agent/command files from `%APPDATA%/opencode` to the corresponding config-home directories if needed
+
 ## 1.6.2
 - Remove task progress notes and the `note` action; keep one current task description and durable knowledge, without a new migration or rewriting existing databases
 - Simplify memory-manager and orchestrator memory/delegation guidance; replace obsolete state instead of accumulating update histories

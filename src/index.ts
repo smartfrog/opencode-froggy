@@ -1,22 +1,9 @@
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Plugin } from "@opencode/plugin"
-import {
-  loadAgents,
-  loadHooks,
-  loadSkills,
-  mergeHooks,
-  type HookConfig,
-  type HookEvent,
-} from "./loaders"
-import { getGlobalAgentDir, getGlobalCommandDir, getGlobalHookDir, getProjectHookDir } from "./config-paths"
-import { hasCodeExtension } from "./code-files"
+import { loadAgents, loadSkills } from "./loaders"
+import { getGlobalAgentDir, getGlobalCommandDir } from "./config-paths"
 import { log } from "./logger"
-import {
-  executeBashAction,
-  DEFAULT_BASH_TIMEOUT,
-  type BashContext,
-} from "./bash-executor"
 import {
   gitingestTool,
   pdfToMarkdownTool,
@@ -28,10 +15,6 @@ import {
   createMemoryReviewTool,
   createMemoryOverviewTool,
   createAgentPromoteTool,
-  ethTransactionTool,
-  ethAddressTxsTool,
-  ethAddressBalanceTool,
-  ethTokenTransfersTool,
 } from "./tools"
 import { buildSkillActivationBlock } from "./skill-activation"
 import { installBundledFiles } from "./command-installer"
@@ -53,13 +36,6 @@ const PLUGIN_ROOT = join(__dirname, "..")
 const AGENT_DIR = join(PLUGIN_ROOT, "agent")
 const COMMAND_DIR = join(PLUGIN_ROOT, "command")
 const SKILL_DIR = join(PLUGIN_ROOT, "skill")
-
-const TRACKED_FILE_TOOLS = new Set(["write", "edit", "patch"])
-
-interface HookExecutionResult {
-  blocked: boolean
-  blockReason?: string
-}
 
 function readSessionID(event: unknown): string | undefined {
   const data = asRecord(asRecord(event).data)
@@ -101,11 +77,6 @@ export default Plugin.define({
       log("[init] failed to reload commands", { error: String(error) })
     }
 
-    const globalHooks = loadHooks(getGlobalHookDir())
-    const projectHooks = loadHooks(getProjectHookDir(ctx.location.directory))
-    const hooks = mergeHooks(globalHooks, projectHooks)
-
-    const modifiedCodeFiles = new Map<string, Set<string>>()
     const tracker = new ChildSessionTracker()
 
     const skillsWithTriggers = skills.filter((s) => s.useWhen)
@@ -118,11 +89,11 @@ export default Plugin.define({
       commandsUpdated: installedCommands.updated,
       skills: skills.map((s) => s.name),
       skillsWithTriggers: skillsWithTriggers.map((s) => s.name),
-      hooks: Array.from(hooks.keys()),
       tools: [
         "gitingest",
         "pdf-to-markdown",
         "list-child-sessions",
+        "session-context",
         "task-board",
         "knowledge",
         "memory-overview",
@@ -131,176 +102,8 @@ export default Plugin.define({
         "stop-orchestrator-loop",
         "orchestrator-status",
         "agent-promote",
-        "eth-transaction",
-        "eth-address-txs",
-        "eth-address-balance",
-        "eth-token-transfers",
       ],
     })
-
-    async function executeHookActions(
-      hook: HookConfig,
-      sessionID: string,
-      extraLog?: Record<string, unknown>,
-      options?: { canBlock?: boolean }
-    ): Promise<HookExecutionResult> {
-      const prefix = `[hook:${hook.event}]`
-      const canBlock = options?.canBlock ?? false
-      const conditions = hook.conditions ?? []
-
-      for (const condition of conditions) {
-        if (condition === "isMainSession") {
-          try {
-            const sessionInfo = (await ctx.session.get({ sessionID })) as unknown as {
-              parentID?: string
-            }
-            if (sessionInfo?.parentID) {
-              log(`${prefix} condition not met, skipping`, { sessionID, condition })
-              return { blocked: false }
-            }
-          } catch (error) {
-            log(`${prefix} failed to check session, continuing`, { error: String(error) })
-          }
-        }
-
-        if (condition === "hasCodeChange") {
-          const files = extraLog?.files as string[] | undefined
-          if (!files || !files.some(hasCodeExtension)) {
-            log(`${prefix} condition not met, skipping`, { sessionID, condition })
-            return { blocked: false }
-          }
-        }
-      }
-
-      log(`${prefix} starting`, {
-        sessionID,
-        conditions,
-        actions: hook.actions.length,
-        ...extraLog,
-      })
-
-      for (const action of hook.actions) {
-        try {
-          if ("command" in action) {
-            const { name, args = "" } =
-              typeof action.command === "string" ? { name: action.command } : action.command
-            log(`${prefix} executing command`, { command: name, args })
-            await ctx.session.command({ sessionID, name, text: args })
-          } else if ("tool" in action) {
-            log(`${prefix} executing tool`, { tool: action.tool.name })
-            await ctx.session.prompt({
-              sessionID,
-              text: `Use the ${action.tool.name} tool with these arguments: ${JSON.stringify(action.tool.args)}`,
-            })
-          } else if ("bash" in action) {
-            const { command, timeout } =
-              typeof action.bash === "string"
-                ? { command: action.bash, timeout: DEFAULT_BASH_TIMEOUT }
-                : { command: action.bash.command, timeout: action.bash.timeout ?? DEFAULT_BASH_TIMEOUT }
-
-            const startTime = Date.now()
-            log(`${prefix} executing bash`, { command, timeout })
-
-            const bashContext: BashContext = {
-              session_id: sessionID,
-              event: hook.event,
-              cwd: ctx.location.directory,
-              files: extraLog?.files as string[] | undefined,
-              tool_name: extraLog?.tool_name as string | undefined,
-              tool_args: extraLog?.tool_args as Record<string, unknown> | undefined,
-            }
-
-            const result = await executeBashAction(command, timeout, bashContext, ctx.location.directory)
-            const duration = Date.now() - startTime
-
-            const statusIcon = result.exitCode === 0 ? "✓" : "✗"
-            const hookMessage = [
-              `[BASH HOOK ${statusIcon}] ${command}`,
-              `Exit: ${result.exitCode} | Duration: ${duration}ms`,
-              result.stdout.trim() ? `Stdout: ${result.stdout.slice(0, 500).trim()}` : null,
-              result.stderr.trim() ? `Stderr: ${result.stderr.slice(0, 500).trim()}` : null,
-            ]
-              .filter(Boolean)
-              .join("\n")
-
-            await ctx.session
-              .synthetic({ sessionID, text: hookMessage })
-              .catch((err: unknown) => {
-                log(`${prefix} failed to send hook message`, { error: String(err) })
-              })
-
-            if (result.exitCode === 2) {
-              log(`${prefix} bash exit code 2`, { stderr: result.stderr, canBlock })
-              if (canBlock) {
-                const blockReason = result.stderr.trim() || "Blocked by hook"
-                return { blocked: true, blockReason }
-              }
-              return { blocked: false }
-            }
-
-            if (result.exitCode !== 0) {
-              log(`${prefix} bash failed (non-blocking)`, {
-                exitCode: result.exitCode,
-                stderr: result.stderr,
-              })
-            } else {
-              log(`${prefix} bash completed`, { stdout: result.stdout.slice(0, 200) })
-            }
-          }
-        } catch (error) {
-          log(`${prefix} action failed, continuing`, { error: String(error) })
-        }
-      }
-
-      log(`${prefix} completed`)
-      return { blocked: false }
-    }
-
-    async function triggerHooks(
-      event: HookEvent,
-      sessionID: string,
-      extraLog?: Record<string, unknown>,
-      options?: { canBlock?: boolean }
-    ): Promise<HookExecutionResult> {
-      const eventHooks = hooks.get(event)
-      if (!eventHooks) return { blocked: false }
-
-      for (const hook of eventHooks) {
-        const result = await executeHookActions(hook, sessionID, extraLog, options)
-        if (result.blocked) return result
-      }
-      return { blocked: false }
-    }
-
-    async function triggerToolHooks(
-      phase: "before" | "after",
-      toolName: string,
-      sessionID: string,
-      toolArgs: Record<string, unknown>
-    ): Promise<HookExecutionResult> {
-      const canBlock = phase === "before"
-      const extraLog = { tool_name: toolName, tool_args: toolArgs }
-
-      const wildcardEvent = `tool.${phase}.*` as HookEvent
-      const wildcardResult = await triggerHooks(wildcardEvent, sessionID, extraLog, { canBlock })
-      if (wildcardResult.blocked) return wildcardResult
-
-      const specificEvent = `tool.${phase}.${toolName}` as HookEvent
-      return triggerHooks(specificEvent, sessionID, extraLog, { canBlock })
-    }
-
-    function trackModifiedFile(sessionID: string, toolName: string, toolArgs: Record<string, unknown>): void {
-      if (!TRACKED_FILE_TOOLS.has(toolName)) return
-      const filePath = (toolArgs.filePath ?? toolArgs.file_path ?? toolArgs.path) as string | undefined
-      if (!filePath) return
-      log("[tool.execute.before] File modified", { sessionID, filePath, tool: toolName })
-      let files = modifiedCodeFiles.get(sessionID)
-      if (!files) {
-        files = new Set()
-        modifiedCodeFiles.set(sessionID, files)
-      }
-      files.add(filePath)
-    }
 
     await ctx.skill.transform((editor) => {
       type SkillInfo = Parameters<typeof editor.add>[0]
@@ -354,26 +157,6 @@ export default Plugin.define({
       editor.add(stopOrchestratorLoopTool)
       editor.add(orchestratorStatusTool)
       editor.add(agentPromoteTool)
-      editor.add(ethTransactionTool)
-      editor.add(ethAddressTxsTool)
-      editor.add(ethAddressBalanceTool)
-      editor.add(ethTokenTransfersTool)
-    })
-
-    await ctx.tool.hook("execute.before", async (event) => {
-      if (!event.sessionID) return
-      const toolArgs = asRecord(event.input)
-      const result = await triggerToolHooks("before", event.tool, event.sessionID, toolArgs)
-      if (result.blocked) {
-        throw new Error(result.blockReason ?? "Blocked by hook")
-      }
-      trackModifiedFile(event.sessionID, event.tool, toolArgs)
-    })
-
-    await ctx.tool.hook("execute.after", async (event) => {
-      if (!event.sessionID) return
-      const toolArgs = asRecord(event.input)
-      await triggerToolHooks("after", event.tool, event.sessionID, toolArgs)
     })
 
     if (skillActivationBlock) {
@@ -401,36 +184,18 @@ export default Plugin.define({
             } else {
               log("[event] session.created - main session", { sessionID })
             }
-            await triggerHooks("session.created", sessionID)
           }
 
           if (record.type === "session.deleted") {
             const sessionID = readSessionID(event)
             if (!sessionID) continue
             log("[event] session.deleted", { sessionID })
-            await triggerHooks("session.deleted", sessionID)
-            modifiedCodeFiles.delete(sessionID)
             tracker.removeSession(sessionID)
             try {
               await orchestratorLoop.stop(sessionID)
             } catch (error) {
               log("[orchestrator-loop] failed to clean up deleted session", { sessionID, error: String(error) })
             }
-          }
-
-          if (record.type === "session.idle") {
-            const sessionID = readSessionID(event)
-            if (!sessionID) continue
-            log("[event] session.idle", { sessionID })
-            if (!hooks.has("session.idle")) {
-              log("[event] session.idle - no hooks defined, skipping")
-              continue
-            }
-            const files = modifiedCodeFiles.get(sessionID)
-            modifiedCodeFiles.delete(sessionID)
-            await triggerHooks("session.idle", sessionID, {
-              files: files ? Array.from(files) : [],
-            })
           }
         }
       } catch (error) {

@@ -9,7 +9,7 @@
 
 # OpenCode Froggy
 
-OpenCode Froggy brings **multi-agent delegation**, **durable project memory**, **Ethereum/EVM tools**, and **event hooks** to OpenCode, guided by Extreme Programming.
+OpenCode Froggy brings **multi-agent delegation**, **durable project memory**, and **general-purpose tools** to OpenCode, guided by Extreme Programming.
 
 **Clear objectives. Focused agents. Simple solutions. Verified results.**
 
@@ -47,9 +47,7 @@ Project memory needs no separate service. Agents read the project’s canonical 
 |---|---|
 | [Orchestration](docs/orchestration.md) | Agents, delegation, review, integration, workspaces, coordination loop, model pools |
 | [Project memory](docs/memory.md) | Task board, knowledge, revisions, discovery, ownership, legacy Markdown, diagrams |
-| [Ethereum and EVM](docs/ethereum.md) | Chain support, API key setup, transaction and address tools, decoded events |
-| [Hooks](docs/hooks.md) | Events, conditions, actions, blocking behavior, context, examples |
-| [Reference](docs/reference.md) | Commands, skills, utility tools, configuration, code extensions |
+| [Reference](docs/reference.md) | Commands, skills, utility tools, configuration |
 
 ## Orchestration
 
@@ -92,36 +90,6 @@ Simple task tracking with `todo`, `in-progress`, `blocked`, `review` and `done`.
 Topic-organized durable knowledge. Use `list`, `search` and `get` for discovery. The manager uses `save` or version-checked `remove`; removal is permanent, not archival. It may also refuse low-value material or return `No change`.
 
 Run `/memory-review` on demand for a global knowledge review. The read-only `memory-review` tool inventories topics; the manager reads all entries and proposes corrections, merges or removals for your validation. Nothing is applied during the review.
-
-## Ethereum and EVM
-
-Froggy includes read-only tools for Ethereum and other EVM-compatible chains through public RPC and Etherscan V2 APIs:
-
-- `eth-transaction` — transaction details, optional internal transactions, token transfers, and decoded logs;
-- `eth-address-balance` — native balance;
-- `eth-address-txs` — transaction history;
-- `eth-token-transfers` — ERC-20 transfers.
-
-Supported chains include Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Fantom, and zkSync. `ETHERSCAN_API_KEY` is required for address balance, transaction history, token transfers, and internal transactions; base transaction details use a public RPC. The tools never sign or send transactions.
-
-See [Ethereum and EVM](docs/ethereum.md) for parameters, output shapes, examples, and limitations.
-
-## Hooks
-
-Hooks run local actions on session and tool events. They are useful for formatting, linting, validation, logging, and guards that must block a tool before it changes a file.
-
-```yaml
-hooks:
-  - event: session.idle
-    conditions: [hasCodeChange, isMainSession]
-    actions:
-      - bash: "npm run lint --fix"
-      - command: simplify-changes
-```
-
-Hooks are loaded from the OpenCode configuration directories, merged global-first, and run in declaration order. A `tool.before.*` hook can block a tool with exit code `2`.
-
-See [Hooks](docs/hooks.md) for all events, conditions, actions, context, exit codes, and examples.
 
 ## Agents
 
@@ -175,12 +143,11 @@ Selected command details are in [Reference](docs/reference.md#commands).
 |---|---|---|
 | Memory | `memory-overview`, `task-board`, `knowledge`, `memory-review` | [Project memory](docs/memory.md) |
 | Orchestration | `start-orchestrator-loop`, `stop-orchestrator-loop`, `orchestrator-status` | [Orchestration](docs/orchestration.md#coordination-loop) |
-| Ethereum/EVM | `eth-transaction`, `eth-address-balance`, `eth-address-txs`, `eth-token-transfers` | [Ethereum and EVM](docs/ethereum.md) |
 | Utilities | `gitingest`, `list-child-sessions`, `session-context`, `pdf-to-markdown`, `agent-promote` | [Reference](docs/reference.md#utility-tools) |
 
 ## Configuration
 
-The plugin loads agents, commands, and skills from its bundled directories. Hooks are loaded from the standard OpenCode hook locations.
+The plugin loads agents, commands, and skills from its bundled directories.
 
 Model pools are configured in the first existing file:
 
@@ -191,10 +158,6 @@ Model pools are configured in the first existing file:
 complex: provider/model-a#max, provider/model-b#xhigh
 normal: provider/model-c
 ```
-
-Ethereum tools use `ETHERSCAN_API_KEY` for address/token queries and internal transactions. See [Ethereum and EVM](docs/ethereum.md#configuration).
-
-`hasCodeChange` checks the extensions listed in [Hooks conditions](docs/hooks.md#conditions). Hooks without conditions run on every matching event; the condition is only needed to filter on modified code files.
 
 ## License
 
