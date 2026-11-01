@@ -1,12 +1,5 @@
 import { type AgentMode, VALID_GRADES, validateGrade, validateAgentName } from "./agent-promote-core"
 
-export { type AgentMode, VALID_GRADES, validateGrade, validateAgentName } from "./agent-promote-core"
-
-export interface AgentPromoteArgs {
-  name: string
-  grade?: string
-}
-
 interface AgentReader {
   get(input: { agentID: string }): Promise<{ mode: string } | { data: { mode: string } } | undefined>
 }

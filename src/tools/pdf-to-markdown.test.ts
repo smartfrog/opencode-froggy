@@ -37,17 +37,17 @@ function buildPdf(lines: PdfTextLine[]): Buffer {
     .join("\n")
 
   const stream = `BT\n${textCommands}\nET`
-  const streamLength = Buffer.byteLength(stream, "utf-8")
+  const streamLength = Buffer.byteLength(stream, "latin1")
   objects.push(
     `5 0 obj\n<< /Length ${streamLength} >>\nstream\n${stream}\nendstream\nendobj\n`
   )
 
   const offsets: number[] = [0]
-  let currentOffset = Buffer.byteLength(header, "utf-8")
+  let currentOffset = Buffer.byteLength(header, "latin1")
 
   for (const obj of objects) {
     offsets.push(currentOffset)
-    currentOffset += Buffer.byteLength(obj, "utf-8")
+    currentOffset += Buffer.byteLength(obj, "latin1")
   }
 
   const xrefOffset = currentOffset
@@ -66,7 +66,7 @@ function buildPdf(lines: PdfTextLine[]): Buffer {
     "%%EOF\n"
 
   const pdfContent = [header, ...objects, xref, trailer].join("")
-  return Buffer.from(pdfContent, "binary")
+  return Buffer.from(pdfContent, "latin1")
 }
 
 async function withTempPdf(lines: PdfTextLine[], run: (filePath: string) => Promise<void>) {
@@ -90,7 +90,7 @@ describe("pdf-to-markdown", () => {
       ],
       async filePath => {
         const markdown = await convertPdfToMarkdown(filePath)
-        expect(markdown).toContain("# Title")
+        expect(markdown.split("\n")).toContain("# Title")
       }
     )
   })
@@ -110,10 +110,10 @@ describe("pdf-to-markdown", () => {
 
   it("formats bullet markers as list items", async () => {
     await withTempPdf(
-      [{ text: "- Bullet item", fontSize: 12, x: 100, y: 700 }],
+      [{ text: "* Bullet item", fontSize: 12, x: 100, y: 700 }],
       async filePath => {
         const markdown = await convertPdfToMarkdown(filePath)
-        expect(markdown).toContain("- Bullet item")
+        expect(markdown).toBe("- Bullet item")
       }
     )
   })

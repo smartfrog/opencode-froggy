@@ -1,43 +1,12 @@
-import { describe, expect, it, jest, mock } from "bun:test"
+import { describe, expect, it, mock } from "bun:test"
 import { createSessionContextTool } from "./session-context"
 import { type SessionContextClient } from "../session-context-api"
-import { type SessionSummary } from "../session-context"
-
-const tokens = { input: 1000, output: 200, cacheRead: 3000 }
-const main: SessionSummary = {
-  id: "ses_main",
-  parentID: null,
-  title: "Main session",
-  agent: "plan",
-  model: "deepseek/deepseek-flash#high",
-  modelKey: "deepseek/deepseek-flash",
-  cost: 1.25,
-  tokens,
-}
-const child: SessionSummary = {
-  id: "ses_child",
-  parentID: "ses_main",
-  title: "Curation",
-  agent: "memory-manager",
-  model: "deepseek/deepseek-flash#high",
-  modelKey: "deepseek/deepseek-flash",
-  cost: 2.5,
-  tokens,
-}
-const messages = [
-  { type: "user", text: "RAW_SECRET_MARKER" },
-  {
-    type: "assistant",
-    content: [{ type: "text", text: "ok" }],
-    tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 900, write: 0 } },
-  },
-]
+import { CONTEXT_MESSAGES, SESSION_SUMMARIES } from "../test-fixtures/session-context"
 
 function setup() {
   const client: SessionContextClient = {
-    listSessions: mock(async () => [main, child]),
-    getContext: mock(async () => messages),
-    getSession: mock(async (id: string) => ({ id, created: 1 })),
+    listSessions: mock(async () => SESSION_SUMMARIES),
+    getContext: mock(async () => CONTEXT_MESSAGES),
     listModelLimits: mock(async () => new Map([["deepseek/deepseek-flash", 10_000]])),
   }
   return { client, tool: createSessionContextTool("project-1", "/repo", { client }) }
@@ -68,6 +37,18 @@ describe("session-context tool", () => {
     await tool.execute({}, { sessionID: "ses_main" })
 
     expect(verifySession).toHaveBeenCalledWith("ses_main")
+  })
+
+  it("does not read project sessions after service verification fails", async () => {
+    const { client } = setup()
+    const failure = new Error("Different OpenCode service")
+    const tool = createSessionContextTool("project-1", "/repo", {
+      client,
+      verifySession: async () => { throw failure },
+    })
+
+    await expect(tool.execute({}, { sessionID: "ses_main" })).rejects.toBe(failure)
+    expect(client.listSessions).not.toHaveBeenCalled()
   })
 
   it("honors an explicit limit", async () => {

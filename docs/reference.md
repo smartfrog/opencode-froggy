@@ -297,7 +297,7 @@ gitingest({
 
 List persisted direct child sessions (subagents) for the current session, including children created before a plugin reload or service restart. Every call verifies that the CLI addresses the same service and reads all result pages, refreshing titles and timestamps. Children in other worktrees remain discoverable because the query filters by parent, not location. Use session IDs with recorded task and agent associations for native `subagent` follow-ups.
 
-Successful discovery reports **verified** inventory, including an explicitly verified empty result. If discovery fails, a non-empty in-memory cache is reported as **incomplete**, with the error and a stale-metadata warning. Without cached children, the tool fails with **inventory unavailable**, never a false empty result. Failed pagination never publishes a partial page set as verified. The cache itself is not durable. This is session inventory, not live activity, background-tool ownership, or task completion.
+Successful discovery reports **verified** inventory, including an explicitly verified empty result. If discovery fails, the tool fails with **inventory unavailable**, never a false empty result or cached metadata. Failed pagination never publishes a partial page set as verified. This is session inventory, not live activity, background-tool ownership, or task completion.
 
 #### Parameters
 
@@ -343,7 +343,7 @@ For each row the report includes the agent type, model and variant, active-conte
 
 The `Tools` table aggregates tool-call input and tool-result characters per tool name across the analyzed sessions. Its share is over all tool characters, so it answers which tools consume the active context. Tool parts without a name are reported as `(unnamed)`. The table lists the top 10 tools by characters.
 
-Both read through the OpenCode API and do not start, stop, modify or compact a session. A context failure is reported on its row without hiding other sessions. If model limits are unavailable, rows still render with `n/a` usage. This is read-only reporting, not live activity or task completion.
+The tool reads session inventory through the OpenCode API and context/model data through the plugin host, after verifying that the CLI addresses the same service. It does not start, stop, modify or compact a session. A context failure is reported on its row without hiding other sessions. If model limits are unavailable, rows still render with `n/a` usage. This is read-only reporting, not live activity or task completion.
 
 #### Parameters
 
@@ -351,8 +351,6 @@ Both read through the OpenCode API and do not start, stop, modify or compact a s
 |-------------|-----------|------|----------|---------|-------------|
 | `/session-context` | `limit` | `integer` | No | `10` | Positional argument, from 1 to 50 |
 | `session-context` tool | `limit` | `integer` | No | `10` | Number of recent sessions to analyze, from 1 to 50 |
-| `froggy-session-context` | `limit` | `integer` | No | `10` | Direct CLI argument, from 1 to 50 |
-| `froggy-session-context` | `--markdown` | flag | No | text | Print the Markdown table instead of the aligned text report |
 
 #### Usage Examples
 
@@ -361,16 +359,7 @@ Both read through the OpenCode API and do not start, stop, modify or compact a s
 /session-context 5
 ```
 
-```bash
-# Direct CLI, without going through the agent (requires Bun, the plugin runtime)
-bun dist/cli/session-context.js 5
-bun dist/cli/session-context.js --markdown 5
-
-# After npm link or a global install
-froggy-session-context --markdown 5
-```
-
-The slash command and tool do not require a separate CLI install. The direct CLI uses Bun, which is also the OpenCode plugin runtime.
+The slash command and tool are the supported entry points. The standalone `froggy-session-context` CLI and its text report have been removed; no separate CLI install is needed.
 
 #### Output
 
@@ -474,6 +463,8 @@ Promote an agent to primary (default) or specify a grade.
 ## Configuration
 
 The plugin loads agents, commands, and skills automatically from the `agent/`, `command/`, and `skill/` directories.
+
+Bundled agent definitions use V2 `permissions` arrays of `{ action, resource, effect }` rules. The plugin no longer converts legacy `permission`, `tools` or object-shaped permissions; unsupported formats fail explicitly instead of silently dropping restrictions. Global and project agent definitions remain managed by OpenCode.
 
 Bundled commands are installed under `<config-home>/opencode/commands/`, and legacy agent copies are checked under `<config-home>/opencode/agents/`. On every platform, `<config-home>` is `XDG_CONFIG_HOME` when set, otherwise `~/.config`.
 

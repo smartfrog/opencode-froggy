@@ -2,11 +2,18 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { asRecord } from "./record"
 import { type LoopSessionClient } from "./orchestrator-loop"
-import { type ChildSessionInfo } from "./session-children"
 
 const execFileAsync = promisify(execFile)
 
 export type OpenCodeRequest = (method: "get" | "delete", path: string) => Promise<unknown>
+
+export interface ChildSessionInfo {
+  id: string
+  parentID: string
+  title?: string
+  created: number
+  updated: number
+}
 
 export const requestOpenCodeAPI: OpenCodeRequest = async (method, path) => {
   const args = ["api", method, path]
@@ -23,14 +30,14 @@ function record(value: unknown): Record<string, unknown> {
   return asRecord(value)
 }
 
-function data(value: unknown): unknown {
+function readAPIData(value: unknown): unknown {
   const response = record(value)
   if (!("data" in response)) throw new Error("OpenCode API response is missing data")
   return response.data
 }
 
-function items(value: unknown): Record<string, unknown>[] {
-  const list = data(value)
+export function readAPIItems(value: unknown): Record<string, unknown>[] {
+  const list = readAPIData(value)
   if (!Array.isArray(list)) throw new Error("Invalid OpenCode API list")
   return list.map(record)
 }
@@ -57,9 +64,10 @@ export function createOrchestratorClients(
 
   async function verifySession(sessionID: string): Promise<void> {
     const host = record(await native.get({ sessionID }))
-    const remote = record(data(await request("get", sessionPath(sessionID))))
+    const remote = record(readAPIData(await request("get", sessionPath(sessionID))))
     const created = record(host.time).created
-    if (typeof created !== "number" || remote.id !== sessionID || record(remote.time).created !== created) {
+    if (typeof created !== "number" || !Number.isFinite(created) ||
+        remote.id !== sessionID || record(remote.time).created !== created) {
       throw new Error("The opencode CLI must connect to the same OpenCode service as this plugin")
     }
   }
@@ -70,7 +78,7 @@ export function createOrchestratorClients(
     inbox: {
       async list({ sessionID }) {
         await verifySession(sessionID)
-        return items(await request("get", `${sessionPath(sessionID)}/inbox`)).map((item) => ({
+        return readAPIItems(await request("get", `${sessionPath(sessionID)}/inbox`)).map((item) => ({
           id: text(item.id), type: text(item.type), payload: record(item.payload),
         }))
       },
@@ -90,7 +98,7 @@ export function createOrchestratorClients(
       const query = new URLSearchParams({ parentID, limit: "100" })
       if (cursor) query.set("cursor", cursor)
       const page = record(await request("get", `/api/session?${query}`))
-      for (const item of items(page)) {
+      for (const item of readAPIItems(page)) {
         if (item.parentID !== parentID) throw new Error("OpenCode child inventory returned a different parent")
         const time = record(item.time)
         const id = text(item.id)
@@ -113,5 +121,5 @@ export function createOrchestratorClients(
     return [...children.values()].sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
   }
 
-  return { session, listChildren }
+  return { session, listChildren, verifySession }
 }

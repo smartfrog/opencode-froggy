@@ -1,4 +1,4 @@
-import { describe, expect, it, jest, mock } from "bun:test"
+import { describe, expect, it, mock } from "bun:test"
 import { createOrchestratorClients, type OpenCodeRequest } from "./orchestrator-api"
 
 function setup() {
@@ -83,6 +83,35 @@ describe("orchestrator API bridge", () => {
     await expect(session.inbox.list({ sessionID: "ses_parent" })).rejects.toThrow("same OpenCode service")
 
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it("exposes the same service verification for session reporting", async () => {
+    const { verifySession, request, native } = setup()
+    request.mockResolvedValue({ data: { id: "ses_parent", time: { created: 123 } } })
+
+    await verifySession("ses_parent")
+
+    expect(native.get).toHaveBeenCalledWith({ sessionID: "ses_parent" })
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenCalledWith("get", "/api/session/ses_parent")
+  })
+
+  it.each([
+    { id: "ses_other", time: { created: 123 } },
+    { id: "ses_parent", time: { created: 999 } },
+  ])("rejects a mismatched service identity %j for session reporting", async (remote) => {
+    const { verifySession, request } = setup()
+    request.mockResolvedValue({ data: remote })
+
+    await expect(verifySession("ses_parent")).rejects.toThrow("same OpenCode service")
+  })
+
+  it.each([NaN, Infinity])("rejects a non-finite service creation timestamp %s", async (created) => {
+    const { verifySession, request, native } = setup()
+    native.get.mockResolvedValue({ id: "ses_parent", time: { created } })
+    request.mockResolvedValue({ data: { id: "ses_parent", time: { created } } })
+
+    await expect(verifySession("ses_parent")).rejects.toThrow("same OpenCode service")
   })
 
   it("rejects malformed inbox data instead of claiming no reminders are pending", async () => {

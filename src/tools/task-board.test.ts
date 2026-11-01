@@ -8,6 +8,7 @@ import { createTaskBoardTool } from "./task-board"
 
 const directories: string[] = []
 const context = { agent: "memory-manager", sessionID: "ses_test" }
+const reader = { agent: "build", sessionID: "ses_reader" }
 
 function tool() {
   const directory = createTemporaryDirectory("froggy-tasks-")
@@ -62,6 +63,10 @@ describe("task-board validation", () => {
     await expect(tool().execute({ action: "save", id: "T", title: "Task" }, { agent: "memory-manager" })).rejects.toThrow("A current session is required")
   })
 
+  it("rejects task saves by other agents", async () => {
+    await expect(tool().execute({ action: "save", id: "T", title: "Task" }, reader)).rejects.toThrow("Only memory-manager")
+  })
+
   it("reports a missing task", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task" }, context)
@@ -83,7 +88,24 @@ describe("task-board markdown reads", () => {
   it("renders one status column on request", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Done task", status: "done" }, context)
-    expect((await memory.execute({ action: "list", status: "done" }, context)).content).toContain("| done (1) |")
+    await memory.execute({ action: "save", id: "open", title: "Open task" }, context)
+    const content = (await memory.execute({ action: "list", status: "done" }, context)).content
+    expect(content).toContain("| done (1) |")
+    expect(content).toContain("T — Done task")
+    expect(content).not.toContain("open — Open task")
+  })
+
+  it("loads the default board in one filtered store read", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "T", title: "Task" }, context)
+    const read = spyOn(MemoryStore.prototype, "listTasks")
+    try {
+      await memory.execute({ action: "list" }, context)
+      expect(read).toHaveBeenCalledTimes(1)
+      expect(read).toHaveBeenCalledWith(["todo", "in-progress", "review", "blocked"])
+    } finally {
+      read.mockRestore()
+    }
   })
 
   it("renders task metadata and its current description without a notes section", async () => {
@@ -92,6 +114,15 @@ describe("task-board markdown reads", () => {
     expect((await memory.execute({ action: "get", id: "T" }, context)).content).toBe(
       "**T** — Task\n\nStatus: todo\nVersion: 1\n\nDetails.",
     )
+  })
+
+  it("stores a detailed task description readable by other agents", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "PERF", title: "Measure idle", description: "Measure before changing the scheduler.", status: "review" }, context)
+    const content = (await memory.execute({ action: "get", id: "PERF" }, reader)).content
+    expect(content).toContain("Status: review")
+    expect(content).toContain("Version: 1")
+    expect(content).toContain("Measure before changing the scheduler.")
   })
 
   it("reads the full description and escapes the title", async () => {
@@ -149,14 +180,17 @@ describe("task-board markdown reads", () => {
 })
 
 describe("task-board current synthesis", () => {
-  it("replaces the previous description rather than appending a history", async () => {
+  it.each([
+    [undefined, "todo"],
+    ["review", "review"],
+  ] as const)("replaces the description with optional status %s", async (status, expectedStatus) => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task", description: "Obsolete blocker." }, context)
-    await memory.execute({ action: "save", id: "T", expectedVersion: 1, description: "Ready for review.", status: "review" }, context)
-    const content = (await memory.execute({ action: "get", id: "T" }, context)).content
+    await memory.execute({ action: "save", id: "T", expectedVersion: 1, description: "Ready for review.", ...(status === undefined ? {} : { status }) }, context)
+    const content = (await memory.execute({ action: "get", id: "T" }, reader)).content
     expect(content).toContain("Ready for review.")
     expect(content).not.toContain("Obsolete blocker.")
-    expect(content).toContain("Status: review")
+    expect(content).toContain(`Status: ${expectedStatus}`)
   })
 
   it("preserves a large task description through a status update", async () => {
@@ -173,5 +207,12 @@ describe("task-board current synthesis", () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task" }, context)
     await expect(memory.execute({ action: "save", id: "T", description: "Overwrite." }, context)).rejects.toThrow("provide expectedVersion")
+  })
+
+  it("rejects stale task updates", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "T", title: "Task" }, context)
+    await memory.execute({ action: "save", id: "T", expectedVersion: 1, status: "review" }, context)
+    await expect(memory.execute({ action: "save", id: "T", expectedVersion: 1, status: "done" }, context)).rejects.toThrow("expected version 1, current 2")
   })
 })

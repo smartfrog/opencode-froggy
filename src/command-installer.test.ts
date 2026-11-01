@@ -1,15 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { installBundledFiles } from "./command-installer"
+import { createTemporaryDirectory } from "./test-fixtures/temporary-directory"
 
 describe("installBundledFiles", () => {
   let sourceDir: string
   let targetDir: string
 
   beforeEach(() => {
-    const base = join(tmpdir(), `froggy-files-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+    const base = createTemporaryDirectory("froggy-files-")
     sourceDir = join(base, "source")
     targetDir = join(base, "target")
     mkdirSync(sourceDir, { recursive: true })
@@ -42,15 +42,6 @@ describe("installBundledFiles", () => {
     const result = installBundledFiles(sourceDir, targetDir)
     expect(result.updated).toEqual(["review-pr.md"])
     expect(readFileSync(join(targetDir, "review-pr.md"), "utf-8")).toBe("# v2")
-  })
-
-  it("never deletes a user-customized file", () => {
-    writeFileSync(join(sourceDir, "review-pr.md"), "# bundled")
-    mkdirSync(targetDir, { recursive: true })
-    writeFileSync(join(targetDir, "review-pr.md"), "# user customization")
-    const result = installBundledFiles(sourceDir, targetDir)
-    expect(result.updated).toEqual(["review-pr.md"])
-    expect(existsSync(join(targetDir, "review-pr.md"))).toBe(true)
   })
 
   it("ignores non-markdown files", () => {

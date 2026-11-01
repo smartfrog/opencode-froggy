@@ -3,7 +3,6 @@ import {
   analyzeContext,
   formatCost,
   formatSessionContextMarkdown,
-  formatSessionContextReport,
   formatTokens,
   modelLabel,
   parseTokens,
@@ -94,6 +93,7 @@ describe("session context analysis", () => {
 
   it("uses the last assistant step that reported prompt tokens", () => {
     const analysis = analyzeContext([
+      { type: "assistant", content: [], tokens: { input: 5, cache: { read: 0, write: 0 } } },
       { type: "assistant", content: [], tokens: { input: 10, cache: { read: 0, write: 0 } } },
       { type: "assistant", content: [] },
     ], 1000)
@@ -137,41 +137,43 @@ describe("session context analysis", () => {
     expect(analysis.categories["tool results"]).toBe(0)
   })
 
-  it("counts shell output from both API shapes", () => {
-    const objectShape = analyzeContext([{ type: "shell", command: "ls", output: { output: "ok" } }], null)
+  it("counts string-shaped shell output", () => {
     const stringShape = analyzeContext([{ type: "shell", command: "ls", output: "ok" }], null)
 
-    expect(objectShape.categories.other).toBe(4)
     expect(stringShape.categories.other).toBe(4)
   })
 
-  it("builds model labels and keys with optional variants", () => {
-    expect(modelLabel({ providerID: "deepseek", id: "deepseek-flash", variant: "high" })).toEqual({
-      label: "deepseek/deepseek-flash#high",
-      key: "deepseek/deepseek-flash",
-    })
-    expect(modelLabel({ providerID: "openai", modelID: "gpt-6.1-sol" })).toEqual({
-      label: "openai/gpt-6.1-sol",
-      key: "openai/gpt-6.1-sol",
-    })
-    expect(modelLabel({})).toEqual({ label: "?", key: null })
+  it.each([
+    [
+      { providerID: "deepseek", id: "deepseek-flash", variant: "high" },
+      { label: "deepseek/deepseek-flash#high", key: "deepseek/deepseek-flash" },
+    ],
+    [
+      { providerID: "openai", modelID: "gpt-6.1-sol" },
+      { label: "openai/gpt-6.1-sol", key: "openai/gpt-6.1-sol" },
+    ],
+    [{}, { label: "?", key: null }],
+  ] as const)("builds the model label for %j", (value, expected) => {
+    expect(modelLabel(value)).toEqual(expected)
   })
 
-  it("parses cumulative token usage with safe defaults", () => {
-    expect(parseTokens({ input: 1, output: 2, cache: { read: 4, write: 5 } })).toEqual({
-      input: 1, output: 2, cacheRead: 4,
-    })
-    expect(parseTokens(undefined)).toEqual({ input: 0, output: 0, cacheRead: 0 })
+  it.each([
+    [{ input: 1, output: 2, cache: { read: 4, write: 5 } }, { input: 1, output: 2, cacheRead: 4 }],
+    [undefined, { input: 0, output: 0, cacheRead: 0 }],
+  ] as const)("parses cumulative tokens from %j", (value, expected) => {
+    expect(parseTokens(value)).toEqual(expected)
   })
 
-  it("formats token, cost and percentage values compactly", () => {
-    expect(formatTokens(999)).toBe("999")
-    expect(formatTokens(1500)).toBe("1.5k")
-    expect(formatTokens(1_000_000)).toBe("1.00M")
-    expect(formatTokens(null)).toBe("n/a")
-    expect(formatCost(0)).toBe("$0")
-    expect(formatCost(0.0012)).toBe("$0.0012")
-    expect(formatCost(2.576)).toBe("$2.58")
+  it.each([
+    [999, "999"], [1500, "1.5k"], [1_000_000, "1.00M"], [null, "n/a"],
+  ] as const)("formats token count %s", (value, expected) => {
+    expect(formatTokens(value)).toBe(expected)
+  })
+
+  it.each([
+    [0, "$0"], [0.0012, "$0.0012"], [2.576, "$2.58"],
+  ] as const)("formats cost %s", (value, expected) => {
+    expect(formatCost(value)).toBe(expected)
   })
 
   it("renders a Markdown table and category list", () => {
@@ -196,38 +198,9 @@ describe("session context analysis", () => {
     expect(markdown).toContain("| read 18 |")
     expect(markdown).toContain("### Tools")
     expect(markdown).toContain("| read | 1 | 12 | 6 | 100.0% |")
-    expect(markdown).toContain("19.0%")
     expect(markdown).toContain("| **Global** | **all sessions** | **$2.50** |")
     expect(markdown).toContain("**19.0%**")
     expect(markdown).toContain("- **#2** error: context unavailable")
     expect(markdown).toContain("**Model limits unavailable:** model offline")
-  })
-
-  it("renders main and subagent rows with categories and errors", () => {
-    const analysis = analyzeContext(messages, 10_000)
-    const rows: SessionContextRow[] = [
-      { session: session(), analysis, error: null },
-      {
-        session: session({ id: "ses_child", parentID: "ses_main", title: "Curation", agent: "memory-manager", model: "deepseek/deepseek-flash#high" }),
-        analysis: null,
-        error: "context unavailable",
-      },
-    ]
-
-    const report = formatSessionContextReport(rows, { limitError: "model offline" })
-
-    expect(report).toContain("Active context — 2 most recent sessions")
-    expect(report).toContain("Model limits unavailable: model offline")
-    expect(report).toContain("main")
-    expect(report).toContain("sub")
-    expect(report).toContain("memory-manager")
-    expect(report).toContain("deepseek/deepseek-flash#high")
-    expect(report).toContain("categories: reasoning")
-    expect(report).toContain("system 19.0%")
-    expect(report).toContain("top tool: read 18 (100.0% of tool chars)")
-    expect(report).toContain("Tools (all sessions)")
-    expect(report).toContain("error: context unavailable")
-    expect(report).toContain("Cumul session")
-    expect(report).toContain("Source: messages after the last compaction.")
   })
 })

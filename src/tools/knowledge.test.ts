@@ -6,6 +6,7 @@ import { createKnowledgeTool } from "./knowledge"
 
 const directories: string[] = []
 const context = { agent: "memory-manager", sessionID: "ses_test" }
+const reader = { agent: "build", sessionID: "ses_reader" }
 
 function tool() {
   const directory = createTemporaryDirectory("froggy-knowledge-")
@@ -31,9 +32,11 @@ describe("knowledge read safety", () => {
 })
 
 describe("knowledge markdown reads", () => {
-  it("preserves Markdown indentation and trailing whitespace exactly", async () => {
+  it.each([
+    ["indentation and trailing whitespace", "    bun test\n    bun run typecheck\n"],
+    ["NUL characters, emoji and the final marker", "\u0000😀".repeat(5_000) + "END"],
+  ])("preserves knowledge content with %s", async (_name, content) => {
     const memory = tool()
-    const content = "    bun test\n    bun run typecheck\n"
     await memory.execute({ action: "save", id: "K", title: "Checks", topic: "build", content }, context)
     expect((await memory.execute({ action: "get", id: "K" }, context)).content).toContain(content)
   })
@@ -47,18 +50,35 @@ describe("knowledge markdown reads", () => {
     expect(content.match(/\| K\d+ \|/g)).toHaveLength(17)
   })
 
-  it("summarises topics and renders a list", async () => {
+  it("summarises topics", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "K", title: "Checks", topic: "build", content: "Run bun test." }, context)
-    expect((await memory.execute({ action: "topics" }, context)).content).toContain("| build | 1 |")
-    expect((await memory.execute({ action: "list" }, context)).content).toContain("| K | build | Checks |")
+    const content = (await memory.execute({ action: "topics" }, context)).content
+    expect(content).toContain("| Topic | Entries |")
+    expect(content).toContain("| build | 1 |")
   })
 
-  it("reads an escaped knowledge entry completely", async () => {
+  it("lists knowledge titles and topics without returning full contents", async () => {
     const memory = tool()
-    const content = "\u0000😀".repeat(5_000) + "END"
-    await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content }, context)
-    expect((await memory.execute({ action: "get", id: "K" }, context)).content).toContain(content)
+    await memory.execute({ action: "save", id: "K", title: "Checks", topic: "build", content: "Run bun test." }, context)
+    const content = (await memory.execute({ action: "list" }, reader)).content
+    expect(content).toContain("| K | build | Checks |")
+    expect(content).not.toContain("Run bun test.")
+  })
+
+  it("renders matching knowledge excerpts", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "K", title: "Build notes", topic: "build", content: "Folders and files are copied." }, context)
+    expect((await memory.execute({ action: "search", query: "Folders" }, context)).content).toContain("Folders and files are copied.")
+  })
+
+  it("renders knowledge detail metadata and content", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "K", title: "Build notes", topic: "build", content: "Folders and files are copied." }, context)
+    const content = (await memory.execute({ action: "get", id: "K" }, context)).content
+    expect(content).toContain("**K** — Build notes")
+    expect(content).toContain("Topic: build")
+    expect(content).toContain("Folders and files are copied.")
   })
 
   it("rejects expectedVersion on reads", async () => {
@@ -102,5 +122,27 @@ describe("knowledge markdown reads", () => {
 
   it.each([null, 0, -1, 1.5, "1"])("rejects invalid version %j", async (expectedVersion) => {
     await expect(tool().execute({ action: "remove", id: "K", expectedVersion }, context)).rejects.toThrow("expectedVersion must be")
+  })
+})
+
+describe("knowledge writes", () => {
+  it("permanently removes knowledge from reads and search", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "wrong", title: "Refuted trick", topic: "performance", content: "Unnecessary workaround." }, context)
+    expect(JSON.parse((await memory.execute({ action: "remove", id: "wrong", expectedVersion: 1 }, context)).content)).toMatchObject({ id: "wrong", removed: true })
+    await expect(memory.execute({ action: "get", id: "wrong" }, reader)).rejects.toThrow("not found")
+    expect((await memory.execute({ action: "search", query: "workaround" }, reader)).content).not.toContain("| wrong |")
+  })
+
+  it("rejects stale deletion without removing changed knowledge", async () => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "rule", title: "Memory limit", topic: "constraints", content: "6 GiB limit." }, context)
+    await memory.execute({ action: "save", id: "rule", expectedVersion: 1, content: "6 GiB hard ceiling." }, context)
+    await expect(memory.execute({ action: "remove", id: "rule", expectedVersion: 1 }, context)).rejects.toThrow("expected version 1, current 2")
+    expect((await memory.execute({ action: "get", id: "rule" }, reader)).content).toContain("6 GiB hard ceiling.")
+  })
+
+  it.each(["save", "remove"])("rejects knowledge %s by other agents", async (action) => {
+    await expect(tool().execute({ action, id: "rule", title: "Rule", topic: "constraints", content: "Keep.", expectedVersion: 1 }, reader)).rejects.toThrow("Only memory-manager")
   })
 })

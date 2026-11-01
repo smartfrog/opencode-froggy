@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, mock } from "bun:test"
+import { describe, it, expect, mock } from "bun:test"
 import { createAgentPromoteTool } from "./agent-promote"
 
 describe("agent-promote", () => {

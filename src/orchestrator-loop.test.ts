@@ -70,7 +70,7 @@ function holdNextAdmission(admit: ReturnType<typeof setup>["admit"]) {
   return admission.resolve
 }
 
-function holdNextDiagnosticSave(storage: LoopStorage) {
+function holdNextStorageSave(storage: LoopStorage) {
   const saving = deferred<void>()
   const save = mocked(storage.set).getMockImplementation()!
   mocked(storage.set).mockImplementationOnce(async (key, value) => {
@@ -78,6 +78,14 @@ function holdNextDiagnosticSave(storage: LoopStorage) {
     await save(key, value)
   })
   return saving.resolve
+}
+
+function interceptDiagnosticRemoval(storage: LoopStorage, beforeRemove: () => void | Promise<void>) {
+  const remove = mocked(storage.remove).getMockImplementation()!
+  mocked(storage.remove).mockImplementation(async (key) => {
+    if (key.startsWith("orchestrator-diagnostics/")) await beforeRemove()
+    await remove(key)
+  })
 }
 
 function setup(
@@ -133,10 +141,13 @@ describe("orchestrator loop", () => {
   })
 
   afterEach(async () => {
-    await Promise.all(loops.splice(0).map((loop) => loop.close()))
-    jest.clearAllTimers()
-    jest.useRealTimers()
-    restoreTimers?.()
+    try {
+      await Promise.all(loops.splice(0).map((loop) => loop.close()))
+    } finally {
+      jest.clearAllTimers()
+      jest.useRealTimers()
+      restoreTimers?.()
+    }
   })
 
   it("reports a disabled loop without admitting inputs or writing storage", async () => {
@@ -241,6 +252,10 @@ describe("orchestrator loop", () => {
     await restored.loop.restore()
     await advance(10 * MINUTE)
 
+    expect(restored.admit).not.toHaveBeenCalled()
+    expect(restored.wake).toHaveBeenCalledWith(expect.objectContaining({
+      sessionID: "ses_parent", id: "msg_1", text: first.admit.mock.calls[0][0].text, resume: true,
+    }))
     expect(await restored.loop.status("ses_parent")).toMatchObject({ diagnostics: {
       lastReminderAdmitted: { at: admittedAt, inboxID: "msg_1" },
       lastWakeRequested: { at: Date.now(), inboxID: "msg_1" },
@@ -248,13 +263,17 @@ describe("orchestrator loop", () => {
   })
 
   it("retains the last failure as history after a successful retry", async () => {
-    const { loop, wake } = setup()
+    const { loop, admit, wake, pending } = setup()
     wake.mockRejectedValueOnce(new Error("Wake unavailable"))
     await loop.start("ses_parent", { objective: "Finish the port" })
     await advance(10 * MINUTE)
     const failedAt = Date.now()
     await advance(10 * MINUTE)
 
+    expect(admit).toHaveBeenCalledTimes(1)
+    expect(pending).toHaveLength(1)
+    expect(wake).toHaveBeenCalledTimes(2)
+    expect(wake.mock.calls[1][0].id).toBe(wake.mock.calls[0][0].id)
     expect(await loop.status("ses_parent")).toMatchObject({ diagnostics: {
       lastWakeRequested: { at: Date.now() },
       lastError: { at: failedAt, message: "Error: Wake unavailable" },
@@ -294,7 +313,7 @@ describe("orchestrator loop", () => {
   it("waits for in-flight diagnostic persistence before clearing stopped state", async () => {
     const { loop, storage, saved } = setup()
     await loop.start("ses_parent", { objective: "Finish the port" })
-    const releaseSave = holdNextDiagnosticSave(storage)
+    const releaseSave = holdNextStorageSave(storage)
     await advance(10 * MINUTE)
     let stopped = false
     const stopping = loop.stop("ses_parent").then(() => { stopped = true })
@@ -314,11 +333,7 @@ describe("orchestrator loop", () => {
     const { loop, storage, pending } = setup()
     await loop.start("ses_parent", { objective: "Finish the port" })
     await advance(10 * MINUTE)
-    const remove = mocked(storage.remove).getMockImplementation()!
-    mocked(storage.remove).mockImplementation(async (key) => {
-      if (key.startsWith("orchestrator-diagnostics/")) throw new Error("Diagnostic cleanup failed")
-      await remove(key)
-    })
+    interceptDiagnosticRemoval(storage, () => { throw new Error("Diagnostic cleanup failed") })
 
     await expect(loop.stop("ses_parent")).rejects.toThrow("Diagnostic cleanup failed")
 
@@ -329,11 +344,7 @@ describe("orchestrator loop", () => {
   it.each([false, true])("schedules and wakes despite diagnostic cleanup failure (reconfiguration: %s)", async (reconfigure) => {
     const { loop, storage, wake } = setup()
     if (reconfigure) await loop.start("ses_parent", { objective: "Old objective" })
-    const remove = mocked(storage.remove).getMockImplementation()!
-    mocked(storage.remove).mockImplementation(async (key) => {
-      if (key.startsWith("orchestrator-diagnostics/")) throw new Error("Diagnostic cleanup failed")
-      await remove(key)
-    })
+    interceptDiagnosticRemoval(storage, () => { throw new Error("Diagnostic cleanup failed") })
 
     await expect(loop.start("ses_parent", { objective: "New objective", intervalMinutes: 1 })).resolves.toMatchObject({ changed: true })
     await advance(0)
@@ -346,7 +357,7 @@ describe("orchestrator loop", () => {
   it.each([false, true])("keeps core wakes independent of a delayed diagnostic save (reload: %s)", async (reload) => {
     const first = setup()
     await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
-    const releaseSave = holdNextDiagnosticSave(first.storage)
+    const releaseSave = holdNextStorageSave(first.storage)
     await advance(MINUTE)
     const admittedAt = Date.now()
     let closing: Promise<void> | undefined
@@ -376,11 +387,7 @@ describe("orchestrator loop", () => {
   it("does not delay enablement or reminders while diagnostic cleanup is pending", async () => {
     const { loop, storage, wake } = setup()
     const cleaning = deferred<void>()
-    const remove = mocked(storage.remove).getMockImplementation()!
-    mocked(storage.remove).mockImplementation(async (key) => {
-      if (key.startsWith("orchestrator-diagnostics/")) await cleaning.promise
-      await remove(key)
-    })
+    interceptDiagnosticRemoval(storage, () => cleaning.promise)
     let enabled = false
     const starting = loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 }).then(() => { enabled = true })
     try {
@@ -400,7 +407,7 @@ describe("orchestrator loop", () => {
   it("reconfigures during a delayed diagnostic save without losing new-revision diagnostics", async () => {
     const { loop, storage, saved, wake } = setup()
     await loop.start("ses_parent", { objective: "First", intervalMinutes: 1 })
-    const releaseSave = holdNextDiagnosticSave(storage)
+    const releaseSave = holdNextStorageSave(storage)
     await advance(MINUTE)
     let reconfigured = false
     const starting = loop.start("ses_parent", { objective: "Second", intervalMinutes: 1 }).then(() => { reconfigured = true })
@@ -427,11 +434,7 @@ describe("orchestrator loop", () => {
     await loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
     await advance(MINUTE)
     const cleaning = deferred<void>()
-    const remove = mocked(storage.remove).getMockImplementation()!
-    mocked(storage.remove).mockImplementation(async (key) => {
-      if (key.startsWith("orchestrator-diagnostics/")) await cleaning.promise
-      await remove(key)
-    })
+    interceptDiagnosticRemoval(storage, () => cleaning.promise)
     const stopping = loop.stop("ses_parent")
     try {
       await advance(0)
@@ -447,7 +450,7 @@ describe("orchestrator loop", () => {
   it("flushes the latest coalesced observation during graceful close", async () => {
     const first = setup()
     await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
-    const releaseSave = holdNextDiagnosticSave(first.storage)
+    const releaseSave = holdNextStorageSave(first.storage)
     await advance(2 * MINUTE)
     const latestWake = Date.now()
     const closing = first.loop.close()
@@ -463,7 +466,7 @@ describe("orchestrator loop", () => {
     const { loop, admit, storage } = setup()
     await loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
     const releaseAdmission = holdNextAdmission(admit)
-    const releaseSave = holdNextDiagnosticSave(storage)
+    const releaseSave = holdNextStorageSave(storage)
     await advance(MINUTE)
     let closed = false
     const closing = loop.close().then(() => { closed = true })
@@ -494,7 +497,7 @@ describe("orchestrator loop", () => {
   it("does not let an older runtime observation hide newer persisted status", async () => {
     const { loop, storage, saved } = setup()
     await loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
-    const releaseSave = holdNextDiagnosticSave(storage)
+    const releaseSave = holdNextStorageSave(storage)
     await advance(MINUTE)
     const revision = (saved.get("orchestrator-loop/ses_parent") as { revision: string }).revision
     jest.setSystemTime(Date.now() + 1)
@@ -510,7 +513,7 @@ describe("orchestrator loop", () => {
   it.each([false, true])("merges late old-manager saves without regressing newer events (new wake fails: %s)", async (failWake) => {
     const first = setup()
     await first.loop.start("ses_parent", { objective: "Finish the port", intervalMinutes: 1 })
-    const releaseSave = holdNextDiagnosticSave(first.storage)
+    const releaseSave = holdNextStorageSave(first.storage)
     await advance(MINUTE)
     first.pending.splice(0)
     await advance(MINUTE)
@@ -828,23 +831,6 @@ describe("orchestrator loop", () => {
     expect(other.synthetic).not.toHaveBeenCalled()
   })
 
-  it("coalesces a durable reminder left pending before a reload", async () => {
-    const first = setup()
-    await first.loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
-    await first.loop.close()
-    const restored = setup("/project", first.saved)
-    restored.pending.push(...first.pending)
-
-    await restored.loop.restore()
-    await advance(10 * MINUTE)
-
-    expect(restored.admit).not.toHaveBeenCalled()
-    expect(restored.wake).toHaveBeenCalledWith(expect.objectContaining({
-      sessionID: "ses_parent", id: "msg_1", text: first.admit.mock.calls[0][0].text, resume: true,
-    }))
-  })
-
   it("keeps reminders short even when the established objective is long", async () => {
     const { loop, admit } = setup()
     await loop.start("ses_parent", { objective: "A detailed project objective. ".repeat(2000) })
@@ -878,14 +864,17 @@ describe("orchestrator loop", () => {
   it("cancels a reminder whose admission finishes while stop is waiting", async () => {
     const { loop, admit, wake, pending } = setup()
     const releaseAdmission = holdNextAdmission(admit)
-    await loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
-    expect(admit).toHaveBeenCalledTimes(1)
-
-    const stopping = loop.stop("ses_parent")
-    await advance(0)
-    releaseAdmission()
-    await stopping
+    let stopping: Promise<void> | undefined
+    try {
+      await loop.start("ses_parent", { objective: "Finish the port" })
+      await advance(10 * MINUTE)
+      expect(admit).toHaveBeenCalledTimes(1)
+      stopping = loop.stop("ses_parent")
+      await advance(0)
+    } finally {
+      releaseAdmission()
+      await stopping
+    }
 
     expect(wake).not.toHaveBeenCalled()
     expect(pending).toHaveLength(0)
@@ -952,13 +941,13 @@ describe("orchestrator loop", () => {
     const createLoop = separateModule ? ((await import(specifier)) as typeof import("./orchestrator-loop")).createOrchestratorLoop : createOrchestratorLoop
     const other = setup("/other-project", first.saved, first.pending, createLoop)
     const releaseAdmission = holdNextAdmission(first.admit)
-    await first.loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
-    expect(first.admit).toHaveBeenCalledTimes(1)
-
     let stopped = false
-    const stopping = other.loop.stop("ses_parent").then(() => { stopped = true })
+    let stopping: Promise<void> | undefined
     try {
+      await first.loop.start("ses_parent", { objective: "Finish the port" })
+      await advance(10 * MINUTE)
+      expect(first.admit).toHaveBeenCalledTimes(1)
+      stopping = other.loop.stop("ses_parent").then(() => { stopped = true })
       await advance(0)
       expect(stopped).toBe(false)
     } finally {
@@ -982,20 +971,20 @@ describe("orchestrator loop", () => {
       first.get.mockReturnValueOnce(agentCheck.promise)
       return reminder
     })
-    await first.loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
-    expect(first.pending).toHaveLength(1)
-
     const removal = deferred<void>()
-    if (delayedRemoval) {
-      const remove = mocked(other.storage.remove).getMockImplementation()!
-      mocked(other.storage.remove).mockImplementationOnce(async (key) => {
-        await removal.promise
-        await remove(key)
-      })
-    }
-    const stopping = other.loop.stop("ses_parent")
+    let stopping: Promise<void> | undefined
     try {
+      await first.loop.start("ses_parent", { objective: "Finish the port" })
+      await advance(10 * MINUTE)
+      expect(first.pending).toHaveLength(1)
+      if (delayedRemoval) {
+        const remove = mocked(other.storage.remove).getMockImplementation()!
+        mocked(other.storage.remove).mockImplementationOnce(async (key) => {
+          await removal.promise
+          await remove(key)
+        })
+      }
+      stopping = other.loop.stop("ses_parent")
       await advance(0)
       agentCheck.resolve({ agent: "orchestrator" })
       await advance(0)
@@ -1035,19 +1024,6 @@ describe("orchestrator loop", () => {
     expect(first.pending).toHaveLength(0)
   })
 
-  it("retries waking the existing durable reminder after a wake failure", async () => {
-    const { loop, admit, wake, pending } = setup()
-    wake.mockRejectedValueOnce(new Error("Wake unavailable"))
-    await loop.start("ses_parent", { objective: "Finish the port" })
-
-    await advance(20 * MINUTE)
-
-    expect(admit).toHaveBeenCalledTimes(1)
-    expect(pending).toHaveLength(1)
-    expect(wake).toHaveBeenCalledTimes(2)
-    expect(wake.mock.calls[1][0].id).toBe(wake.mock.calls[0][0].id)
-  })
-
   it("does not duplicate a reminder delivered before its wake request", async () => {
     const { loop, admit, wake, pending, delivered } = setup()
     const send = admit.getMockImplementation()!
@@ -1071,13 +1047,13 @@ describe("orchestrator loop", () => {
     const other = setup("/other-project", first.saved, first.pending)
     const waking = deferred<void>()
     first.wake.mockReturnValueOnce(waking.promise)
-    await first.loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
-    expect(first.wake).toHaveBeenCalledTimes(1)
-
     let stopped = false
-    const stopping = other.loop.stop("ses_parent").then(() => { stopped = true })
+    let stopping: Promise<void> | undefined
     try {
+      await first.loop.start("ses_parent", { objective: "Finish the port" })
+      await advance(10 * MINUTE)
+      expect(first.wake).toHaveBeenCalledTimes(1)
+      stopping = other.loop.stop("ses_parent").then(() => { stopped = true })
       await advance(0)
       expect(stopped).toBe(false)
     } finally {
@@ -1131,24 +1107,18 @@ describe("orchestrator loop", () => {
   it("serializes a cross-location stop behind an activation being persisted", async () => {
     const first = setup()
     const other = setup("/other-project", first.saved, first.pending)
-    const persistence = deferred<void>()
-    const save = first.storage.set
-    const implementation = mocked(save).getMockImplementation()!
-    mocked(save).mockImplementationOnce(async (key, value) => {
-      await persistence.promise
-      await implementation(key, value)
-    })
+    const releaseSave = holdNextStorageSave(first.storage)
     const starting = first.loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(0)
-    expect(save).toHaveBeenCalledTimes(1)
-
     let stopped = false
-    const stopping = other.loop.stop("ses_parent").then(() => { stopped = true })
+    let stopping: Promise<void> | undefined
     try {
+      await advance(0)
+      expect(first.storage.set).toHaveBeenCalledTimes(1)
+      stopping = other.loop.stop("ses_parent").then(() => { stopped = true })
       await advance(0)
       expect(stopped).toBe(false)
     } finally {
-      persistence.resolve()
+      releaseSave()
       await Promise.all([starting, stopping])
     }
     await advance(10 * MINUTE)
@@ -1200,46 +1170,37 @@ describe("orchestrator loop", () => {
     expect(admit).toHaveBeenCalledTimes(1)
   })
 
-  it("pauses admission when the agent switches during the inbox lookup", async () => {
-    const { loop, get, inbox, synthetic, wake } = setup()
-    const inspection = deferred<PendingInputs>()
+  it.each([false, true])("pauses during an agent switch in inbox lookup (existing reminder: %s)", async (existingReminder) => {
+    const { loop, get, inbox, synthetic, wake, pending } = setup()
     await loop.start("ses_parent", { objective: "Finish the port" })
-    inbox.list.mockReturnValueOnce(inspection.promise)
-    await advance(10 * MINUTE)
-
-    get.mockResolvedValue({ agent: "plan" })
-    inspection.resolve([])
-    await advance(0)
-
-    expect(synthetic).not.toHaveBeenCalled()
-    expect(wake).not.toHaveBeenCalled()
-  })
-
-  it("does not wake an existing reminder after an agent switch during inbox lookup", async () => {
-    const { loop, get, inbox, wake, pending } = setup()
-    await loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
+    if (existingReminder) await advance(10 * MINUTE)
+    synthetic.mockClear()
     wake.mockClear()
     const inspection = deferred<PendingInputs>()
     inbox.list.mockReturnValueOnce(inspection.promise)
-    await advance(10 * MINUTE)
+    try {
+      await advance(10 * MINUTE)
+      get.mockResolvedValue({ agent: "plan" })
+    } finally {
+      inspection.resolve([...pending])
+      await advance(0)
+    }
 
-    get.mockResolvedValue({ agent: "plan" })
-    inspection.resolve([...pending])
-    await advance(0)
-
+    expect(synthetic).not.toHaveBeenCalled()
     expect(wake).not.toHaveBeenCalled()
   })
 
   it("cancels a reminder admitted during an agent switch without waking the new agent", async () => {
     const { loop, get, admit, wake, pending } = setup()
     const releaseAdmission = holdNextAdmission(admit)
-    await loop.start("ses_parent", { objective: "Finish the port" })
-    await advance(10 * MINUTE)
-
-    get.mockResolvedValue({ agent: "plan" })
-    releaseAdmission()
-    await advance(0)
+    try {
+      await loop.start("ses_parent", { objective: "Finish the port" })
+      await advance(10 * MINUTE)
+      get.mockResolvedValue({ agent: "plan" })
+    } finally {
+      releaseAdmission()
+      await advance(0)
+    }
 
     expect(wake).not.toHaveBeenCalled()
     expect(pending).toHaveLength(0)

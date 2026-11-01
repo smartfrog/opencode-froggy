@@ -2,7 +2,6 @@ import fs from "node:fs"
 import { join } from "node:path"
 import { createOrchestratorLoop, type LoopSessionClient, type LoopStorage } from "../orchestrator-loop"
 import { asRecord } from "../record"
-import { ChildSessionTracker } from "../session-children"
 import { openProjectMemory } from "../memory/project"
 import { openSqlite } from "../memory/sqlite"
 import { createTaskBoardTool } from "../tools/task-board"
@@ -18,7 +17,6 @@ function readJsonObject(path: string): StoredValues {
 const directory = process.cwd()
 const context = { agent: "memory-manager", sessionID: "ses_fixture_manager" }
 const memory = createTaskBoardTool(directory)
-const tracker = new ChildSessionTracker()
 const storageFile = join(directory, "storage.json")
 const sessionsFile = join(directory, "sessions.json")
 const readStorage = (): StoredValues => fs.existsSync(storageFile) ? readJsonObject(storageFile) : {}
@@ -75,13 +73,12 @@ async function main() {
       ses_fixture_parent: { id: "ses_fixture_parent", agent: "orchestrator" },
       ses_fixture_worker: { id: "ses_fixture_worker", agent: "general", location: { directory: workspace } },
     }))
-    tracker.trackChild({ id: "ses_fixture_worker", parentID: "ses_fixture_parent", created: Date.now(), updated: Date.now() })
     const assignment = { id: "FIXTURE", status: "in-progress", workerSessionID: "ses_fixture_worker", workspace, nextAction: "Complete the fixture investigation" }
     const receipt = asRecord(JSON.parse((await memory.execute({ action: "save", id: "FIXTURE", title: "Recover assignment", status: "in-progress", description: JSON.stringify(assignment) }, context)).content))
     if (typeof receipt.version !== "number") throw new Error("Fixture save receipt is missing its version")
     const loop = createOrchestratorLoop({ directory, storage, session })
     await loop.start("ses_fixture_parent", { objective: "Recover the fixture assignment", intervalMinutes: 1 })
-    return { pid: process.pid, taskVersion: receipt.version, childCount: tracker.listChildren("ses_fixture_parent").length, revision: readSchedule().revision }
+    return { pid: process.pid, taskVersion: receipt.version, revision: readSchedule().revision }
   }
   const { store } = openProjectMemory(directory, { readonly: true })
   let source
@@ -130,7 +127,7 @@ async function main() {
   timers[0].callback()
   await new Promise<void>((resolve) => setImmediate(resolve))
   await loop.close()
-  return { pid: process.pid, taskVersion: source.version, assignment, childCount: tracker.listChildren("ses_fixture_parent").length, sessionAndWorkspaceVerified: worker.agent === "general" && workerLocation.directory === assignment.workspace && fs.statSync(assignment.workspace).isDirectory(), delay, revision: config.revision, admitted, woken }
+  return { pid: process.pid, taskVersion: source.version, assignment, sessionAndWorkspaceVerified: worker.agent === "general" && workerLocation.directory === assignment.workspace && fs.statSync(assignment.workspace).isDirectory(), delay, revision: config.revision, admitted, woken }
 }
 
 main().then((result) => process.stdout.write(JSON.stringify(result))).catch((error) => {

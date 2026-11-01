@@ -1,6 +1,7 @@
-import { describe, it, expect, jest, mock } from "bun:test"
+import { describe, it, expect, mock } from "bun:test"
 import { Agent } from "@opencode/plugin"
 import { applyAgents, createAgentModes } from "./agent-runtime"
+import { type AgentFrontmatter } from "./loaders"
 
 function instance(reload = mock<() => Promise<void>>().mockResolvedValue()) {
   return createAgentModes(["reviewer"], reload)
@@ -26,7 +27,7 @@ describe("plugin agents", () => {
     })
   })
 
-  it("resets promotions when the plugin unloads", async () => {
+  it("starts a fresh mode registry without earlier promotions", async () => {
     const first = instance()
     await first.set("reviewer", "primary")
     const restarted = instance()
@@ -46,5 +47,15 @@ describe("plugin agents", () => {
   it("reports registry reload failures", async () => {
     const modes = instance(mock().mockRejectedValue(new Error("reload failed")))
     await expect(modes.set("reviewer", "primary")).rejects.toThrow("reload failed")
+  })
+
+  it("rejects legacy permission objects", () => {
+    expect(() => applyAgents({
+      update: (_name, update) => update(structuredClone(Agent.Info.default(Agent.ID.make("reviewer")))),
+      remove: () => {},
+    }, { reviewer: {
+      description: "Review", mode: "subagent", prompt: "Inspect changes",
+      permissions: { edit: "deny" } as unknown as AgentFrontmatter["permissions"],
+    } }, {})).toThrow("V2 permissions must be an array")
   })
 })

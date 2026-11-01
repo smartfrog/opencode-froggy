@@ -2,7 +2,7 @@ import { response, textResponse } from "../memory/bounds"
 import { openProjectMemory, type ProjectMemory } from "../memory/project"
 import { TASK_STATUSES, type TaskStatus } from "../memory/store"
 import { inputRecord, recordId, requireMemoryWriter, textPatch, versionInput } from "../memory/tool-input"
-import { allTasks, formatBoard, formatTaskDetails } from "../memory/views"
+import { formatBoard, formatTaskDetails } from "../memory/views"
 
 const BOARD_STATUSES = TASK_STATUSES.filter((status) => status !== "done")
 const TASK_ACTIONS = ["list", "get", "save"]
@@ -10,8 +10,8 @@ const TASK_ACTIONS = ["list", "get", "save"]
 function renderList(store: ProjectMemory["store"], status: unknown): { content: string } {
   const filter = typeof status === "string" ? status as TaskStatus : undefined
   if (filter && !TASK_STATUSES.includes(filter)) throw new Error(`Invalid task status: ${status}`)
-  const columns: readonly TaskStatus[] = filter ? [filter] : BOARD_STATUSES
-  return textResponse(formatBoard(columns.flatMap((column) => allTasks(store, column)), [...columns]))
+  const columns = filter ? [filter] : BOARD_STATUSES
+  return textResponse(formatBoard(store.listTasks(columns), columns))
 }
 
 function renderGet(store: ProjectMemory["store"], id: string): { content: string } {

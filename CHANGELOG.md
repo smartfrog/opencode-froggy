@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Breaking change: remove the standalone `froggy-session-context` binary, `bun run session-context` script and text renderer; use `/session-context` or the `session-context` tool for Markdown reports inside OpenCode
+- Breaking change: remove the child-session cache and its incomplete fallback; `list-child-sessions` always reads persisted inventory and fails explicitly if discovery is unavailable
+- Breaking change: bundled agent definitions accept only V2 permission-rule arrays; legacy `permission`, `tools` and object-shaped permissions are rejected instead of converted
+- Breaking change: remove package-root helper exports (`parseFrontmatter`, `loadAgents`, `loadCommands`, `LoadedSkill`, `buildSkillActivationBlock`); the package root exposes only the plugin
+- Remove internal memory-list pagination and collect task-board rows in one status-filtered query; preserve complete Markdown reads, transactional topic inventory and public `memory-review` pagination
+- Reuse API response decoding and service-identity verification; remove standalone service discovery/authentication and register/log tools from one ordered list without changing orchestrator-loop behavior or migrations
 - Breaking change: remove configurable session/tool hooks, their bash actions and modified-file tracking; existing global and project `hook/hooks.md` files are no longer loaded
 - Remove the `eth-transaction`, `eth-address-balance`, `eth-address-txs` and `eth-token-transfers` tools and the `viem` dependency
 - Resolve global command and agent directories from `XDG_CONFIG_HOME` or `~/.config` on every platform; Windows no longer selects `%APPDATA%` based on legacy hook files, so move any agent/command files from `%APPDATA%/opencode` to the corresponding config-home directories if needed

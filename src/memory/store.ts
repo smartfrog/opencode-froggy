@@ -125,11 +125,11 @@ export class MemoryStore {
     return TASK_STATUSES.map((status) => ({ status, count: counts.get(status) ?? 0 }))
   }
 
-  listTasks(status?: string, limit = 21, offset = 0): TaskRecord[] {
-    const rows = status === undefined
-      ? this.database.prepare("SELECT * FROM tasks ORDER BY updated_at DESC, id LIMIT ? OFFSET ?").all(limit, offset)
-      : this.database.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC, id LIMIT ? OFFSET ?").all(taskStatus(status), limit, offset)
-    return rows.map(mapTask)
+  listTasks(statuses: readonly TaskStatus[] = TASK_STATUSES): TaskRecord[] {
+    if (statuses.length === 0) return []
+    const placeholders = statuses.map(() => "?").join(", ")
+    return this.database.prepare(`SELECT * FROM tasks WHERE status IN (${placeholders}) ORDER BY updated_at DESC, id`)
+      .all(...statuses.map(taskStatus)).map(mapTask)
   }
 
   saveTask(id: string, patch: TaskPatch, expectedVersion: number | null = null): SaveResult {
@@ -158,7 +158,7 @@ export class MemoryStore {
     return row == null ? null : mapNote(row)
   }
 
-  listNotes(options: { query?: string; topic?: string; limit?: number; offset?: number } = {}): NoteRecord[] {
+  listNotes(options: { query?: string; topic?: string } = {}): NoteRecord[] {
     const filters: string[] = []
     const params: unknown[] = []
     if (options.query !== undefined) {
@@ -169,15 +169,16 @@ export class MemoryStore {
       filters.push("topic = ?")
       params.push(options.topic)
     }
-    return this.database.prepare(`SELECT * FROM knowledge ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY topic, id LIMIT ? OFFSET ?`)
-      .all(...params, options.limit ?? 21, options.offset ?? 0).map(mapNote)
+    return this.database.prepare(`SELECT * FROM knowledge ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY topic, id`)
+      .all(...params).map(mapNote)
   }
 
-  knowledgeInventory(limit: number, offset: number) {
+  knowledgeInventory(limit?: number, offset = 0) {
     return this.transaction(() => {
       const totals = asRecord(this.database.prepare("SELECT count(*) AS knowledge_count, count(DISTINCT topic) AS topic_count FROM knowledge").get())
-      const topics = this.database.prepare("SELECT topic, count(*) AS count FROM knowledge GROUP BY topic ORDER BY topic LIMIT ? OFFSET ?")
-        .all(limit, offset).map((value) => {
+      const pagination = limit === undefined ? "" : " LIMIT ? OFFSET ?"
+      const topics = this.database.prepare(`SELECT topic, count(*) AS count FROM knowledge GROUP BY topic ORDER BY topic${pagination}`)
+        .all(...(limit === undefined ? [] : [limit, offset])).map((value) => {
           const row = asRecord(value)
           return { topic: String(row.topic), count: Number(row.count) }
         })

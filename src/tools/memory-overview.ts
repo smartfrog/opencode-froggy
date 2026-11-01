@@ -1,7 +1,7 @@
 import { textResponse } from "../memory/bounds"
 import { openProjectMemory } from "../memory/project"
 import { inputRecord } from "../memory/tool-input"
-import { formatOverview, readInventory } from "../memory/views"
+import { formatOverview } from "../memory/views"
 
 export function createMemoryOverviewTool(directory: string) {
   return {
@@ -17,7 +17,7 @@ export function createMemoryOverviewTool(directory: string) {
       inputRecord(input, [])
       const { path, store } = openProjectMemory(directory, { readonly: true })
       try {
-        const { topics, knowledgeCount } = readInventory(store)
+        const { topics, knowledgeCount } = store.knowledgeInventory()
         return textResponse(formatOverview(path, store.taskCounts(), topics, knowledgeCount))
       } finally {
         store.close()

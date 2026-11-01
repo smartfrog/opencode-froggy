@@ -145,6 +145,8 @@ Selected command details are in [Reference](docs/reference.md#commands).
 | Orchestration | `start-orchestrator-loop`, `stop-orchestrator-loop`, `orchestrator-status` | [Orchestration](docs/orchestration.md#coordination-loop) |
 | Utilities | `gitingest`, `list-child-sessions`, `session-context`, `pdf-to-markdown`, `agent-promote` | [Reference](docs/reference.md#utility-tools) |
 
+Session context reports are available through `/session-context` or its tool, in Markdown only; there is no standalone CLI.
+
 ## Configuration
 
 The plugin loads agents, commands, and skills from its bundled directories.

@@ -1,42 +1,33 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
-import { ModuleKind, ScriptTarget, transpileModule } from "typescript"
+import { rmSync } from "node:fs"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { createTemporaryDirectory } from "./test-fixtures/temporary-directory"
+
+const RECOVERY_FIXTURE = fileURLToPath(new URL("./test-fixtures/orchestrator-recovery.ts", import.meta.url))
 
 describe("orchestration recovery across processes", () => {
   let directory: string
 
   beforeEach(() => {
-    directory = mkdtempSync(join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), "froggy-recovery-"))
-    writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "commonjs" }))
-    for (const name of ["record", "logger", "session-children", "orchestrator-diagnostics", "orchestrator-loop", "memory/sqlite", "memory/migration", "memory/store", "memory/project", "memory/path-safety", "memory/bounds", "memory/tool-input", "memory/views", "tools/task-board", "test-fixtures/orchestrator-recovery"]) {
-      const source = readFileSync(new URL(`./${name}.ts`, import.meta.url), "utf8")
-      const target = join(directory, `${name}.js`)
-      mkdirSync(dirname(target), { recursive: true })
-      writeFileSync(target, transpileModule(source, {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, esModuleInterop: true },
-      }).outputText)
-    }
+    directory = createTemporaryDirectory("froggy-recovery-")
   })
 
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
   function run(stage: string) {
-    return JSON.parse(execFileSync(process.execPath, [join(directory, "test-fixtures/orchestrator-recovery.js"), stage], {
+    return JSON.parse(execFileSync(process.execPath, [RECOVERY_FIXTURE, stage], {
       cwd: directory, encoding: "utf8", timeout: 10_000,
     })) as Record<string, unknown>
   }
 
-  it("recovers assignment and cadence from disk with an empty child registry in a fresh process", () => {
+  it("recovers assignment and cadence from disk in a fresh process", () => {
     const prepared = run("prepare")
 
     const recovered = run("recover")
 
-    expect(prepared.childCount).toBe(1)
     expect(recovered.pid).not.toBe(prepared.pid)
-    expect(recovered.childCount).toBe(0)
     expect(recovered.assignment).toMatchObject({
       workerSessionID: "ses_fixture_worker",
       nextAction: "Complete the fixture investigation",

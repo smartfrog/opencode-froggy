@@ -13,76 +13,30 @@ describe("config-paths", () => {
   })
 
   describe("getUserConfigDir", () => {
-    it("should return XDG_CONFIG_HOME on Linux when set", async () => {
-      Object.defineProperty(process, "platform", { value: "linux" })
-      process.env.XDG_CONFIG_HOME = "/custom/config"
-
-      expect(getUserConfigDir()).toBe("/custom/config")
-    })
-
-    it("should return ~/.config on Linux when XDG_CONFIG_HOME is not set", async () => {
-      Object.defineProperty(process, "platform", { value: "linux" })
-      delete process.env.XDG_CONFIG_HOME
-
-      expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
-    })
-
-    it("should return XDG_CONFIG_HOME on macOS when set", async () => {
-      Object.defineProperty(process, "platform", { value: "darwin" })
-      process.env.XDG_CONFIG_HOME = "/custom/mac/config"
-
-      expect(getUserConfigDir()).toBe("/custom/mac/config")
-    })
-
-    it("should return ~/.config on macOS when XDG_CONFIG_HOME is not set", async () => {
-      Object.defineProperty(process, "platform", { value: "darwin" })
-      delete process.env.XDG_CONFIG_HOME
-
-      expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
-    })
-
-    it("should ignore APPDATA on Windows when XDG_CONFIG_HOME is not set", async () => {
-      Object.defineProperty(process, "platform", { value: "win32" })
-      delete process.env.XDG_CONFIG_HOME
+    it.each([
+      ["linux", "/custom/config"], ["linux", undefined],
+      ["darwin", "/custom/mac/config"], ["darwin", undefined],
+      ["win32", "/custom/windows/config"], ["win32", undefined],
+    ] as const)("resolves %s with XDG_CONFIG_HOME=%s independently of APPDATA", (platform, xdg) => {
+      Object.defineProperty(process, "platform", { value: platform })
+      if (xdg === undefined) delete process.env.XDG_CONFIG_HOME
+      else process.env.XDG_CONFIG_HOME = xdg
       process.env.APPDATA = "C:\\Users\\Test\\AppData\\Roaming"
 
-      expect(getUserConfigDir()).toBe(join(homedir(), ".config"))
-    })
-
-    it("should honor XDG_CONFIG_HOME on Windows regardless of APPDATA", () => {
-      Object.defineProperty(process, "platform", { value: "win32" })
-      process.env.XDG_CONFIG_HOME = "/custom/windows/config"
-      process.env.APPDATA = "C:\\Users\\Test\\AppData\\Roaming"
-
-      expect(getUserConfigDir()).toBe("/custom/windows/config")
-    })
-  })
-
-  describe("getGlobalCommandDir", () => {
-    it("should return correct path on Linux", async () => {
-      Object.defineProperty(process, "platform", { value: "linux" })
-      delete process.env.XDG_CONFIG_HOME
-
-      expect(getGlobalCommandDir()).toBe(join(homedir(), ".config", "opencode", "commands"))
-    })
-  })
-
-  describe("getGlobalAgentDir", () => {
-    it("should return correct path on Linux", async () => {
-      Object.defineProperty(process, "platform", { value: "linux" })
-      delete process.env.XDG_CONFIG_HOME
-
-      expect(getGlobalAgentDir()).toBe(join(homedir(), ".config", "opencode", "agents"))
+      expect(getUserConfigDir()).toBe(xdg ?? join(homedir(), ".config"))
     })
   })
 
   it.each([
-    ["agents", getGlobalAgentDir],
-    ["commands", getGlobalCommandDir],
-  ] as const)("should resolve Windows %s using XDG_CONFIG_HOME", (name, resolveDirectory) => {
-    Object.defineProperty(process, "platform", { value: "win32" })
-    process.env.XDG_CONFIG_HOME = "/custom/config"
+    ["agents", "linux", undefined, getGlobalAgentDir],
+    ["commands", "linux", undefined, getGlobalCommandDir],
+    ["agents", "win32", "/custom/config", getGlobalAgentDir],
+    ["commands", "win32", "/custom/config", getGlobalCommandDir],
+  ] as const)("resolves %s on %s with XDG_CONFIG_HOME=%s", (name, platform, xdg, resolveDirectory) => {
+    Object.defineProperty(process, "platform", { value: platform })
+    if (xdg === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = xdg
 
-    expect(resolveDirectory()).toBe(join("/custom/config", "opencode", name))
+    expect(resolveDirectory()).toBe(join(xdg ?? join(homedir(), ".config"), "opencode", name))
   })
 })

@@ -28,7 +28,7 @@ describe("legacy agent copies", () => {
     writeFileSync(path, original + "Custom instructions\n")
     const result = migrateAgentCopies(join(root, "bundled"), join(root, "agents"))
     expect(result.conflicts).toEqual([path])
-    expect(readFileSync(path, "utf8")).toContain("Custom instructions")
+    expect(readFileSync(path, "utf8")).toBe(original + "Custom instructions\n")
   })
 
 })

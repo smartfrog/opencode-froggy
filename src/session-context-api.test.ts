@@ -1,15 +1,16 @@
-import { describe, expect, it, jest, mock } from "bun:test"
-import { createSessionContextClient, resolveProjectID } from "./session-context-api"
+import { describe, expect, it, mock } from "bun:test"
+import { createSessionContextClient } from "./session-context-api"
 import { type OpenCodeRequest } from "./orchestrator-api"
 
 function setup() {
   const request = mock<OpenCodeRequest>()
-  const fetchContext = mock<(url: string, headers?: Record<string, string>) => Promise<unknown>>()
-  const endpoint = mock(async () => ({ url: "http://127.0.0.1:1234", password: "secret" }))
+  const readContext = mock<(sessionID: string) => Promise<unknown[]>>().mockResolvedValue([])
+  const listModels = mock<(directory: string) => Promise<readonly unknown[]>>().mockResolvedValue([])
   return {
     request,
-    fetchContext,
-    client: createSessionContextClient({ request, fetchContext, resolveEndpoint: endpoint }),
+    readContext,
+    listModels,
+    client: createSessionContextClient({ request, readContext, listModels }),
   }
 }
 
@@ -63,14 +64,6 @@ describe("session context API", () => {
     ])
   })
 
-  it("resolves the current directory to its project", async () => {
-    const { request } = setup()
-    request.mockResolvedValue({ project: { id: "project-1" } })
-
-    await expect(resolveProjectID("/repo/sub", request)).resolves.toBe("project-1")
-    expect(request).toHaveBeenCalledWith("get", "/api/location?location%5Bdirectory%5D=%2Frepo%2Fsub")
-  })
-
   it("rejects sessions from another project", async () => {
     const { client, request } = setup()
     request.mockResolvedValue({ data: [session({ projectID: "project-2" })] })
@@ -85,46 +78,51 @@ describe("session context API", () => {
     await expect(client.listSessions("project-1", 1)).rejects.toThrow("parent session id")
   })
 
-  it("retrieves active context messages directly from the authenticated service", async () => {
-    const { client, fetchContext } = setup()
-    fetchContext.mockResolvedValue({ data: [{ type: "user", text: "hello" }] })
+  it.each([null, [], "invalid"])("rejects a non-object session entry %j", async (value) => {
+    const { client, request } = setup()
+    request.mockResolvedValue({ data: [value] })
+
+    await expect(client.listSessions("project-1", 1)).rejects.toThrow("Invalid OpenCode API object")
+  })
+
+  it("retrieves active context messages through the host-bound reader", async () => {
+    const { client, readContext, request } = setup()
+    readContext.mockResolvedValue([{ type: "user", text: "hello" }])
 
     await expect(client.getContext("ses_main")).resolves.toEqual([{ type: "user", text: "hello" }])
-    expect(fetchContext).toHaveBeenCalledWith("http://127.0.0.1:1234/api/session/ses_main/context", {
-      authorization: "Basic " + Buffer.from("opencode:secret").toString("base64"),
-    })
+    expect(readContext).toHaveBeenCalledWith("ses_main")
+    expect(request).not.toHaveBeenCalled()
   })
 
   it("rejects a non-list context response", async () => {
-    const { client, fetchContext } = setup()
-    fetchContext.mockResolvedValue({ data: { messages: [] } })
+    const { client, readContext } = setup()
+    readContext.mockResolvedValue({ messages: [] } as unknown as unknown[])
 
     await expect(client.getContext("ses_main")).rejects.toThrow("Invalid session context")
   })
 
   it("maps model identifiers to their context limits", async () => {
-    const { client, request } = setup()
-    request.mockResolvedValue({
-      data: [
-        { providerID: "deepseek", modelID: "deepseek-flash", limit: { context: 1_000_000, output: 1 } },
-        { providerID: "openai", id: "gpt-6.1-sol", limit: { context: 628_000, output: 1 } },
-        { providerID: "invalid", modelID: "no-limit", limit: {} },
-      ],
-    })
+    const { client, listModels, request } = setup()
+    listModels.mockResolvedValue([
+      { providerID: "deepseek", modelID: "deepseek-flash", limit: { context: 1_000_000, output: 1 } },
+      { providerID: "openai", id: "gpt-6.1-sol", limit: { context: 628_000, output: 1 } },
+      { providerID: "invalid", modelID: "no-limit", limit: {} },
+    ])
 
     const limits = await client.listModelLimits("/repo")
 
-    expect(request).toHaveBeenCalledWith("get", "/api/model?location%5Bdirectory%5D=%2Frepo")
+    expect(listModels).toHaveBeenCalledWith("/repo")
+    expect(request).not.toHaveBeenCalled()
     expect(limits.get("deepseek/deepseek-flash")).toBe(1_000_000)
     expect(limits.get("openai/gpt-6.1-sol")).toBe(628_000)
     expect(limits.size).toBe(2)
   })
 
   it("maps public and upstream model identifiers to the same limit", async () => {
-    const { client, request } = setup()
-    request.mockResolvedValue({
-      data: [{ providerID: "alias", id: "public-model", modelID: "upstream-model", limit: { context: 10_000, output: 1 } }],
-    })
+    const { client, listModels } = setup()
+    listModels.mockResolvedValue([
+      { providerID: "alias", id: "public-model", modelID: "upstream-model", limit: { context: 10_000, output: 1 } },
+    ])
 
     const limits = await client.listModelLimits("/repo")
 
@@ -133,13 +131,11 @@ describe("session context API", () => {
   })
 
   it("does not overwrite a public model limit with another model's alias", async () => {
-    const { client, request } = setup()
-    request.mockResolvedValue({
-      data: [
-        { providerID: "alias", id: "base-model", modelID: "base-model", limit: { context: 10_000, output: 1 } },
-        { providerID: "alias", id: "extended-model", modelID: "base-model", limit: { context: 100_000, output: 1 } },
-      ],
-    })
+    const { client, listModels } = setup()
+    listModels.mockResolvedValue([
+      { providerID: "alias", id: "base-model", modelID: "base-model", limit: { context: 10_000, output: 1 } },
+      { providerID: "alias", id: "extended-model", modelID: "base-model", limit: { context: 100_000, output: 1 } },
+    ])
 
     const limits = await client.listModelLimits("/repo")
 
@@ -147,27 +143,10 @@ describe("session context API", () => {
     expect(limits.get("alias/extended-model")).toBe(100_000)
   })
 
-  it("retrieves the session identity used for service verification", async () => {
-    const { client, request } = setup()
-    request.mockResolvedValue({ data: { id: "ses_main", time: { created: 123 } } })
-
-    await expect(client.getSession("ses_main")).resolves.toEqual({ id: "ses_main", created: 123 })
-    expect(request).toHaveBeenCalledWith("get", "/api/session/ses_main")
-  })
-
-  it("uses an injected host-bound context reader", async () => {
-    const { request } = setup()
-    const readContext = mock(async () => [{ type: "user", text: "host context" }])
-    const client = createSessionContextClient({ request, readContext })
-
-    await expect(client.getContext("ses_main")).resolves.toEqual([{ type: "user", text: "host context" }])
-    expect(readContext).toHaveBeenCalledWith("ses_main")
-  })
-
   it("rejects a response without data", async () => {
     const { client, request } = setup()
     request.mockResolvedValue({})
 
-    await expect(client.listModelLimits("/repo")).rejects.toThrow("missing data")
+    await expect(client.listSessions("project-1", 1)).rejects.toThrow("missing data")
   })
 })

@@ -2,26 +2,24 @@ import { response, textResponse } from "../memory/bounds"
 import { openProjectMemory, type ProjectMemory } from "../memory/project"
 import { inputRecord, recordId, requireMemoryWriter, textPatch, versionInput } from "../memory/tool-input"
 import {
-  allNotes,
   formatKnowledgeList,
   formatKnowledgeNote,
   formatKnowledgeSearch,
   formatKnowledgeTopics,
-  readInventory,
 } from "../memory/views"
 
 function renderTopics(store: ProjectMemory["store"]): { content: string } {
-  const { topics, knowledgeCount } = readInventory(store)
+  const { topics, knowledgeCount } = store.knowledgeInventory()
   return textResponse(formatKnowledgeTopics(topics, knowledgeCount))
 }
 
 function renderList(store: ProjectMemory["store"], topic: unknown): { content: string } {
-  return textResponse(formatKnowledgeList(allNotes(store, { topic: typeof topic === "string" ? topic : undefined })))
+  return textResponse(formatKnowledgeList(store.listNotes({ topic: typeof topic === "string" ? topic : undefined })))
 }
 
 function renderSearch(store: ProjectMemory["store"], query: unknown, topic: unknown): { content: string } {
   if (typeof query !== "string" || !query.trim()) throw new Error("query is required")
-  return textResponse(formatKnowledgeSearch(allNotes(store, { query, topic: typeof topic === "string" ? topic : undefined })))
+  return textResponse(formatKnowledgeSearch(store.listNotes({ query, topic: typeof topic === "string" ? topic : undefined })))
 }
 
 function renderGet(store: ProjectMemory["store"], id: string): { content: string } {

@@ -1,39 +1,7 @@
-import { type MemoryStore, type NoteRecord, type TaskRecord, type TaskStatus } from "./store"
-
-const PAGE = 500
+import { type NoteRecord, type TaskRecord, type TaskStatus } from "./store"
 
 function text(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim()
-}
-
-export function allTasks(store: MemoryStore, status?: TaskStatus): TaskRecord[] {
-  const tasks: TaskRecord[] = []
-  for (let offset = 0; ; offset += PAGE) {
-    const page = store.listTasks(status, PAGE, offset)
-    tasks.push(...page)
-    if (page.length < PAGE) return tasks
-  }
-}
-
-export function allNotes(store: MemoryStore, options: { query?: string; topic?: string } = {}): NoteRecord[] {
-  const notes: NoteRecord[] = []
-  for (let offset = 0; ; offset += PAGE) {
-    const page = store.listNotes({ ...options, limit: PAGE, offset })
-    notes.push(...page)
-    if (page.length < PAGE) return notes
-  }
-}
-
-export function readInventory(store: MemoryStore): { topics: { topic: string; count: number }[]; knowledgeCount: number } {
-  const topics: { topic: string; count: number }[] = []
-  let knowledgeCount = 0
-  for (let page = 0; ; page++) {
-    const inventory = store.knowledgeInventory(PAGE, page * PAGE)
-    knowledgeCount = inventory.knowledgeCount
-    topics.push(...inventory.topics)
-    if ((page + 1) * PAGE >= inventory.topicCount) break
-  }
-  return { topics, knowledgeCount }
 }
 
 export function formatBoard(tasks: TaskRecord[], columns: TaskStatus[]): string {

@@ -19,27 +19,15 @@ type AgentDraft = Parameters<Parameters<AgentEditor["update"]>[1]>[0]
 
 function permissions(input: unknown): AgentDraft["permissions"] {
   if (input === undefined) return []
-  if (Array.isArray(input)) {
-    return input.map((rule: unknown) => {
-      if (!rule || typeof rule !== "object") throw new Error("Invalid agent permission rule")
-      const { action, resource, effect } = rule as Record<string, unknown>
-      if (typeof action !== "string" || typeof resource !== "string" ||
-          (effect !== "allow" && effect !== "deny" && effect !== "ask")) {
-        throw new Error("Invalid agent permission rule")
-      }
-      return { action, resource, effect }
-    })
-  }
-  if (typeof input !== "object" || input === null) throw new Error("Invalid agent permissions")
-  return Object.entries(input).flatMap(([action, value]) => {
-    const resources = typeof value === "string" ? { "*": value } : value
-    if (!resources || typeof resources !== "object" || Array.isArray(resources)) {
-      throw new Error(`Invalid permission for "${action}"`)
+  if (!Array.isArray(input)) throw new Error("V2 permissions must be an array")
+  return input.map((rule: unknown) => {
+    if (!rule || typeof rule !== "object") throw new Error("Invalid agent permission rule")
+    const { action, resource, effect } = rule as Record<string, unknown>
+    if (typeof action !== "string" || typeof resource !== "string" ||
+        (effect !== "allow" && effect !== "deny" && effect !== "ask")) {
+      throw new Error("Invalid agent permission rule")
     }
-    return Object.entries(resources).map(([resource, effect]) => {
-      if (effect !== "allow" && effect !== "deny" && effect !== "ask") throw new Error("Invalid permission effect")
-      return { action: action === "bash" ? "shell" : action, resource, effect }
-    })
+    return { action, resource, effect }
   })
 }
 
@@ -68,9 +56,6 @@ export function applyAgents(
       }
       if (config.temperature !== undefined) agent.request.settings.temperature = config.temperature
       if (config.maxSteps !== undefined) agent.steps = config.maxSteps
-      for (const [tool, enabled] of Object.entries(config.tools ?? {})) {
-        agent.permissions.push({ action: tool === "bash" ? "shell" : tool, resource: "*", effect: enabled ? "allow" : "deny" })
-      }
       agent.permissions.push(...permissions(config.permissions))
     })
   }

@@ -2,10 +2,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, basename } from "node:path"
 import yaml from "js-yaml"
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
 export interface AgentFrontmatter {
   description: string
   mode?: "primary" | "subagent" | "all"
@@ -13,9 +9,7 @@ export interface AgentFrontmatter {
   temperature?: number
   maxSteps?: number
   disable?: boolean
-  tools?: Record<string, boolean>
-  permission?: Record<string, unknown>
-  permissions?: Record<string, unknown> | Array<{
+  permissions?: Array<{
     action: string
     resource: string
     effect: "allow" | "deny" | "ask"
@@ -26,9 +20,6 @@ export interface SkillFrontmatter {
   name: string
   description: string
   use_when?: string
-  license?: string
-  compatibility?: string
-  metadata?: Record<string, string>
 }
 
 export interface CommandFrontmatter {
@@ -56,22 +47,10 @@ export interface LoadedSkill {
   body: string
 }
 
-export interface AgentConfigOutput {
-  description: string
+export interface AgentConfigOutput extends AgentFrontmatter {
   mode: "subagent" | "primary" | "all"
-  model?: string
-  temperature?: number
-  maxSteps?: number
-  disable?: boolean
-  tools?: Record<string, boolean>
-  permissions?: AgentFrontmatter["permissions"]
   prompt: string
-  [key: string]: unknown
 }
-
-// ============================================================================
-// UTILITIES
-// ============================================================================
 
 export function parseFrontmatter<T>(content: unknown): { data: T; body: string } {
   if (typeof content !== "string") {
@@ -90,10 +69,6 @@ export function parseFrontmatter<T>(content: unknown): { data: T; body: string }
   }
 }
 
-// ============================================================================
-// LOADERS
-// ============================================================================
-
 export function loadAgents(agentDir: string): Record<string, AgentConfigOutput> {
   if (!existsSync(agentDir)) return {}
 
@@ -105,11 +80,12 @@ export function loadAgents(agentDir: string): Record<string, AgentConfigOutput> 
     const filePath = join(agentDir, file)
     const content = readFileSync(filePath, "utf-8")
     const { data, body } = parseFrontmatter<AgentFrontmatter>(content)
+    if (Object.hasOwn(data, "permission") || Object.hasOwn(data, "tools")) {
+      throw new Error(`Unsupported legacy agent field in ${file}; use V2 permissions rules`)
+    }
 
     const agentName = basename(file, ".md")
     const mode = data.mode ?? "all"
-
-    const permissions = data.permissions ?? data.permission
 
     agents[agentName] = {
       description: data.description || "",
@@ -119,8 +95,7 @@ export function loadAgents(agentDir: string): Record<string, AgentConfigOutput> 
       ...(data.temperature !== undefined && { temperature: data.temperature }),
       ...(data.maxSteps !== undefined && { maxSteps: data.maxSteps }),
       ...(data.disable !== undefined && { disable: data.disable }),
-      ...(data.tools !== undefined && { tools: data.tools }),
-      ...(permissions !== undefined && { permissions }),
+      ...(data.permissions !== undefined && { permissions: data.permissions }),
     }
   }
 

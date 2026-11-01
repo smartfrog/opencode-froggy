@@ -11,7 +11,3 @@ export function log(message: string, data?: unknown): void {
     appendFileSync(LOG_FILE, entry)
   } catch {}
 }
-
-export function getLogFilePath(): string {
-  return LOG_FILE
-}

@@ -221,10 +221,6 @@ function truncate(value: string, width: number): string {
   return characters.slice(0, Math.max(0, width - 1)).join("") + "…"
 }
 
-function pad(value: string, width: number): string {
-  return truncate(value, width).padEnd(width)
-}
-
 function sessionName(session: SessionSummary): string {
   return truncate(session.title ?? "(untitled)", 50)
 }
@@ -245,26 +241,6 @@ function contextLabel(analysis: ContextAnalysis | null): string {
 
 function cumulativeTokens(session: SessionSummary): string {
   return `${formatTokens(session.tokens.input)} / ${formatTokens(session.tokens.output)} / ${formatTokens(session.tokens.cacheRead)}`
-}
-
-function categoryLines(analysis: ContextAnalysis): string[] {
-  if (analysis.characters === 0) return ["   categories: no active text"]
-  const parts = DISPLAY_CATEGORIES.map((category) => `${category} ${analysis.percentages[category].toFixed(1)}%`)
-  const prefix = "   categories: "
-  const continuation = " ".repeat(prefix.length)
-  const lines: string[] = []
-  let current = prefix
-  for (const part of parts) {
-    const separator = current === prefix ? "" : " · "
-    if (current.length + separator.length + part.length > 130 && current !== prefix) {
-      lines.push(current)
-      current = continuation + part
-    } else {
-      current += separator + part
-    }
-  }
-  if (current !== prefix) lines.push(current)
-  return lines
 }
 
 function topToolLabel(analysis: ContextAnalysis | null): string {
@@ -379,70 +355,5 @@ export function formatSessionContextMarkdown(rows: SessionContextRow[], options:
     "Tools = call input plus result characters per tool; share is over all tool characters.",
     "Global = weighted category share across analyzed sessions; cost is the total of the listed sessions.",
   )
-  return lines.join("\n")
-}
-
-export function formatSessionContextReport(rows: SessionContextRow[], options: { limitError?: string | null } = {}): string {
-  const lines = [
-    `Active context — ${rows.length} most recent session${rows.length === 1 ? "" : "s"} in this project`,
-    "Context / Limit = last assistant prompt tokens / model window; percentage in parentheses",
-    "Cost = total session cost in USD",
-    "Cumul session = cumulative input / output / cache read across all calls, not the active context",
-    "Categories = share of active context characters after the last compaction",
-    "Tools = call input plus result characters per tool; share is over all tool characters",
-  ]
-  if (options.limitError) lines.push(`Model limits unavailable: ${options.limitError}`)
-  lines.push("")
-
-  const widths = [2, 34, 46, 30, 8, 24]
-  const headers = ["#", "Session", "Agent · Model", "Context / Limit (used)", "Cost", "Cumul session (in/out/cache)"]
-  const row = (values: string[]) => values.map((value, index) => pad(value, widths[index])).join(" ").trimEnd()
-  lines.push(row(headers))
-
-  rows.forEach((entry, index) => {
-    const { session, analysis, error } = entry
-    lines.push(row([
-      String(index + 1),
-      sessionName(session),
-      agentModel(session),
-      contextLabel(analysis),
-      formatCost(session.cost),
-      cumulativeTokens(session),
-    ]))
-    if (analysis) {
-      lines.push(...categoryLines(analysis))
-      if (analysis.tools.length > 0) {
-        const [top] = analysis.tools
-        lines.push(`   top tool: ${top.name} ${formatTokens(top.characters)} (${toolShare(top, totalToolCharacters(analysis.tools))} of tool chars)`)
-      }
-      if (analysis.attachments > 0) {
-        lines.push(`   attachments: ${analysis.attachments} file${analysis.attachments === 1 ? "" : "s"} (excluded from percentages)`)
-      }
-    }
-    if (error) lines.push(`   error: ${error}`)
-  })
-
-  const analyzed = rows.filter((entry): entry is SessionContextRow & { analysis: ContextAnalysis } => entry.analysis !== null)
-  const tools = collectTools(analyzed.map((entry) => entry.analysis))
-  if (tools.length > 0) {
-    const total = totalToolCharacters(tools)
-    const toolWidths = [20, 6, 10, 12, 7]
-    const toolRow = (values: string[]) => values.map((value, index) => pad(value, toolWidths[index])).join(" ").trimEnd()
-    lines.push("", "Tools (all sessions)")
-    lines.push(toolRow(["Tool", "Calls", "Call chars", "Result chars", "Share"]))
-    for (const tool of tools.slice(0, TOOL_ROWS)) {
-      lines.push(toolRow([
-        tool.name,
-        String(tool.calls),
-        formatTokens(tool.callCharacters),
-        formatTokens(tool.resultCharacters),
-        toolShare(tool, total),
-      ]))
-    }
-    if (tools.length > TOOL_ROWS) lines.push(`Top ${TOOL_ROWS} of ${tools.length} tools by characters.`)
-  }
-
-  lines.push("")
-  lines.push("Source: messages after the last compaction.")
   return lines.join("\n")
 }

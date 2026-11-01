@@ -41,7 +41,61 @@ describe("memory store", () => {
     const { memory } = store()
     memory.saveTask("T", { title: "Task" })
     memory.saveTask("R", { title: "Review", status: "review" })
-    expect(memory.listTasks("review").map(({ id }) => id)).toEqual(["R"])
+    expect(memory.listTasks(["review"]).map(({ id }) => id)).toEqual(["R"])
+  })
+
+  it("lists every task beyond the former internal page size", () => {
+    const { memory } = store()
+    for (let index = 0; index < 501; index++) memory.saveTask(`T${index}`, { title: `Task ${index}` })
+    expect(memory.listTasks()).toHaveLength(501)
+  })
+
+  it("lists every matching knowledge entry beyond the former internal page size", () => {
+    const { memory } = store()
+    for (let index = 0; index < 501; index++) {
+      memory.saveNote(`K${index}`, { title: `Entry ${index}`, topic: "build", content: "Keep." })
+    }
+    expect(memory.listNotes({ topic: "build" })).toHaveLength(501)
+  })
+
+  it("reads a complete topic inventory without pagination", () => {
+    const { memory } = store()
+    for (let index = 0; index < 501; index++) {
+      memory.saveNote(`K${index}`, { title: `Entry ${index}`, topic: `topic-${index}`, content: "Keep." })
+    }
+    const inventory = memory.knowledgeInventory()
+    expect(inventory).toMatchObject({ knowledgeCount: 501, topicCount: 501 })
+    expect(inventory.topics).toHaveLength(501)
+  })
+
+  it("orders task results by latest update then ID", () => {
+    const { memory, database } = store()
+    for (const id of ["C", "B", "A"]) memory.saveTask(id, { title: id })
+    database.exec("UPDATE tasks SET updated_at = CASE WHEN id = 'C' THEN 20 ELSE 10 END")
+
+    expect(memory.listTasks().map(({ id }) => id)).toEqual(["C", "A", "B"])
+  })
+
+  it("keeps inventory totals and topics in one read snapshot", () => {
+    const { memory, database } = store()
+    memory.saveNote("first", { title: "First", topic: "build", content: "Keep." })
+    const writer = new MemoryStore(openSqlite(join(directories.at(-1)!, "memory.db")))
+    stores.push(writer)
+    const reader = new MemoryStore({
+      exec: (sql) => database.exec(sql),
+      prepare: (sql) => {
+        if (sql.startsWith("SELECT topic, count(*)")) {
+          writer.saveNote("second", { title: "Second", topic: "runtime", content: "Keep." })
+        }
+        return database.prepare(sql)
+      },
+      serialize: () => database.serialize(),
+      close: () => {},
+    }, undefined, true)
+
+    expect(reader.knowledgeInventory()).toEqual({
+      knowledgeCount: 1, topicCount: 1, topics: [{ topic: "build", count: 1 }],
+    })
   })
 
   it.each(["archived", "unknown"])("rejects unsupported task status %s", (status) => {
@@ -76,16 +130,11 @@ describe("memory store", () => {
     expect(trace.indexOf("SELECT * FROM tasks WHERE id = ?")).toBeGreaterThan(trace.indexOf("BEGIN IMMEDIATE"))
   })
 
-  it("does not create a history table", () => {
+  it.each(["history", "task_notes"])("does not create the retired %s table during task updates", (table) => {
     const { memory, database } = store()
     memory.saveTask("T", { title: "Task" })
     memory.saveTask("T", { status: "done" }, 1)
-    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'history'").get()).toBeNull()
-  })
-
-  it("does not create a progress-note table", () => {
-    const { database } = store()
-    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'task_notes'").get()).toBeNull()
+    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = ?").get(table)).toBeNull()
   })
 
   it("searches knowledge by content and topic", () => {

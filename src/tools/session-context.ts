@@ -1,23 +1,22 @@
 import { asRecord } from "../record"
 import { formatSessionContextMarkdown } from "../session-context"
-import { createSessionContextClient, type SessionContextClient } from "../session-context-api"
+import { type SessionContextClient } from "../session-context-api"
 import { collectSessionContext } from "../session-context-report"
 
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 50
 
 interface SessionContextToolOptions {
-  client?: SessionContextClient
+  client: SessionContextClient
   verifySession?: (sessionID: string) => Promise<void>
 }
 
 export function createSessionContextTool(
   projectID: string,
   directory: string,
-  options: SessionContextToolOptions = {},
+  options: SessionContextToolOptions,
 ) {
-  const client = options.client ?? createSessionContextClient()
-  const verifySession = options.verifySession
+  const { client, verifySession } = options
   return {
     name: "session-context",
     description: "List recent project sessions as a Markdown table with active context size, model/agent, cumulative tokens, cost and character breakdown by category and by tool. Returns only aggregated results, never raw session messages.",

@@ -3,7 +3,6 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, jest, mock } from "bun:test"
 import { Agent, type Plugin } from "@opencode/plugin"
 import plugin from "./index"
-import { ChildSessionTracker } from "./session-children"
 import { createTemporaryDirectory } from "./test-fixtures/temporary-directory"
 
 type AgentEditor = Parameters<Parameters<Plugin.Context["agent"]["transform"]>[0]>[0]
@@ -162,24 +161,11 @@ hooks:
     expect(result.content).toContain("Keep orchestration, memory and general utilities.")
   })
 
-  it("still tracks newly created child sessions", async () => {
-    const track = jest.spyOn(ChildSessionTracker.prototype, "trackChild")
-    const state = fixture([{ type: "session.created", data: {
-      sessionID: "ses-child", parentID: "ses-root", title: "Review",
-    } }])
+  it("ignores child creation events", async () => {
+    const state = fixture([{ type: "session.created", data: { sessionID: "ses-child", parentID: "ses-root" } }])
     await state.start()
     await state.eventsFinished
-    expect(track).toHaveBeenCalledWith(expect.objectContaining({
-      id: "ses-child", parentID: "ses-root", title: "Review",
-    }))
-  })
-
-  it("still removes deleted sessions from child tracking", async () => {
-    const removeSession = jest.spyOn(ChildSessionTracker.prototype, "removeSession")
-    const state = fixture([{ type: "session.deleted", data: { sessionID: "ses-child" } }])
-    await state.start()
-    await state.eventsFinished
-    expect(removeSession).toHaveBeenCalledWith("ses-child")
+    expect(state.remove).not.toHaveBeenCalled()
   })
 
   it("still clears coordination state for a deleted session", async () => {

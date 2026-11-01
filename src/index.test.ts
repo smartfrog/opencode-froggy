@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { tmpdir } from "node:os"
 import {
   parseFrontmatter,
   loadAgents,
@@ -10,6 +9,7 @@ import {
   type LoadedSkill,
 } from "./loaders"
 import { buildSkillActivationBlock } from "./skill-activation"
+import { createTemporaryDirectory } from "./test-fixtures/temporary-directory"
 
 describe("parseFrontmatter", () => {
   it("should parse valid frontmatter", () => {
@@ -44,7 +44,7 @@ Content after empty frontmatter`
 
     const result = parseFrontmatter<{ name?: string }>(content)
 
-    // Empty frontmatter returns empty object (yaml.load returns null, we cast to T)
+    expect(result.data).toEqual({})
     expect(result.body.trim()).toBe("Content after empty frontmatter")
   })
 
@@ -66,8 +66,7 @@ describe("loadAgents", () => {
   let testDir: string
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `opencode-test-${Date.now()}`)
-    mkdirSync(testDir, { recursive: true })
+    testDir = createTemporaryDirectory("froggy-agents-")
   })
 
   afterEach(() => {
@@ -84,9 +83,10 @@ describe("loadAgents", () => {
 description: Test agent
 mode: subagent
 temperature: 0.5
-tools:
-  write: false
-  edit: true
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
 ---
 
 # Test Agent
@@ -101,40 +101,38 @@ You are a test agent.`
     expect(result["test-agent"].description).toBe("Test agent")
     expect(result["test-agent"].mode).toBe("subagent")
     expect(result["test-agent"].temperature).toBe(0.5)
-    expect(result["test-agent"].tools).toEqual({ write: false, edit: true })
+    expect(result["test-agent"].permissions).toEqual([{ action: "edit", resource: "*", effect: "deny" }])
     expect(result["test-agent"].prompt).toContain("You are a test agent.")
   })
 
-  it("should load agent with permissions and singular permission key", () => {
+  it.each(["permission", "tools"])("rejects the legacy %s field rather than dropping restrictions", (field) => {
     const agentContent = `---
 description: Permission agent
-permission:
+${field}:
   bash: allow
 ---
 Content`
 
     writeFileSync(join(testDir, "perm.md"), agentContent)
 
-    const result = loadAgents(testDir)
-
-    expect(result["perm"].permissions).toEqual({ bash: "allow" })
+    expect(() => loadAgents(testDir)).toThrow("Unsupported legacy agent field")
   })
 
-  it("should prioritize permissions (plural) over permission (singular)", () => {
+  it("rejects legacy fields even when V2 permissions are present", () => {
     const agentContent = `---
 description: Dual permission agent
 permission:
   bash: deny
 permissions:
-  bash: allow
+  - action: shell
+    resource: "*"
+    effect: allow
 ---
 Content`
 
     writeFileSync(join(testDir, "dual.md"), agentContent)
 
-    const result = loadAgents(testDir)
-
-    expect(result["dual"].permissions).toEqual({ bash: "allow" })
+    expect(() => loadAgents(testDir)).toThrow("Unsupported legacy agent field")
   })
 
   it("should not include undefined optional fields", () => {
@@ -152,45 +150,16 @@ Content`
     expect(result["minimal"]).not.toHaveProperty("permissions")
   })
 
-  it("should use mode value directly (primary, subagent, all)", () => {
-    const primaryContent = `---
-description: Primary agent
-mode: primary
----
+  it.each([
+    ["primary", "primary"],
+    ["subagent", "subagent"],
+    ["all", "all"],
+    [undefined, "all"],
+  ] as const)("loads mode %s as %s", (mode, expected) => {
+    const field = mode === undefined ? "" : `mode: ${mode}\n`
+    writeFileSync(join(testDir, "agent.md"), `---\ndescription: Agent\n${field}---\nContent`)
 
-Content`
-
-    const subagentContent = `---
-description: Subagent
-mode: subagent
----
-
-Content`
-
-    const allContent = `---
-description: All modes agent
-mode: all
----
-
-Content`
-
-    const noModeContent = `---
-description: No mode specified
----
-
-Content`
-
-    writeFileSync(join(testDir, "primary.md"), primaryContent)
-    writeFileSync(join(testDir, "subagent.md"), subagentContent)
-    writeFileSync(join(testDir, "all.md"), allContent)
-    writeFileSync(join(testDir, "nomode.md"), noModeContent)
-
-    const result = loadAgents(testDir)
-
-    expect(result["primary"].mode).toBe("primary")
-    expect(result["subagent"].mode).toBe("subagent")
-    expect(result["all"].mode).toBe("all")
-    expect(result["nomode"].mode).toBe("all")
+    expect(loadAgents(testDir).agent.mode).toBe(expected)
   })
 
   it("should ignore non-markdown files", () => {
@@ -207,8 +176,7 @@ describe("loadSkills", () => {
   let testDir: string
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `opencode-test-${Date.now()}`)
-    mkdirSync(testDir, { recursive: true })
+    testDir = createTemporaryDirectory("froggy-skills-")
   })
 
   afterEach(() => {
@@ -276,43 +244,17 @@ Content`
     expect(result[0].name).toBe("valid")
   })
 
-  it("should load use_when field from frontmatter", () => {
+  it.each(["After completing a task, call this skill", undefined])("loads optional use_when %s", (trigger) => {
     const skillDir = join(testDir, "auto-skill")
     mkdirSync(skillDir)
-
-    const skillContent = `---
-name: auto-skill
-description: An auto-triggered skill
-use_when: After completing a task, call this skill
----
-
-Skill instructions here.`
-
-    writeFileSync(join(skillDir, "SKILL.md"), skillContent)
+    const field = trigger === undefined ? "" : `use_when: ${trigger}\n`
+    writeFileSync(join(skillDir, "SKILL.md"), `---\nname: auto-skill\n${field}---\nSkill instructions here.`)
 
     const result = loadSkills(testDir)
 
     expect(result).toHaveLength(1)
     expect(result[0].name).toBe("auto-skill")
-    expect(result[0].useWhen).toBe("After completing a task, call this skill")
-  })
-
-  it("should have undefined useWhen when not provided", () => {
-    const skillDir = join(testDir, "manual-skill")
-    mkdirSync(skillDir)
-
-    const skillContent = `---
-name: manual-skill
-description: A manual skill
----
-
-Content`
-
-    writeFileSync(join(skillDir, "SKILL.md"), skillContent)
-
-    const result = loadSkills(testDir)
-
-    expect(result[0].useWhen).toBeUndefined()
+    expect(result[0].useWhen).toBe(trigger)
   })
 })
 
@@ -320,8 +262,7 @@ describe("loadCommands", () => {
   let testDir: string
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `opencode-test-${Date.now()}`)
-    mkdirSync(testDir, { recursive: true })
+    testDir = createTemporaryDirectory("froggy-commands-")
   })
 
   afterEach(() => {
@@ -397,53 +338,14 @@ describe("buildSkillActivationBlock", () => {
     expect(result).toContain("After writing code")
   })
 
-  it("should preserve quotes in trigger text", () => {
-    const skills: LoadedSkill[] = [
-      {
-        name: "test-skill",
-        description: "Test",
-        useWhen: 'Call when user says "help"',
-        path: "/path",
-        body: "",
-      },
-    ]
+  it.each([
+    ["quotes", 'Call when user says "help"', 'Call when user says "help"'],
+    ["internal whitespace", "First line\nSecond line\nThird line", "First line Second line Third line"],
+    ["surrounding whitespace", "  padded trigger  ", "padded trigger"],
+  ])("normalizes trigger %s", (_name, useWhen, expected) => {
+    const skill: LoadedSkill = { name: "test-skill", description: "Test", useWhen, path: "/path", body: "" }
 
-    const result = buildSkillActivationBlock(skills)
-
-    expect(result).toContain('"help"')
-  })
-
-  it("should collapse whitespace in trigger text", () => {
-    const skills: LoadedSkill[] = [
-      {
-        name: "multi-line",
-        description: "Test",
-        useWhen: "First line\nSecond line\nThird line",
-        path: "/path",
-        body: "",
-      },
-    ]
-
-    const result = buildSkillActivationBlock(skills)
-
-    expect(result).toContain("First line Second line Third line")
-  })
-
-  it("should trim whitespace from trigger text", () => {
-    const skills: LoadedSkill[] = [
-      {
-        name: "whitespace",
-        description: "Test",
-        useWhen: "  padded trigger  ",
-        path: "/path",
-        body: "",
-      },
-    ]
-
-    const result = buildSkillActivationBlock(skills)
-
-    expect(result).toContain("padded trigger")
-    expect(result).not.toContain("  padded")
+    expect(buildSkillActivationBlock([skill])).toBe(`MANDATORY: Call skill({ id: "test-skill" }) ${expected}`)
   })
 
   it("should generate separate instructions for multiple skills", () => {

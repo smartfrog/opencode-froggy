@@ -4,9 +4,6 @@
   "description": "OpenCode plugin for multi-agent orchestration, durable project memory, and general-purpose tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "froggy-session-context": "./dist/cli/session-context.js"
-  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -33,8 +30,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "test:coverage": "bun test --coverage",
-    "session-context": "bun dist/cli/session-context.js"
+    "test:coverage": "bun test --coverage"
   },
   "keywords": [
     "opencode",

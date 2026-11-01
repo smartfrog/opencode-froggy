@@ -1,55 +1,22 @@
-import { describe, expect, it, jest, mock, type Mock } from "bun:test"
+import { describe, expect, it, mock } from "bun:test"
 import { collectSessionContext } from "./session-context-report"
 import { type SessionContextClient } from "./session-context-api"
 import { type SessionSummary } from "./session-context"
+import { CHILD_SESSION, CONTEXT_MESSAGES, SESSION_SUMMARIES } from "./test-fixtures/session-context"
 
-const mocked = <T extends (...args: any[]) => any>(fn: T) => fn as unknown as Mock<T>
-
-const tokens = { input: 1000, output: 200, cacheRead: 3000 }
-const main: SessionSummary = {
-  id: "ses_main",
-  parentID: null,
-  title: "Main session",
-  agent: "plan",
-  model: "deepseek/deepseek-flash#high",
-  modelKey: "deepseek/deepseek-flash",
-  cost: 1.25,
-  tokens,
-}
-const child: SessionSummary = {
-  id: "ses_child",
-  parentID: "ses_main",
-  title: "Curation",
-  agent: "memory-manager",
-  model: "deepseek/deepseek-flash#high",
-  modelKey: "deepseek/deepseek-flash",
-  cost: 2.5,
-  tokens,
-}
-const messages = [
-  { type: "user", text: "hello" },
-  {
-    type: "assistant",
-    content: [{ type: "text", text: "ok" }],
-    tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 900, write: 0 } },
-  },
-]
-
-function setup(sessions: SessionSummary[] = [main, child]) {
-  const client: SessionContextClient = {
+function setup(sessions: SessionSummary[] = SESSION_SUMMARIES) {
+  return {
     listSessions: mock(async () => sessions),
-    getContext: mock(async () => messages),
-    getSession: mock(async (id: string) => ({ id, created: 1 })),
+    getContext: mock(async (_sessionID: string) => CONTEXT_MESSAGES),
     listModelLimits: mock(async () => new Map([["deepseek/deepseek-flash", 10_000]])),
-  }
-  return { client, report: collectSessionContext(client, "project-1", 10, "/repo") }
+  } satisfies SessionContextClient
 }
 
 describe("session context report", () => {
   it("collects main and subagent rows with model limits", async () => {
-    const { client, report } = setup()
+    const client = setup()
 
-    const result = await report
+    const result = await collectSessionContext(client, "project-1", 10, "/repo")
 
     expect(client.listSessions).toHaveBeenCalledWith("project-1", 10)
     expect(client.listModelLimits).toHaveBeenCalledWith("/repo")
@@ -61,32 +28,32 @@ describe("session context report", () => {
   })
 
   it("reports an empty project without fetching models", async () => {
-    const { client, report } = setup([])
+    const client = setup([])
 
-    const result = await report
+    const result = await collectSessionContext(client, "project-1", 10, "/repo")
 
     expect(result).toEqual({ rows: [], limitError: null })
     expect(client.listModelLimits).not.toHaveBeenCalled()
   })
 
   it("isolates a context failure to its session", async () => {
-    const { client, report } = setup()
-    mocked(client.getContext).mockImplementation(async (id) => {
-      if (id === child.id) throw new Error("context unavailable")
-      return messages
+    const client = setup()
+    client.getContext.mockImplementation(async (id) => {
+      if (id === CHILD_SESSION.id) throw new Error("context unavailable")
+      return CONTEXT_MESSAGES
     })
 
-    const result = await report
+    const result = await collectSessionContext(client, "project-1", 10, "/repo")
 
     expect(result.rows[0].error).toBeNull()
     expect(result.rows[1]).toMatchObject({ analysis: null, error: "context unavailable" })
   })
 
   it("keeps rows when model limits are unavailable", async () => {
-    const { client, report } = setup([main])
-    mocked(client.listModelLimits).mockRejectedValue(new Error("model offline"))
+    const client = setup(SESSION_SUMMARIES.slice(0, 1))
+    client.listModelLimits.mockRejectedValue(new Error("model offline"))
 
-    const result = await report
+    const result = await collectSessionContext(client, "project-1", 10, "/repo")
 
     expect(result.limitError).toBe("model offline")
     expect(result.rows[0].analysis).toMatchObject({ contextLimit: null, usedPercent: null })

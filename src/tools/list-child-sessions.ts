@@ -1,14 +1,13 @@
 import { log } from "../logger"
 import { asRecord } from "../record"
-import type { ChildSessionInfo, ChildSessionTracker } from "../session-children"
+import { type ChildSessionInfo } from "../orchestrator-api"
 
 export function createListChildSessionsTool(
-  tracker: ChildSessionTracker,
   listPersistedChildren: (parentID: string) => Promise<ChildSessionInfo[]>,
 ) {
   return {
     name: "list-child-sessions",
-    description: "List persisted direct child sessions of the current session across reloads. Reports verified inventory or an explicitly incomplete cached fallback; inventory is not worker activity or task completion.",
+    description: "List persisted direct child sessions of the current session across reloads. Reports verified inventory or fails explicitly if discovery is unavailable; inventory is not worker activity or task completion.",
     input: {
       type: "object",
       properties: {},
@@ -17,15 +16,12 @@ export function createListChildSessionsTool(
     async execute(_input: unknown, context: unknown) {
       const sessionID = asRecord(context).sessionID
       if (typeof sessionID !== "string" || !sessionID.startsWith("ses")) throw new Error("A current session is required")
-      let inventory = "Inventory verified from persisted sessions (all pages)."
+      const inventory = "Inventory verified from persisted sessions (all pages)."
       let childList: ChildSessionInfo[]
       try {
         childList = await listPersistedChildren(sessionID)
-        tracker.replaceChildren(sessionID, childList)
       } catch (error) {
-        childList = tracker.listChildren(sessionID)
-        if (!childList.length) throw new Error(`Child session inventory unavailable: ${String(error)}`, { cause: error })
-        inventory = `Inventory incomplete: cached sessions only; metadata may be stale. Discovery failed: ${String(error)}`
+        throw new Error(`Child session inventory unavailable: ${String(error)}`, { cause: error })
       }
       if (childList.length === 0) {
         return { content: `${inventory}\nNo child sessions found` }
