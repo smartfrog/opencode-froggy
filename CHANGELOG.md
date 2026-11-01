@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.7.0
+
 - Breaking change: remove the standalone `froggy-session-context` binary, `bun run session-context` script and text renderer; use `/session-context` or the `session-context` tool for Markdown reports inside OpenCode
 - Breaking change: remove the child-session cache and its incomplete fallback; `list-child-sessions` always reads persisted inventory and fails explicitly if discovery is unavailable
 - Breaking change: bundled agent definitions accept only V2 permission-rule arrays; legacy `permission`, `tools` and object-shaped permissions are rejected instead of converted

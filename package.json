@@ -1,6 +1,6 @@
 {
   "name": "opencode-froggy",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "OpenCode plugin for multi-agent orchestration, durable project memory, and general-purpose tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
