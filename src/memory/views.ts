@@ -1,4 +1,5 @@
-import { type NoteRecord, type TaskRecord, type TaskStatus } from "./store"
+import { formatRecordContent, type ContentRead } from "./content-read"
+import { type NoteRecord, type RevisionSummary, type TaskRecord, type TaskStatus } from "./store"
 
 function text(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim()
@@ -33,10 +34,10 @@ export function formatOverview(path: string, counts: { status: TaskStatus; count
   ].join("\n")
 }
 
-export function formatTaskDetails(task: TaskRecord): string {
+export function formatTaskDetails(task: TaskRecord, read: ContentRead = {}): string {
   return [
     `**${task.id}** — ${text(task.title)}`, "", `Status: ${task.status}`, `Version: ${task.version}`, "",
-    task.description.trim() ? task.description : "_(no description)_",
+    formatRecordContent(task.description, task.version, read) || "_(no description)_",
   ].join("\n")
 }
 
@@ -61,10 +62,17 @@ export function formatKnowledgeSearch(notes: NoteRecord[]): string {
   return [
     "| ID | Topic | Title | Excerpt |",
     "|---|---|---|---|",
-    ...notes.map((note) => `| ${note.id} | ${text(note.topic)} | ${text(note.title)} | ${text(note.content.replace(/\s+/g, " ").slice(0, 200))} |`),
+    ...notes.map((note) => `| ${note.id} | ${text(note.topic)} | ${text(note.title)} | ${text(note.excerpt ?? note.content.replace(/\s+/g, " ").slice(0, 200))} |`),
   ].join("\n")
 }
 
-export function formatKnowledgeNote(note: NoteRecord): string {
-  return [`**${note.id}** — ${text(note.title)}`, "", `Topic: ${note.topic}`, `Version: ${note.version}`, "", note.content].join("\n")
+export function formatKnowledgeNote(note: NoteRecord, read: ContentRead = {}): string {
+  return [`**${note.id}** — ${text(note.title)}`, "", `Topic: ${note.topic}`, `Version: ${note.version}`, "", formatRecordContent(note.content, note.version, read)].join("\n")
+}
+
+export function formatRevisions(id: string, revisions: RevisionSummary[]): string {
+  return [
+    `History: **${id}**`, "", "| Version | Operation | Recorded at |", "|---|---|---|",
+    ...revisions.map((revision) => `| ${revision.version} | ${revision.operation} | ${new Date(revision.recordedAt).toISOString()} |`),
+  ].join("\n")
 }

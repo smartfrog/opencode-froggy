@@ -21,6 +21,7 @@ describe("bundled memory manager", () => {
     ["knowledge", "allow"],
     ["task-board", "allow"],
     ["memory-review", "allow"],
+    ["memory-backup", "allow"],
     ["edit", "deny"],
     ["shell", "deny"],
     ["execute", "deny"],

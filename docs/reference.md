@@ -24,7 +24,7 @@ Detailed reference for commands, skills, and utility tools. For system behavior,
 | `/knowledge [list\|search\|get] ...` | Browse or search project knowledge without modifying it | - |
 | `/linear-stale-check` | Review open Linear issues for the configured team and report whether they are likely active, uncertain, or obsolete | `plan` |
 | `/memory` | Show task counts by status and knowledge topics with totals | - |
-| `/memory-review` | Review all project knowledge and propose corrections, merges or removals for user validation | `memory-manager` |
+| `/memory-review` | Review all project knowledge and propose corrections, merges or removals for user validation | `memory-reviewer` |
 | `/release` | Prepare and execute a release with explicit confirmation | - |
 | `/review-changes` | Review uncommitted changes (staged, unstaged, untracked) | `code-reviewer` |
 | `/review-pr <source> <target>` | Review diff from source branch into target branch | `code-reviewer` |
@@ -56,11 +56,12 @@ Shows stats overview, commits, files changed, and full diff between branches.
 
 ### /memory-review
 
-Runs an on-demand global knowledge review in a `memory-manager` child session. It uses the
+Runs an on-demand global knowledge review in a read-only `memory-reviewer` child session. It uses the
 read-only `memory-review` inventory, then reads all entries with `knowledge list/get`.
 The result is a coverage summary and reasoned proposals, not applied changes. The user must
 validate proposals before a separate manager pass can apply them. Tasks are read only for
-context or reference checks. See [Project memory](memory.md#on-demand-global-review).
+context or reference checks. Tool-level identity checks reject reviewer mutations; it cannot
+create backups or delegate. See [Project memory](memory.md#on-demand-global-review).
 
 ### /memory, /task-board, /knowledge
 
@@ -76,6 +77,14 @@ or upgrade a missing store.
 - `/knowledge` lists topics, lists or searches entries, and `get <ID>` shows one entry.
 
 Use `/memory-review` when the goal is to assess and propose changes, not merely to consult memory.
+
+The underlying record tools also support `get` with `offset`, `limit` and a continuation
+`version`, plus `history` (current + one previous version, or last saved content and a removal
+token for deleted knowledge) and manager-only `restore`. Older versions are automatically
+discarded. `memory-backup` creates a verified
+standalone local backup without changing current records. These capabilities are accessed
+through tools rather than additional slash-command arguments. See
+[Recovery history and backups](memory.md#recovery-history-and-backups).
 
 ### /linear-stale-check
 

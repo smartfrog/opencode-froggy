@@ -8,7 +8,7 @@ export function createMemoryReviewTool(directory: string) {
   return {
     name: "memory-review",
     options: { codemode: false },
-    description: "Read-only inventory for an on-demand global knowledge review: topic counts and total entries, paginated with nextPage. This tool does not assess content, invoke an agent or change memory. Use knowledge list/get to read every entry; memory-manager reports proposals for user validation before applying changes.",
+    description: "Read-only inventory for an on-demand global knowledge review: topic counts and total entries, paginated with nextPage. This tool does not assess content, invoke an agent or change memory. The read-only memory-reviewer uses knowledge list/get and proposes changes for user validation; memory-manager applies approved proposals separately.",
     input: {
       type: "object",
       properties: {

@@ -73,8 +73,9 @@ size alone is not a deletion criterion. Explicit user retention instructions sti
 If unique information cannot safely be condensed or its evidence is missing, report the
 limitation rather than discarding it or inventing a report.
 
-`knowledge remove` is **permanent deletion**, with no archive or undo. Read the full entry
-first. Save and verify merged content before deleting duplicates, and reconcile affected
+`knowledge remove` removes the entry from current reads and search. Only its last saved version
+remains recoverable; older recovery versions are discarded. Removal is **not erasure**. Read the full entry first.
+Save and verify merged content before removing duplicates, and reconcile affected
 references. When uncertain, keep the entry. The handback lists changed IDs, returned
 versions, deletion reasons, conflicts and partial writes.
 
@@ -91,9 +92,20 @@ Use `/memory`, `/task-board` and `/knowledge` to inspect tasks and knowledge wit
 then `get` only matching entries. Do not load the whole project on every reminder.
 `project-rules`, if present, is an ordinary knowledge entry, not a special backend.
 
-Tools return complete Markdown, but rendering may be truncated. Narrow discovery with a
-status, topic or query. Before replacing a description or content, read the full affected
-record and obtain any missing text through an authorized path. If any part remains unread
+Knowledge search uses SQLite FTS5 with title/ID weighting, accent-insensitive token matching
+and excerpts around matching passages. Whitespace-separated terms are combined with AND;
+each term is treated as literal text, not FTS query syntax. Technical paths and identifiers
+are searchable, but substring, synonym and cross-language semantic matching are not provided.
+Lists and searches still return every match without a hidden result cap.
+
+Tools return complete Markdown by default, but rendering may be truncated. Narrow discovery
+with a status, topic or query. For `get`, request `offset: 0, limit: 8000` to read a slice.
+Offsets and limits count Unicode code points, not bytes or UTF-16 code units. Each slice
+includes metadata, version, character coverage and the next offset; its exact body follows
+`--- content ---`. The maximum slice size is 16,000 characters. Continue using the returned
+offset and the same `version`; a changed record is rejected rather than mixing versions.
+
+Before replacing a description or content, read the full affected record. If any part remains unread
 or inaccessible, stop that replacement and report incomplete coverage; excerpts and summaries
 are not enough. Record `get` shows the current version. Lists are discovery views, not
 immutable snapshots while other sessions write.
@@ -102,14 +114,61 @@ Each task's metadata and description are read together. The plugin does not cap 
 responses or impose a display-driven limit on descriptions or knowledge content.
 
 Create records without `expectedVersion`. Updating or removing an existing record requires
-its current version. Versions are opaque conflict guards, not public history; never calculate
+its current version. Versions are opaque conflict guards and recovery identifiers; never calculate
 the next value. On conflict, report it and reread before deciding how to reconcile.
+
+## Recovery history and backups
+
+Both record tools expose `history` with an `id`, but it is a **one-step recovery buffer**, not
+a complete history. For a live record it lists the current version and, after an update,
+only the immediately previous version, newest first. Each save replaces that previous version.
+For removed knowledge it lists only the last saved version and a distinct removal token;
+the removal metadata contains no second copy of the content. Recreating or restoring the
+entry drops the removal token and keeps that last saved content as the previous version.
+
+Add `version` to inspect a retained snapshot; `offset` and `limit` can slice it too. Older
+versions are discarded transactionally with the change and become unavailable to reads and
+restores. Two successive bad edits can therefore lose the last good content. Recovery data
+is separate from ordinary lists, search and task descriptions; it is not an activity journal.
+
+Only `memory-manager` can `restore`, using `id`, `restoreVersion` and `expectedVersion`.
+Restoration writes a new current version; it never rewinds version counters. For an existing
+record, use its current version. For removed knowledge, use the most recent `remove` version
+from history; an intervening recreation and removal invalidates the old token. Read and
+verify the restored current record, including its references, before reporting recovery.
+For an existing record, the state replaced by restoration becomes its one previous version.
+
+The manager can call `memory-backup` with no arguments to create a uniquely named, local
+`memory.db.backup-<unique-id>.bak`. The tool serializes a consistent read snapshot, verifies
+the written bytes, database integrity and table counts, and returns the standalone backup's
+path and size. It does not create or upgrade a missing/outdated database, restore anything,
+publish data or remove older backups. Backup creation is denied to the audit agent.
+Request an explicit backup before broad curation when one-step recovery is insufficient;
+backups are not created automatically on each edit.
+
+To recover an entire database, stop all plugin processes using the canonical project first.
+Keep a safety copy of the existing database and any WAL sidecars. Verify the selected backup
+and recover it into a separate directory before replacing the authoritative store. Do not copy
+only a live `memory.db`, or combine an old backup with newer `-wal`/`-shm` files. Whole-store
+replacement is an explicit offline operator action, not an agent tool. A whole-store rollback
+also rewinds versions: discard pre-recovery record tokens before resuming work.
+
+The recovery buffer is automatically bounded per ID, but removed entries remain recoverable
+until their ID is reused. Backups are not automatically pruned, committed or published and
+may contain older discarded versions. Treat both as sensitive local data. Logical pruning
+is not secure erasure of SQLite pages or existing backups. There is no erasure/purge tool
+in this release; backup cleanup requires a separate explicit decision.
 
 ## On-demand global review
 
-Run `/memory-review` to ask the manager for a **report before any changes**. The read-only
+Run `/memory-review` to ask `memory-reviewer` for a **report before any changes**. This
+dedicated agent has no shell, file-edit, backup or delegation permissions. Even though it
+can read the record tools, those tools reject its save/remove/restore calls by agent identity.
+This remains an application-level boundary, not an OS sandbox.
+
+The read-only
 `memory-review` tool inventories all topics and counts, in pages; it does not judge content
-or invoke an agent. The manager then reads every knowledge entry with the existing tools,
+or invoke an agent. The reviewer then reads every knowledge entry with the existing tools,
 checking duplicates across topics, contradictions, obsolete claims and useful missing facts.
 Tasks are consulted only for context or affected references, not audited or changed.
 
@@ -123,10 +182,11 @@ the inventory reports a blocker instead of creating or migrating a store.
 
 | Tool | Actions | Record fields |
 |---|---|---|
-| `task-board` | `list`, `get`, `save` | `id`, `title`, `status`, `description`; updates require the task's `expectedVersion` |
-| `knowledge` | `topics`, `list`, `search`, `get`, `save`, `remove` | `id`, `topic`, `title`, `content`; `query` searches text |
+| `task-board` | `list`, `get`, `history`, `save`, `restore` | `id`, `title`, `status`, `description`; updates/restores require `expectedVersion` |
+| `knowledge` | `topics`, `list`, `search`, `get`, `history`, `save`, `remove`, `restore` | `id`, `topic`, `title`, `content`; `query` searches text |
 | `memory-overview` | none | Read-only store path, task counts by status and knowledge topics |
 | `memory-review` | `page` | Read-only inventory: `knowledgeCount`, `topicCount`, `topics` and `nextPage` |
+| `memory-backup` | none | Manager-only verified standalone backup; returns `path` and `bytes` |
 
 `task-board`, `knowledge` and `memory-overview` return Markdown; their write actions return
 JSON receipts. `expectedVersion` guards updates. Task lists filter by `status`; knowledge
@@ -136,8 +196,20 @@ Use `memory-overview` to consult memory and `memory-review` only to prepare a cl
 ## Storage and upgrades
 
 One SQLite database lives at `<canonical-project>/.opencode/memory/memory.db`, shared
-across project worktrees. New stores contain only `tasks` and `knowledge`, with internal
-versions and timestamps. Reports and session history remain separate.
+across project worktrees. Schema 4 contains `tasks`, `knowledge`, bounded recovery snapshots in
+`memory_revisions`, and a rebuildable FTS5 search index. Reports and conversation history
+remain separate. This adds no background capture, embeddings, context injection or graph.
+
+The first write to schema 2 creates a verified standalone
+`memory.db.pre-reliability-<unique-id>.bak` before adding history and search transactionally.
+Current IDs, contents and versions are preserved, existing records seed the recovery history,
+and existing knowledge is indexed. Earlier overwritten or removed contents cannot be reconstructed.
+
+For schema 3 stores with complete history, the first write creates a verified
+`memory.db.pre-bounded-history-<unique-id>.bak`, then transactionally limits live records to
+current + previous and removed knowledge to its last saved version plus removal metadata.
+Obsolete removal events are discarded, without changing current IDs, versions, contents or
+search. The pre-upgrade backup retains the older history. Reads do not trigger this pruning.
 
 On first write access to the previous structured schema, Froggy creates and verifies a standalone
 `memory.db.pre-simple-<unique-id>.bak` before converting in a transaction. Task details and
@@ -154,6 +226,5 @@ nor deleted automatically. A project still using them needs an explicit migratio
 simultaneously authoritative stores. The database and its backups are local project data:
 code commits do not protect them unless explicitly included.
 
-Progress-note removal adds no migration, schema version or compatibility layer. Existing
-databases and backups are not rewritten, and former task-note content is not copied into
-descriptions. The removed actions and fields are rejected rather than silently ignored.
+Former task progress notes are not copied into descriptions or imported into recovery history.
+The retired progress-note actions and fields remain rejected rather than silently ignored.

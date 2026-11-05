@@ -106,13 +106,13 @@ describe("knowledge markdown reads", () => {
     expect(content).not.toContain("| runtime |")
   })
 
-  it("requires a version for permanent removal", async () => {
+  it("requires a version for removal", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "K", title: "Knowledge", topic: "constraints", content: "Keep." }, context)
     await expect(memory.execute({ action: "remove", id: "K" }, context)).rejects.toThrow("expectedVersion is required")
   })
 
-  it.each(["overview", "history"])("rejects removed action %s", async (action) => {
+  it.each(["overview", "unknown"])("rejects unsupported action %s", async (action) => {
     await expect(tool().execute({ action }, context)).rejects.toThrow("action must be")
   })
 
@@ -126,7 +126,7 @@ describe("knowledge markdown reads", () => {
 })
 
 describe("knowledge writes", () => {
-  it("permanently removes knowledge from reads and search", async () => {
+  it("removes knowledge from current reads and search", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "wrong", title: "Refuted trick", topic: "performance", content: "Unnecessary workaround." }, context)
     expect(JSON.parse((await memory.execute({ action: "remove", id: "wrong", expectedVersion: 1 }, context)).content)).toMatchObject({ id: "wrong", removed: true })

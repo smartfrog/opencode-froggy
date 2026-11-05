@@ -21,8 +21,8 @@ afterEach(() => {
 })
 
 describe("task-board without progress notes", () => {
-  it("exposes only task reads and saves", () => {
-    expect(tool().input.properties.action.enum).toEqual(["list", "get", "save"])
+  it("exposes task reads, saves and recovery without progress notes", () => {
+    expect(tool().input.properties.action.enum).toEqual(["list", "get", "history", "save", "restore"])
   })
 
   it.each(["note", "noteId", "noteIds"])("does not expose the retired %s field", (field) => {
@@ -31,7 +31,7 @@ describe("task-board without progress notes", () => {
 
   it.each(["note", "edit-note", "remove-notes"])("rejects retired action %s before opening memory", async (action) => {
     const memory = tool()
-    await expect(memory.execute({ action, id: "T" }, context)).rejects.toThrow("action must be list, get, save")
+    await expect(memory.execute({ action, id: "T" }, context)).rejects.toThrow("action must be")
     expect(existsSync(join(directories.at(-1)!, ".opencode"))).toBe(false)
   })
 })
@@ -49,7 +49,7 @@ describe("task-board validation", () => {
     expect(existsSync(join(directories.at(-1)!, ".opencode"))).toBe(false)
   })
 
-  it.each(["objective", "expectedRevision", "field", "item", "offset", "page", "format", "note", "noteId", "noteIds"])("rejects removed parameter %s rather than ignoring it", async (field) => {
+  it.each(["objective", "expectedRevision", "field", "item", "page", "format", "note", "noteId", "noteIds"])("rejects removed parameter %s rather than ignoring it", async (field) => {
     const memory = tool()
     await expect(memory.execute({ action: "save", id: "T", title: "Task", [field]: "old" }, context)).rejects.toThrow("Unsupported memory parameter")
     expect(existsSync(join(directories.at(-1)!, ".opencode"))).toBe(false)

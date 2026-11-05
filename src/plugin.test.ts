@@ -101,7 +101,7 @@ describe("plugin setup", () => {
     const state = fixture()
     await state.start()
     expect([...state.tools.keys()].sort()).toEqual([
-      "agent-promote", "gitingest", "knowledge", "list-child-sessions", "memory-overview",
+      "agent-promote", "gitingest", "knowledge", "list-child-sessions", "memory-backup", "memory-overview",
       "memory-review", "orchestrator-status", "pdf-to-markdown", "session-context",
       "start-orchestrator-loop", "stop-orchestrator-loop", "task-board",
     ])

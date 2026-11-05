@@ -125,8 +125,8 @@ describe("global knowledge review inventory", () => {
 })
 
 describe("memory review command", () => {
-  it("runs the report through the memory manager in a child session", () => {
+  it("runs the report through the read-only reviewer in a child session", () => {
     const commands = loadCommands(fileURLToPath(new URL("../../command/", import.meta.url)))
-    expect(commands["memory-review"]).toMatchObject({ agent: "memory-manager", subagent: true })
+    expect(commands["memory-review"]).toMatchObject({ agent: "memory-reviewer", subagent: true })
   })
 })
