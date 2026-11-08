@@ -5,9 +5,9 @@ The goal is to recover what matters, not to preserve a journal of everything tha
 
 ```mermaid
 flowchart LR
-    O[Orchestrator: execution and task prose] -->|save| T[Current task descriptions]
-    O -->|useful knowledge candidates| M[Memory manager: curate]
-    M -->|delegated consolidation| T
+    O[Orchestrator: execution and task state] -->|small known deltas| T[Current task descriptions]
+    O -->|knowledge candidates or substantial task work| M[Memory manager: curate]
+    M -->|delegated synthesis| T
     M --> K[Project knowledge]
     A[All agents] -->|read| T
     A -->|read| K
@@ -60,9 +60,10 @@ The task holds the remaining blocker and next action, not another copy of each t
 
 ## Ownership and curation
 
-All agents read directly. **The orchestrator owns task prose and saves operational state
-through `task-board`**, including review, session, workspace and recovery references.
-The memory-manager handles delegated task consolidation and owns durable knowledge prose.
+All agents may read directly. **The orchestrator owns operational decisions and task state,
+saving small known deltas through `task-board`.** Substantial task-record discovery, rewriting
+or consolidation can be delegated to memory-manager when doing it in the orchestrator would
+pull in large irrelevant content. The manager works in its own context and owns durable knowledge prose.
 Only the manager mutates knowledge, restores either record type or creates verified backups.
 
 Before delegating curation, ask: **what future decision would this knowledge improve?**
@@ -95,9 +96,11 @@ Save and verify merged content before removing duplicates, and reconcile affecte
 references. When uncertain, keep the entry. The handback lists changed IDs, returned
 versions, deletion reasons, conflicts and partial writes.
 
-The coordinator reads back affected records and checks titles, statuses, blockers and next steps
-against its decisions and the supplied evidence, including necessary recovery references. A saved-record
-receipt proves persistence, not that the updated state is coherent or that acceptance was met.
+The writer reads back affected records and checks titles, statuses, blockers, next steps and recovery
+references against the coordinator's decisions and evidence. For delegated work, the manager returns
+compact IDs, versions, result, verification and needed next action. The coordinator checks these and
+requests decision-critical details when needed, not full records by default. A saved-record receipt
+proves persistence, not that the updated state is coherent or that acceptance was met.
 
 Tool checks allow `task-board save` only for the exact current `orchestrator` or `memory-manager`
 agent with a current session. Other mutations remain manager-only; caller-supplied identity fields
@@ -122,10 +125,13 @@ includes metadata, version, character coverage and the next offset; its exact bo
 `--- content ---`. The maximum slice size is 16,000 characters. Continue using the returned
 offset and the same `version`; a changed record is rejected rather than mixing versions.
 
-Before replacing a description or content, read the full affected record. If any part remains unread
-or inaccessible, stop that replacement and report incomplete coverage; excerpts and summaries
-are not enough. Record `get` shows the current version. Lists are discovery views, not
-immutable snapshots while other sessions write.
+For metadata-only task patches needing no description reconciliation, send only changed fields with
+the current version from a bounded `get` or a receipt; omitted fields stay intact. Verify with a bounded read.
+Any description/content edit, including a reference change, replaces the whole field: the writer
+must have read the full current record, with version-consistent slices if needed. Reuse complete
+current content already in context. If any part remains inaccessible, stop replacement and report
+incomplete coverage; excerpts and summaries are not enough. Lists are discovery views, not immutable
+snapshots while other sessions write.
 
 Each task's metadata and description are read together. The plugin does not cap Markdown
 responses or impose a display-driven limit on descriptions or knowledge content.

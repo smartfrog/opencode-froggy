@@ -75,9 +75,9 @@ Froggy separates **current execution state** from **durable knowledge**:
 | `task-board` | Title, status and one current task description |
 | `knowledge` | Valuable constraints, performance tips, pitfalls and decisions grouped by topic |
 
-Both live in one SQLite database per canonical project, shared across worktrees. All agents may read. The orchestrator owns and saves task prose; `memory-manager` curates knowledge, handles delegated task consolidation, and alone restores records or creates verified backups. Coordinators supply knowledge candidates as verified facts and decisions, not final knowledge prose. Recovery retains only the current and immediately previous version, not a complete history.
+Both live in one SQLite database per canonical project, shared across worktrees. All agents may read. The orchestrator owns operational task state and saves small known deltas; `memory-manager` curates knowledge, handles delegated task discovery and synthesis, and alone restores records or creates verified backups. Coordinators supply knowledge candidates as verified facts and decisions, not final knowledge prose. Recovery retains only the current and immediately previous version, not a complete history.
 
-Read the affected task first, then use knowledge `topics`/`list`/`search` and `get` only what you need. Tools return complete Markdown, but rendering may be truncated: narrow discovery with a status, topic or query and obtain any missing content before replacing a record. If the full read is blocked, report it instead of rewriting from excerpts. Do not load the whole store.
+Read only the relevant task context, then use knowledge `topics`/`list`/`search` and `get` only what you need. Tools return complete Markdown, but rendering may be truncated: narrow discovery with a status, topic or query. The writer must obtain the full current record before replacing its description/content. If that read is blocked, report it instead of rewriting from excerpts. Do not load the whole store.
 
 See [Project memory](docs/memory.md) for the model, curation rules, tools and upgrades. Utility tool parameters are in [Reference](docs/reference.md#utility-tools).
 
@@ -103,14 +103,14 @@ Run `/memory-review` on demand for a global knowledge review. The read-only `mem
 | `doc-writer` | subagent | Technical writer for README, API, architecture, and user documentation. |
 | `code-reviewer` | subagent | Independent review of correctness, regressions, security, and maintainability. |
 | `code-simplifier` | subagent | Simplifies recently modified code while preserving behavior. |
-| `memory-manager` | subagent | Curates knowledge and delegated task consolidations, restores saved versions and creates verified backups. |
+| `memory-manager` | subagent | Curates knowledge and delegated task syntheses, restores saved versions and creates verified backups. |
 | `memory-reviewer` | subagent | Read-only knowledge audit; proposes changes without mutation, backup or delegation access. |
 | `partner` | subagent | Strategic ideation partner that expands solution spaces. Read-only. |
 | `rubber-duck` | subagent | Thinking partner that listens, reflects, and asks focused questions. Read-only. |
 
 ### orchestrator
 
-The `orchestrator` is a primary agent that owns execution decisions and saves current task state directly. It delegates useful knowledge curation and justified task consolidation to `memory-manager`, then reads back affected records to verify their meaning and references. Keep one writer per scoped record until handback. See [Orchestration](docs/orchestration.md).
+The `orchestrator` owns execution decisions and saves small known task deltas directly. It delegates substantial task-record discovery and rewriting to `memory-manager` when that would otherwise pull large irrelevant content into its context. The manager reads and verifies in its own context and returns compact results and needed next actions. Keep one writer per scoped record until handback. See [Orchestration](docs/orchestration.md).
 
 ## Commands
 
