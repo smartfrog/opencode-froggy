@@ -89,7 +89,10 @@ The manager decides what knowledge to add, correct, merge, refuse or remove.
 
 The manager reads required affected current context and searches relevant existing knowledge
 for duplicates before creating or reconciling entries. Reuse complete valid context. Apply task
-selection within scope; preserve operative constraints, scope, negation, uncertainty, operator decisions
+selection within scope to retained existing text as well as incoming facts. Adding accurate new state
+while leaving irrelevant historical narrative is not sufficient curation. If the in-scope task body
+needs consolidation, perform it after the required FULL version-consistent read; use `edit` for genuinely
+local changes. Preserve operative constraints, scope, negation, uncertainty, operator decisions
 and necessary source/recovery references. Important confirmed findings and explicit retention must have
 a reliable home or link; never assume unread knowledge already contains them. Do not invent acceptance,
 authorization, causes or completion. This is selection, not blanket shortening or global pruning;
