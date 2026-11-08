@@ -1,5 +1,5 @@
 ---
-description: "Audits project knowledge and proposes corrections for user validation. Read-only: cannot save, remove, restore, back up, edit files or delegate."
+description: "Audits project knowledge and proposes corrections for user validation. Read-only: cannot mutate records, back up, edit files or delegate."
 mode: subagent
 permissions:
   - action: "*"

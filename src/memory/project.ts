@@ -9,12 +9,12 @@ export interface ProjectMemory {
   store: MemoryStore
 }
 
-export function openProjectMemory(directory: string, options: { readonly?: boolean } = {}): ProjectMemory {
+export function openProjectMemory(directory: string, options: { readonly?: boolean; existing?: boolean } = {}): ProjectMemory {
   if (!directory) throw new Error("A project directory is required")
   const root = realpathSync(directory)
   const memoryDirectory = join(root, ".opencode", "memory")
   assertSafeDirectory(root, memoryDirectory)
-  if (!options.readonly) mkdirSync(memoryDirectory, { recursive: true })
+  if (!options.readonly && !options.existing) mkdirSync(memoryDirectory, { recursive: true })
   assertSafeDirectory(root, memoryDirectory)
 
   const path = join(memoryDirectory, "memory.db")
@@ -22,14 +22,15 @@ export function openProjectMemory(directory: string, options: { readonly?: boole
   assertSafeFile(root, `${path}-wal`)
   assertSafeFile(root, `${path}-shm`)
   assertSafeFile(root, `${path}-journal`)
-  if (options.readonly && !existsSync(path)) throw new Error("No project memory database exists")
+  if ((options.readonly || options.existing) && !existsSync(path)) throw new Error("No project memory database exists")
   const database = openSqlite(path, options.readonly)
   try {
     assertSafeFile(root, path)
     assertSafeFile(root, `${path}-wal`)
     assertSafeFile(root, `${path}-shm`)
     assertSafeFile(root, `${path}-journal`)
-    return { path, store: new MemoryStore(database, path, options.readonly) }
+    const requireCurrentSchema = options.readonly || options.existing
+    return { path, store: new MemoryStore(database, path, requireCurrentSchema) }
   } catch (error) {
     database.close()
     throw error

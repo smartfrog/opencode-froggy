@@ -86,6 +86,14 @@ standalone local backup without changing current records. These capabilities are
 through tools rather than additional slash-command arguments. See
 [Recovery history and backups](memory.md#recovery-history-and-backups).
 
+Both record tools also expose single-ID literal body `grep` (`pattern`, optional `context` 0–10,
+default 2), with current version and merged 1-based body-line context, and manager-only atomic
+exact-text `edit` (`id`, `expectedVersion`, nonempty `edits: [{oldText,newText}]`). Old text must
+match exactly once in the original body; missing, ambiguous or overlapping edits reject the batch.
+All agents may read; only memory-manager saves/edits/removes/restores task or knowledge records.
+Use save for metadata or real consolidation. These are tool actions, not new slash-command
+arguments. See [Literal grep and exact-text edit](memory.md#literal-grep-and-exact-text-edit).
+
 ### /linear-stale-check
 
 Analyzes open Linear issues for the team configured in `AGENTS.md` with:
@@ -121,7 +129,7 @@ Skills are contextual instructions loaded on demand via the `skill` tool. The ag
 | Skill | Description |
 |-------|-------------|
 | `ask-questions-if-underspecified` | Clarify requirements before implementing. Use when serious doubts arise. |
-| `backlog-management` | Ticket responsibilities, proportionate tracking, and adaptive workflow through Linear/Trello MCP or Markdown. |
+| `backlog-management` | Task/knowledge ownership and proportionate tracking through the structured store or an explicitly selected external tracker. |
 | `extreme-programming` | Shared XP values, simple evolving design, short feedback loops, and engineering responsibility. |
 | `implementation-comparison` | Compare candidate implementations when the decision benefits from alternatives. |
 | `tdd` | Short test/code/refactor loops and verification adapted to the change. |

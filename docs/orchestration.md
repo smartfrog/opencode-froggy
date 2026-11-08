@@ -28,20 +28,22 @@ This page explains the working model. It intentionally avoids plugin internals.
 | `orchestrator` | Execution decisions, task state, delegation, integration, final reporting | Product commitments or unverified acceptance |
 | Workers | A bounded deliverable, checks, evidence, blockers | Coordination state or independent approval |
 | `code-reviewer` | Independent review of a non-trivial change set | Implementing the change |
-| `memory-manager` | Durable knowledge prose, delegated task discovery and synthesis, restoration and backups | Execution decisions, authorization, acceptance |
+| `memory-manager` | All task/knowledge writes, scoped curation, restoration and backups | Execution decisions, authorization, acceptance |
 
 The separation is deliberate:
 
-- **The orchestrator decides what is true and what should happen next, and saves small known task deltas directly.**
-- **The memory-manager curates durable knowledge and delegated task syntheses.**
+- **The orchestrator owns execution and acceptance decisions and delegates their persistence.**
+- **The memory-manager is the sole task/knowledge writer and curates scoped prose.**
 - **All agents may read project memory directly.**
-- **Only the memory-manager mutates knowledge, restores records or creates verified backups.**
+- **Only the memory-manager saves, edits, removes or restores records and creates verified backups.**
 
-The orchestrator owns operational task state, including review/session/workspace/recovery references. Metadata-only patches needing no description reconciliation send only changed fields and the current `expectedVersion` from a bounded `get` or a receipt; verify with a bounded read. Any description edit, including references, replaces that field and requires the writer's full, version-consistent current read. The writer reads back the result to verify meaning and references. Conflicts and partial writes remain visible.
+The orchestrator sends affected IDs/fields, intended changes, decisions, facts and evidence to the manager for every write, including review/session/workspace/recovery references. Draft text is allowed; whole-record reconstruction or transmission is not required. The manager reads required affected current context, reusing valid context, and searches relevant existing knowledge for duplicates. Clean only scoped redundancy/obsolete prose and preserve facts, scope, negation, uncertainty, constraints and operator decisions. Do not silently refuse/change execution or acceptance decisions as an editorial preference; report contradictions. All instructions below to record, update or mark task state mean manager persistence, not direct orchestrator writes.
+
+Prefer local exact-text `edit` with relevant context for local changes, `save` for metadata or real consolidation. Reading for understanding is independent of emitting a whole document: whole-description/content replacement still requires a FULL version-consistent read. Single-record literal body `grep` helps locate relevant context and current versions. Conflicts and partial writes remain visible.
 
 Before delegating knowledge curation, ask what future decision it improves. Group available useful candidates in one bounded pass with verified facts, decisions, affected IDs, obsolete conclusions and evidence. Existing-record corrections or explicit memory requests may justify curation; status, tests, reminders, review references or unchanged state alone do not. Persist needed task/recovery references promptly and curate explicit retention requests or important confirmed findings while blocked or in progress, without waiting for done. The manager may return `No change`.
 
-Delegate substantial task discovery, rewriting or consolidation when doing it in the orchestrator would pull in large irrelevant content. The manager reads and verifies in its own context, returning compact IDs, versions, result and needed next action; the orchestrator checks these and requests decision-critical details when needed. Length alone does not justify shortening or discarding content. Keep one writer per scoped record until handback; the orchestrator pauses writes to delegated records. See [Project memory](memory.md) for fidelity and recovery safeguards.
+The manager verifies in its own context and returns compact IDs, versions, outcome, meaningful refused/ambiguous items, blockers and next action. The orchestrator checks the handback and requests decision-critical details only when needed; no full-record echo or parent readback by default. Irrelevant or duplicate knowledge proposals may yield `No change`. Length alone does not justify discarding content. Keep one manager per scoped record until handback. No automatic global sweep or always-new-knowledge rule. See [Project memory](memory.md) for safeguards.
 
 ## Product owner
 
@@ -68,7 +70,7 @@ flowchart LR
 
 Use the product owner when the objective is ambiguous, when priorities or acceptance criteria are missing, or when the work needs a meaningful scope decision. Use the orchestrator when the objective is actionable and the remaining choices are execution details.
 
-The product owner does not write task or knowledge records directly. It supplies product decisions to the orchestrator for task publication and useful knowledge candidates to the memory-manager. Publishing tasks still does not authorize development.
+The product owner does not write task or knowledge records directly. It supplies product decisions for memory-manager publication and hands execution context to the orchestrator. Publishing tasks still does not authorize development.
 
 ## Git flow
 
@@ -93,7 +95,7 @@ flowchart LR
     R -->|corrections| W
     R --> I[Integrate and verify exact revision]
     I --> O
-    O --> T[Save changed task state]
+    O --> T[Memory-manager persists changed task state]
     T --> O
     O --> F[Report outcome and remaining gaps]
 ```
@@ -211,9 +213,11 @@ sequenceDiagram
     O->>W: Inspect activity and results
     W-->>O: Evidence, blockers, next facts
     opt Changed operational state
-        O->>T: Save small known task deltas directly
+        O->>M: IDs, intended task changes and evidence
+        M->>T: Guarded task write and verify
+        M-->>O: Compact IDs, versions and outcome
     end
-    opt Useful knowledge or substantial task work
+    opt Useful knowledge
         O->>M: Delegate one bounded memory pass
         M-->>O: Compact result and versions, or No change
     end
@@ -224,7 +228,7 @@ The reminder asks the orchestrator to:
 
 - inspect current worker and background activity;
 - reconcile results, reviews, and blockers;
-- save small known task deltas or delegate substantial record work;
+- send changed task state to memory-manager; group useful knowledge candidates when justified;
 - release eligible workspaces;
 - advance the next useful action without waiting for another user prompt.
 
@@ -270,7 +274,7 @@ With `orchestrator` selected, say **“Automatic mode”** to delegate remaining
 | Relying on an implementer's summary | Review the diff and checks |
 | Running checks on a different revision | Verify exact SHA and working-tree state |
 | Keeping a workspace because a session is inactive | Check background users and evidence, then reconcile explicitly |
-| Delegating trivial known status updates to the memory-manager | Save known metadata patches directly; delegate substantial record work or useful curation |
+| Writing task metadata directly as orchestrator | Send IDs, changed fields, decisions and evidence to the sole memory-manager writer |
 | Recording a chronology in every ticket | Keep a current snapshot and link detailed evidence |
 | Skipping review for agent/configuration changes | Review non-trivial changes of every kind |
 

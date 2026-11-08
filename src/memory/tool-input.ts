@@ -14,14 +14,6 @@ export function requireMemoryWriter(value: unknown): void {
   requireMemorySession(current.session)
 }
 
-export function requireTaskSaver(value: unknown): void {
-  const current = agentContext(value)
-  if (current.agent !== "orchestrator" && current.agent !== "memory-manager") {
-    throw new Error("Only orchestrator or memory-manager may save tasks")
-  }
-  requireMemorySession(current.session)
-}
-
 function requireMemorySession(session: string): void {
   if (!session) throw new Error("A current session is required to change project memory")
 }

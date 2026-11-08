@@ -13,8 +13,10 @@ const writer = { agent: "memory-manager", sessionID: "ses_writer" }
 const reviewer = { agent: "memory-reviewer", sessionID: "ses_review" }
 const mutations = [
   { tool: "tasks", input: { action: "save", id: "T", expectedVersion: 2, description: "Unintended update." } },
+  { tool: "tasks", input: { action: "edit", id: "T", expectedVersion: 2, edits: [{ oldText: "Current", newText: "Wrong" }] } },
   { tool: "tasks", input: { action: "restore", id: "T", expectedVersion: 2, restoreVersion: 1 } },
   { tool: "knowledge", input: { action: "save", id: "K", expectedVersion: 2, content: "Unintended update." } },
+  { tool: "knowledge", input: { action: "edit", id: "K", expectedVersion: 2, edits: [{ oldText: "Current", newText: "Wrong" }] } },
   { tool: "knowledge", input: { action: "remove", id: "K", expectedVersion: 2 } },
   { tool: "knowledge", input: { action: "restore", id: "K", expectedVersion: 2, restoreVersion: 1 } },
   { tool: "backup", input: {} },
@@ -78,11 +80,10 @@ describe("versioned content slices", () => {
 })
 
 describe("history tools", () => {
-  it("lets the memory manager restore a task saved by the orchestrator", async () => {
+  it("lets the memory manager restore a task", async () => {
     const { tasks } = fixture()
-    const orchestrator = { agent: "orchestrator", sessionID: "ses_orchestrator" }
-    const first = JSON.parse((await tasks.execute({ action: "save", id: "T", title: "Task", description: "Keep recovery references." }, orchestrator)).content)
-    const second = JSON.parse((await tasks.execute({ action: "save", id: "T", description: "Wrong.", expectedVersion: first.version }, orchestrator)).content)
+    const first = JSON.parse((await tasks.execute({ action: "save", id: "T", title: "Task", description: "Keep recovery references." }, writer)).content)
+    const second = JSON.parse((await tasks.execute({ action: "save", id: "T", description: "Wrong.", expectedVersion: first.version }, writer)).content)
     const restored = JSON.parse((await tasks.execute({ action: "restore", id: "T", restoreVersion: first.version, expectedVersion: second.version }, writer)).content)
     expect(restored.version).toBeGreaterThan(second.version)
     expect((await tasks.execute({ action: "get", id: "T" }, reviewer)).content).toContain("Keep recovery references.")
@@ -134,16 +135,15 @@ describe("read-only audit identity", () => {
 })
 
 describe.each(["orchestrator", "build", "general", "code-reviewer", "memory-reviewer", "product-owner"])("memory write permissions for %s", (agent) => {
-  const denied = mutations.filter(({ tool, input }) => !(agent === "orchestrator" && tool === "tasks" && input.action === "save"))
   const caller = { agent, sessionID: "ses_caller" }
 
-  it.each(denied)("rejects %j without creating a store", async ({ tool, input }) => {
+  it.each(mutations)("rejects %j without creating a store", async ({ tool, input }) => {
     const state = fixture()
     await expect(state[tool].execute(input, caller)).rejects.toThrow("Only")
     expect(existsSync(join(state.directory, ".opencode"))).toBe(false)
   })
 
-  it.each(denied)("rejects %j without changing existing memory or backups", async ({ tool, input }) => {
+  it.each(mutations)("rejects %j without changing existing memory or backups", async ({ tool, input }) => {
     const state = fixture()
     await state.tasks.execute({ action: "save", id: "T", title: "Task", description: "Original scope." }, writer)
     await state.tasks.execute({ action: "save", id: "T", expectedVersion: 1, description: "Current scope." }, writer)

@@ -26,6 +26,6 @@ Define initial tickets using the backlog contract. Prioritize by value and risk 
 
 Publish the requested artifacts within the user's mandate and report scope, order, and meaningful decisions. Do not add a separate approval ceremony when the request already authorizes the work. Label speculative or unresolved proposals as drafts.
 
-Publish through the selected backend using its write-verification guidance. Report actual links or paths and failures. Hand off scope, criteria, priorities, dependencies, and unresolved decisions to `orchestrator`.
+For the built-in backlog, send IDs, intended fields, product decisions and evidence to memory-manager for publication; all agents may read, but only memory-manager writes task/knowledge records. External backends retain their established ownership and write-verification rules. Report actual links or paths and failures. Hand off scope, criteria, priorities, dependencies, and unresolved decisions to `orchestrator`.
 
 Use actual user feedback and product discoveries from execution to revise upcoming work with the user. Technical ticket adjustments follow the backlog's authority rules. Publishing the backlog does not automatically start execution.

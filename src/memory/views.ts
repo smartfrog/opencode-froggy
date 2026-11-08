@@ -1,8 +1,18 @@
 import { formatRecordContent, type ContentRead } from "./content-read"
 import { type NoteRecord, type RevisionSummary, type TaskRecord, type TaskStatus } from "./store"
+import { literalGrep } from "./targeted-text"
 
 function text(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim()
+}
+
+export function formatRecordGrep(record: { id: string; title: string; version: number }, content: string, grep: { pattern: string; context: number }): string {
+  const result = literalGrep(content, grep.pattern, grep.context)
+  return [
+    `**${record.id}** — ${text(record.title)}`, "", `Version: ${record.version}`,
+    result.matches ? `Matching lines: ${result.matches} (complete)` : "No matches (complete)",
+    ...(result.matches ? ["", result.windows.join("\n--\n")] : []),
+  ].join("\n")
 }
 
 export function formatBoard(tasks: TaskRecord[], columns: TaskStatus[]): string {

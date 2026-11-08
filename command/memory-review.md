@@ -6,7 +6,7 @@ subagent: true
 
 # Global knowledge review — report only
 
-Review all project knowledge on explicit user request as the read-only memory-reviewer. Produce a report only. Record tools reject your save/remove/restore calls; do not create backups, edit files, delegate or create a second memory store. Invoking this command is not approval to apply changes. Even if command arguments request application, report proposals and stop; application requires separate user validation and a distinct memory-manager pass after the report.
+Review all project knowledge on explicit user request as the read-only memory-reviewer. Produce a report only. Record tools reject your save/edit/remove/restore calls; do not create backups, edit files, delegate or create a second memory store. Invoking this command is not approval to apply changes. Even if command arguments request application, report proposals and stop; application requires separate user validation and a distinct memory-manager pass after the report.
 
 ## Read the whole scope
 

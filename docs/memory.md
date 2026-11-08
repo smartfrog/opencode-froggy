@@ -5,9 +5,8 @@ The goal is to recover what matters, not to preserve a journal of everything tha
 
 ```mermaid
 flowchart LR
-    O[Orchestrator: execution and task state] -->|small known deltas| T[Current task descriptions]
-    O -->|knowledge candidates or substantial task work| M[Memory manager: curate]
-    M -->|delegated synthesis| T
+    O[Orchestrator: execution and task state] -->|IDs, intended changes, facts and evidence| M[Memory manager: sole writer]
+    M --> T[Current task descriptions]
     M --> K[Project knowledge]
     A[All agents] -->|read| T
     A -->|read| K
@@ -23,8 +22,8 @@ Keep session/workspace references there when needed to resume work. Title, statu
 description must agree with the current established state: replace obsolete blockers,
 assignments and former current-state sections rather than keeping a succession of snapshots.
 There are no task notes, update feeds or history sections. `save` replaces supplied fields;
-it does not append a timeline. Read the current task with `get`, then replace its description
-using the returned `expectedVersion`. Keep unique constraints, unresolved risks and recovery
+it does not append a timeline. The manager reads required current context, then uses local `edit`
+or a consolidated `save` with current `expectedVersion`. Keep unique constraints, unresolved risks and recovery
 links when removing obsolete prose. Detailed trials stay in linked reports; do not create
 reports merely to relocate redundant updates.
 
@@ -60,30 +59,32 @@ The task holds the remaining blocker and next action, not another copy of each t
 
 ## Ownership and curation
 
-All agents may read directly. **The orchestrator owns operational decisions and task state,
-saving small known deltas through `task-board`.** Substantial task-record discovery, rewriting
-or consolidation can be delegated to memory-manager when doing it in the orchestrator would
-pull in large irrelevant content. The manager works in its own context and owns durable knowledge prose.
-Only the manager mutates knowledge, restores either record type or creates verified backups.
+All agents retain direct on-demand reads. **Only memory-manager writes tasks and knowledge,**
+including metadata, review/session/workspace/recovery references and delivery transitions.
+The orchestrator owns operational execution and acceptance decisions; the manager must not
+silently refuse or change them as an editorial preference. Report contradictions or ambiguities.
+The manager works in its own context, curates scoped prose, restores records and creates verified backups.
 
-Before delegating curation, ask: **what future decision would this knowledge improve?**
+Before delegating knowledge curation, ask: **what future decision would this improve?**
 An existing-record correction or explicit memory request may justify a pass. Status, tests,
 reminders, review references or unchanged state alone do not. Group available useful knowledge
 candidates in one bounded pass, supplying verified facts, decisions, obsolete conclusions,
-affected IDs and evidence—not final knowledge prose or a transcript.
+affected IDs/fields, intended changes and evidence. Draft text is allowed; the orchestrator
+need not reconstruct or send whole records. Do not send a whole transcript.
 Persist needed task/recovery references promptly. Explicit retention requests and important
 confirmed findings warrant curation even while blocked or in progress; do not wait for done
 or other deliveries. Passing tests alone do not establish a reusable lesson.
 
 Delegate task consolidation only for a concrete benefit such as demonstrated redundancy or
-obsolete state, not length alone. Keep one writer per scoped record until handback: the
-orchestrator pauses its writes to records delegated to the manager. Grouping records does not
+obsolete state, not length alone. Keep one manager per scoped record until handback. Grouping records does not
 make the pass atomic; report conflicts and partial writes rather than forcing or blindly retrying.
 The manager decides what knowledge to add, correct, merge, refuse or remove.
 `No change` is a valid result; quantity is not a quality measure.
 
-Before creating an entry, the manager searches for an existing home. It preserves uncertainty
-and does not invent acceptance or authorization. Old or rarely read knowledge is not
+The manager reads required affected current context and searches relevant existing knowledge
+for duplicates before creating or reconciling entries. Reuse complete valid context. Clean only
+scoped redundancy or obsolete prose; preserve facts, scope, negation, uncertainty, constraints
+and operator decisions. Do not invent acceptance or authorization. Old or rarely read knowledge is not
 automatically useless. Unique constraints, unresolved risks and recovery information stay
 unless explicit evidence supersedes them. Preserve recoverability, not exhaustive chronology;
 size alone is not a deletion criterion. Explicit user retention instructions still apply.
@@ -98,12 +99,13 @@ versions, deletion reasons, conflicts and partial writes.
 
 The writer reads back affected records and checks titles, statuses, blockers, next steps and recovery
 references against the coordinator's decisions and evidence. For delegated work, the manager returns
-compact IDs, versions, result, verification and needed next action. The coordinator checks these and
-requests decision-critical details when needed, not full records by default. A saved-record receipt
+compact IDs, versions, outcome, verification, meaningful refused or ambiguous items, blockers and
+next action. The coordinator checks these and requests decision-critical details when needed,
+not full-record echoes or parent readback by default. A saved-record receipt
 proves persistence, not that the updated state is coherent or that acceptance was met.
 
-Tool checks allow `task-board save` only for the exact current `orchestrator` or `memory-manager`
-agent with a current session. Other mutations remain manager-only; caller-supplied identity fields
+Tool checks allow all task/knowledge mutations only for the exact current `memory-manager`
+agent with a current session. Caller-supplied identity fields
 cannot grant access. This is not an OS sandbox: agents must not bypass the tools with SQL, shell or file edits.
 
 ## Reading and writing
@@ -125,13 +127,46 @@ includes metadata, version, character coverage and the next offset; its exact bo
 `--- content ---`. The maximum slice size is 16,000 characters. Continue using the returned
 offset and the same `version`; a changed record is rejected rather than mixing versions.
 
-For metadata-only task patches needing no description reconciliation, send only changed fields with
-the current version from a bounded `get` or a receipt; omitted fields stay intact. Verify with a bounded read.
-Any description/content edit, including a reference change, replaces the whole field: the writer
-must have read the full current record, with version-consistent slices if needed. Reuse complete
-current content already in context. If any part remains inaccessible, stop replacement and report
-incomplete coverage; excerpts and summaries are not enough. Lists are discovery views, not immutable
-snapshots while other sessions write.
+The manager uses `save` with only changed fields for metadata; omitted fields stay intact.
+Prefer `edit` for local body changes and `save` for real consolidation. Reading for understanding
+is independent of emitting a whole document: targeted edits can use sufficient relevant context,
+while whole-description/content replacement requires a FULL version-consistent current read.
+Reuse complete valid context already available. If any part remains inaccessible, stop whole
+replacement and report incomplete coverage; excerpts and summaries are not enough. Lists are
+discovery views, not immutable snapshots while other sessions write.
+
+### Literal grep and exact-text edit
+
+Both tools support `grep` on ONE required `id`, searching only the current task description or
+knowledge content, not metadata or other records. `pattern` is a nonempty case-sensitive literal;
+CR/LF in the pattern is rejected. No regex, flags, sed or interpreter is involved. `context` is a
+safe integer 0–10, default 2. Output includes ID/title/current version, matching-line count or
+clear no-matches, and 1-based BODY line numbers. Adjacent/overlapping context windows are merged
+without duplicate lines; separated windows use `--`. Lines split on LF; CR from CRLF is preserved,
+as are Unicode and a final empty line. Output is complete without hidden clipping. If the client
+truncates rendering, do not treat its visible excerpt as complete. Like other reads, grep never
+creates or migrates a store and reports missing/outdated stores.
+
+Manager-only `edit` requires an existing `id`, current `expectedVersion`, and nonempty `edits`:
+
+```json
+{"action":"edit","id":"TASK-1","expectedVersion":3,"edits":[{"oldText":"Pending review.","newText":"Review: ses_review; findings resolved."}]}
+```
+
+Only description/content changes; metadata patches remain `save`. Each oldText is a nonempty
+string, newText is any string, subject to existing record constraints (knowledge content cannot
+become blank). Every oldText must occur exactly once in ORIGINAL content, counting overlapping
+occurrences too. Missing/ambiguous matches and overlapping edits reject the whole batch. All
+matches are determined before replacements: newText cannot create later matches. Untouched text
+and literal replacement characters such as `$&` and backslashes are preserved exactly, including
+multiline/Unicode/CRLF text. Stale/invalid versions are rejected before matching. A failed batch
+does not change content, metadata, version, history or search. Successful edits use the existing
+transactional save/history/index path and return a compact JSON receipt, not the document.
+An identical effective result preserves timestamp/version/history/index, with stale guards first.
+Edit requires an existing current-schema store: it never creates or migrates one. Existing `save`
+upgrade behavior remains unchanged, so a failed edit cannot trigger an upgrade as a side effect.
+Grep accepts only action/id/pattern/context; edit accepts only action/id/expectedVersion/edits.
+New parameters on other actions, or read/slice/metadata parameters on edit, are rejected.
 
 Each task's metadata and description are read together. The plugin does not cap Markdown
 responses or impose a display-driven limit on descriptions or knowledge content.
@@ -140,8 +175,8 @@ Create records without `expectedVersion`. Updating or removing an existing recor
 its current version. Versions are opaque conflict guards and recovery identifiers; never calculate
 the next value. On conflict, report it and reread before deciding how to reconcile.
 
-After validation, a `save` whose merged fields equal the current record is a no-op,
-including empty patches. It returns the existing ID and version with `created: false`,
+After validation, a `save` whose merged fields equal the current record (including an empty patch),
+or an effective identical `edit`, is a no-op. It returns the existing ID and version with `created: false`,
 without changing timestamps, recovery history or the search index. The current
 `expectedVersion` is still required; stale or invalid tokens are rejected.
 
@@ -193,7 +228,7 @@ in this release; backup cleanup requires a separate explicit decision.
 
 Run `/memory-review` to ask `memory-reviewer` for a **report before any changes**. This
 dedicated agent has no shell, file-edit, backup or delegation permissions. Even though it
-can read the record tools, those tools reject its save/remove/restore calls by agent identity.
+can read the record tools, those tools reject its save/edit/remove/restore calls by agent identity.
 This remains an application-level boundary, not an OS sandbox.
 
 The read-only
@@ -212,8 +247,8 @@ the inventory reports a blocker instead of creating or migrating a store.
 
 | Tool | Actions | Record fields |
 |---|---|---|
-| `task-board` | `list`, `get`, `history`, `save`, `restore` | `id`, `title`, `status`, `description`; updates/restores require `expectedVersion` |
-| `knowledge` | `topics`, `list`, `search`, `get`, `history`, `save`, `remove`, `restore` | `id`, `topic`, `title`, `content`; `query` searches text |
+| `task-board` | `list`, `get`, `grep`, `history`, `save`, `edit`, `restore` | `id`, `title`, `status`, `description`; updates/edits/restores require `expectedVersion` |
+| `knowledge` | `topics`, `list`, `search`, `get`, `grep`, `history`, `save`, `edit`, `remove`, `restore` | `id`, `topic`, `title`, `content`; `query` searches text |
 | `memory-overview` | none | Read-only store path, task counts by status and knowledge topics |
 | `memory-review` | `page` | Read-only inventory: `knowledgeCount`, `topicCount`, `topics` and `nextPage` |
 | `memory-backup` | none | Manager-only verified standalone backup; returns `path` and `bytes` |

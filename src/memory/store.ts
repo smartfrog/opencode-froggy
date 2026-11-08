@@ -2,6 +2,7 @@ import { asRecord } from "../record"
 import { backupDatabase } from "./backup"
 import { initializeMemory } from "./migration"
 import { type SqliteDatabase } from "./sqlite"
+import { applyTextEdits, type TextEdit } from "./targeted-text"
 
 export const TASK_STATUSES = ["todo", "in-progress", "review", "blocked", "done"] as const
 export type TaskStatus = typeof TASK_STATUSES[number]
@@ -147,6 +148,15 @@ export class MemoryStore {
     return this.transaction(() => this.writeTask(id, patch, expectedVersion))
   }
 
+  editTask(id: string, edits: readonly TextEdit[], expectedVersion: number): SaveResult {
+    return this.transaction(() => {
+      const current = this.getTask(id)
+      if (!current) throw new Error(`Task not found: ${id}`)
+      checkVersion(id, current, expectedVersion)
+      return this.writeTask(id, { description: applyTextEdits(current.description, edits) }, expectedVersion)
+    })
+  }
+
   private writeTask(id: string, patch: TaskPatch, expectedVersion: number | null, restoring = false): SaveResult {
     const current = this.getTask(id)
     checkVersion(id, current, expectedVersion)
@@ -210,6 +220,15 @@ export class MemoryStore {
   saveNote(id: string, patch: NotePatch, expectedVersion: number | null = null): SaveResult {
     assertId(id)
     return this.transaction(() => this.writeNote(id, patch, expectedVersion))
+  }
+
+  editNote(id: string, edits: readonly TextEdit[], expectedVersion: number): SaveResult {
+    return this.transaction(() => {
+      const current = this.getNote(id)
+      if (!current) throw new Error(`Knowledge not found: ${id}`)
+      checkVersion(id, current, expectedVersion)
+      return this.writeNote(id, { content: applyTextEdits(current.content, edits) }, expectedVersion)
+    })
   }
 
   private writeNote(id: string, patch: NotePatch, expectedVersion: number | null, restoring = false): SaveResult {
