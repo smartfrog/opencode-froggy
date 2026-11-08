@@ -17,18 +17,18 @@ flowchart LR
 A task has a stable **ID**, **title**, **status**, and **detailed description**.
 Statuses are `todo`, `in-progress`, `blocked`, `review`, and `done`.
 
-The description explains the objective, scope, acceptance, relevant established facts,
-unresolved problems, confirmed or uncertain causes, useful discoveries and their practical
-consequences, and next technical action. Keep necessary session/workspace/source/evidence/recovery
-references. Title, status and description must agree with the current established state:
-replace superseded accounts rather than keeping successive probes, counts or acceptance/status
-snapshots. Retain a resolved incident only when its cause, conditions or lesson explains a current
-decision or avoids repeating a failure.
+The description states the current objective, any unresolved problem and remaining work.
+Include other facts or uncertainty only when they change how to resume, decide or stay safe,
+or prevent a concrete repeated failure. Preserve operative user constraints, safety limits,
+scope, negation and operator choices. Keep acceptance and necessary owner/session/workspace/source/evidence/recovery
+references compactly available, not as the main narrative. Title, status and description must agree.
+Remove resolved or superseded problems except for residual effects on current work.
+Uniqueness or technical detail alone is not a reason to include a fact.
 There are no task notes, update feeds or history sections. `save` replaces supplied fields;
 it does not append a timeline. The manager reads required current context, then uses local `edit`
-or a consolidated `save` with current `expectedVersion`. Keep unique constraints, unresolved risks and recovery
-links when removing obsolete prose. Detailed trials stay in linked reports; do not create
-reports merely to relocate redundant updates.
+or a consolidated `save` with current `expectedVersion`. Keep operative constraints, unresolved risks and recovery
+links when selecting current content. Detailed fix/review/test/probe chronology stays in existing linked evidence;
+do not create reports merely to relocate redundant updates or delete evidence to shorten a task.
 
 The coordinator decides assignments and acceptance. A dispatched worker is not proof of
 execution, and a passing static check is not proof that the product objective is achieved.
@@ -57,9 +57,9 @@ the replacement instead of appending contradictory verdicts. Keep a refuted lead
 helps avoid repeating a mistake: summarize the failed approach, its conditions and the reason,
 with a source link. Keep detailed trial sequences, timestamps and measurements in linked reports.
 
-For example, when several trials isolate a capture-only crash and validate a local fix,
-retain the failure mechanism, affected configuration, fix, validation limits and report link.
-The task holds the remaining blocker and next action, not another copy of each trial.
+A resolved problem belongs in knowledge only if its reusable cause, pitfall or decision genuinely
+helps future work or avoids a repeated failure. Otherwise leave its resolution in existing linked
+evidence; the task keeps only residual effects on current work, not another copy of the history.
 
 ## Ownership and curation
 
@@ -72,29 +72,31 @@ The manager works in its own context, curates scoped prose, restores records and
 Before delegating knowledge curation, ask: **what future decision would this improve?**
 An existing-record correction or explicit memory request may justify a pass. Status, tests,
 reminders, review references or unchanged state alone do not. Group available useful knowledge
-candidates in one bounded pass, supplying established facts, encountered problems/causes,
-discoveries/consequences, decisions, obsolete conclusions, affected IDs/fields, intended useful
-changes and evidence. Draft text is optional; the orchestrator need not reconstruct or send whole
+candidates in one bounded pass, supplying affected IDs/fields, decision-relevant changes,
+execution decisions, obsolete conclusions and necessary evidence references.
+Draft text is optional; the orchestrator need not reconstruct or send whole
 records. Keep necessary status/session/SHA/recovery references available without retelling unchanged
-metadata or supplying every run/proof receipt as narrative. Do not send a whole transcript.
+metadata or requiring the manager to repeat every test/review fact. Do not send transcripts or operation lists.
 Persist needed task/recovery references promptly. Explicit retention requests and important
 confirmed findings warrant curation even while blocked or in progress; do not wait for done
 or other deliveries. Passing tests alone do not establish a reusable lesson.
 
-Delegate task consolidation only for a concrete benefit such as demonstrated redundancy or
+Delegate task consolidation only for a concrete benefit such as irrelevant detail, redundancy or
 obsolete state, not length alone. Keep one manager per scoped record until handback. Grouping records does not
 make the pass atomic; report conflicts and partial writes rather than forcing or blindly retrying.
 The manager decides what knowledge to add, correct, merge, refuse or remove.
 `No change` is a valid result; quantity is not a quality measure.
 
 The manager reads required affected current context and searches relevant existing knowledge
-for duplicates before creating or reconciling entries. Reuse complete valid context. Clean only
-scoped redundancy or obsolete prose; preserve facts, scope, negation, uncertainty, constraints
-and operator decisions. Do not invent acceptance or authorization. Old or rarely read knowledge is not
-automatically useless. Unique constraints, unresolved risks and recovery information stay
-unless explicit evidence supersedes them. Preserve recoverability, not exhaustive chronology;
-size alone is not a deletion criterion. Explicit user retention instructions still apply.
-If unique information cannot safely be condensed or its evidence is missing, report the
+for duplicates before creating or reconciling entries. Reuse complete valid context. Apply task
+selection within scope; preserve operative constraints, scope, negation, uncertainty, operator decisions
+and necessary source/recovery references. Important confirmed findings and explicit retention must have
+a reliable home or link; never assume unread knowledge already contains them. Do not invent acceptance,
+authorization, causes or completion. This is selection, not blanket shortening or global pruning;
+complex ongoing work may need long operative content. Old or rarely read knowledge is not automatically
+useless. Unique constraints, unresolved risks and recovery information in knowledge stay unless explicit
+evidence supersedes them. Preserve recoverability, not exhaustive chronology; size alone is not a deletion
+criterion. If necessary information cannot safely be condensed or its evidence is missing, report the
 limitation rather than discarding it or inventing a report.
 
 `knowledge remove` removes the entry from current reads and search. Only its last saved version
