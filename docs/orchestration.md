@@ -25,19 +25,23 @@ This page explains the working model. It intentionally avoids plugin internals.
 | Role | Owns | Does not own |
 |---|---|---|
 | `product-owner` | Product intent, scope, priorities, acceptance | Implementation or delivery claims |
-| `orchestrator` | Execution decisions, delegation, integration, final reporting | Product commitments or unverified acceptance |
+| `orchestrator` | Execution decisions, task prose and state, delegation, integration, final reporting | Product commitments or unverified acceptance |
 | Workers | A bounded deliverable, checks, evidence, blockers | Coordination state or independent approval |
 | `code-reviewer` | Independent review of a non-trivial change set | Implementing the change |
-| `memory-manager` | Faithful task and knowledge records | Execution decisions, authorization, acceptance |
+| `memory-manager` | Durable knowledge prose, delegated task consolidation, restoration and backups | Execution decisions, authorization, acceptance |
 
 The separation is deliberate:
 
-- **The orchestrator decides what is true and what should happen next.**
-- **The memory-manager records that decision consistently.**
+- **The orchestrator decides what is true and what should happen next, and saves task state directly.**
+- **The memory-manager curates durable knowledge and delegated task consolidations.**
 - **All agents may read project memory directly.**
-- **Only the memory-manager saves tasks or knowledge through the structured tools.**
+- **Only the memory-manager mutates knowledge, restores records or creates verified backups.**
 
-A coordinator does not write memory prose itself. It supplies verified facts, decisions, affected record IDs, obsolete state, and evidence references; the memory-manager reconciles the record and returns a compact receipt.
+The orchestrator owns task prose, including review/session/workspace/recovery references. It reads the full current record, uses version-consistent slices when needed, saves with the current `expectedVersion`, and reads back the result to verify meaning and references. Conflicts and partial writes remain visible.
+
+Before delegating knowledge curation, ask what future decision it improves. Group available useful candidates in one bounded pass with verified facts, decisions, affected IDs, obsolete conclusions and evidence. Existing-record corrections or explicit memory requests may justify curation; status, tests, reminders, review references or unchanged state alone do not. Persist needed task/recovery references promptly and curate explicit retention requests or important confirmed findings while blocked or in progress, without waiting for done. The manager may return `No change`.
+
+Delegate task consolidation only for a concrete benefit, not length alone. Keep one writer per scoped record until handback; the orchestrator pauses writes to records delegated to the manager. See [Project memory](memory.md) for fidelity and recovery safeguards.
 
 ## Product owner
 
@@ -64,7 +68,7 @@ flowchart LR
 
 Use the product owner when the objective is ambiguous, when priorities or acceptance criteria are missing, or when the work needs a meaningful scope decision. Use the orchestrator when the objective is actionable and the remaining choices are execution details.
 
-The product owner also does not write task or knowledge records directly. It delegates meaningful transitions through the same memory path as every other coordinator.
+The product owner does not write task or knowledge records directly. It supplies product decisions to the orchestrator for task publication and useful knowledge candidates to the memory-manager. Publishing tasks still does not authorize development.
 
 ## Git flow
 
@@ -89,8 +93,8 @@ flowchart LR
     R -->|corrections| W
     R --> I[Integrate and verify exact revision]
     I --> O
-    O --> M[Record meaningful transitions]
-    M --> O
+    O --> T[Save changed task state]
+    T --> O
     O --> F[Report outcome and remaining gaps]
 ```
 
@@ -201,12 +205,18 @@ sequenceDiagram
     participant Timer as Scheduler
     participant O as Orchestrator
     participant W as Workers
+    participant T as Task board
     participant M as Memory manager
     Timer->>O: Short coordination reminder
     O->>W: Inspect activity and results
     W-->>O: Evidence, blockers, next facts
-    O->>M: Delegate meaningful transition
-    M-->>O: Changed IDs, versions, curation decisions
+    opt Changed operational state
+        O->>T: Save task state and references directly
+    end
+    opt Available useful knowledge candidates
+        O->>M: Delegate one bounded curation pass
+        M-->>O: Changed IDs and versions, or No change
+    end
     O->>O: Choose next useful action
 ```
 
@@ -214,7 +224,7 @@ The reminder asks the orchestrator to:
 
 - inspect current worker and background activity;
 - reconcile results, reviews, and blockers;
-- update the backlog through the memory-manager;
+- save changed task state directly through `task-board`;
 - release eligible workspaces;
 - advance the next useful action without waiting for another user prompt.
 
@@ -260,7 +270,7 @@ With `orchestrator` selected, say **“Automatic mode”** to delegate remaining
 | Relying on an implementer's summary | Review the diff and checks |
 | Running checks on a different revision | Verify exact SHA and working-tree state |
 | Keeping a workspace because a session is inactive | Check background users and evidence, then reconcile explicitly |
-| Letting the orchestrator rewrite memory directly | Delegate the transition to the memory-manager |
+| Delegating status-only task updates to the memory-manager | Save task state directly; delegate useful curation or justified consolidation |
 | Recording a chronology in every ticket | Keep a current snapshot and link detailed evidence |
 | Skipping review for agent/configuration changes | Review non-trivial changes of every kind |
 

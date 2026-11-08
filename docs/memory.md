@@ -5,8 +5,9 @@ The goal is to recover what matters, not to preserve a journal of everything tha
 
 ```mermaid
 flowchart LR
-    C[Coordinator: facts and decisions] --> M[Memory manager: curate]
-    M --> T[Current task descriptions]
+    O[Orchestrator: execution and task prose] -->|save| T[Current task descriptions]
+    O -->|useful knowledge candidates| M[Memory manager: curate]
+    M -->|delegated consolidation| T
     M --> K[Project knowledge]
     A[All agents] -->|read| T
     A -->|read| K
@@ -57,12 +58,27 @@ For example, when several trials isolate a capture-only crash and validate a loc
 retain the failure mechanism, affected configuration, fix, validation limits and report link.
 The task holds the remaining blocker and next action, not another copy of each trial.
 
-## The memory manager decides
+## Ownership and curation
 
-All agents read directly. **Only `memory-manager` writes tasks and knowledge.**
-The coordinator supplies verified new facts, decisions, obsolete conclusions, bounded scope
-and evidence—not final prose to copy or a requirement to preserve every previous chain.
-The manager decides what to add, correct, merge, refuse or remove.
+All agents read directly. **The orchestrator owns task prose and saves operational state
+through `task-board`**, including review, session, workspace and recovery references.
+The memory-manager handles delegated task consolidation and owns durable knowledge prose.
+Only the manager mutates knowledge, restores either record type or creates verified backups.
+
+Before delegating curation, ask: **what future decision would this knowledge improve?**
+An existing-record correction or explicit memory request may justify a pass. Status, tests,
+reminders, review references or unchanged state alone do not. Group available useful knowledge
+candidates in one bounded pass, supplying verified facts, decisions, obsolete conclusions,
+affected IDs and evidence—not final knowledge prose or a transcript.
+Persist needed task/recovery references promptly. Explicit retention requests and important
+confirmed findings warrant curation even while blocked or in progress; do not wait for done
+or other deliveries. Passing tests alone do not establish a reusable lesson.
+
+Delegate task consolidation only for a concrete benefit such as demonstrated redundancy or
+obsolete state, not length alone. Keep one writer per scoped record until handback: the
+orchestrator pauses its writes to records delegated to the manager. Grouping records does not
+make the pass atomic; report conflicts and partial writes rather than forcing or blindly retrying.
+The manager decides what knowledge to add, correct, merge, refuse or remove.
 `No change` is a valid result; quantity is not a quality measure.
 
 Before creating an entry, the manager searches for an existing home. It preserves uncertainty
@@ -79,12 +95,13 @@ Save and verify merged content before removing duplicates, and reconcile affecte
 references. When uncertain, keep the entry. The handback lists changed IDs, returned
 versions, deletion reasons, conflicts and partial writes.
 
-The coordinator checks the resulting affected titles, statuses, blockers and next steps against
-its decisions and the supplied evidence, including necessary recovery references. A saved-record
+The coordinator reads back affected records and checks titles, statuses, blockers and next steps
+against its decisions and the supplied evidence, including necessary recovery references. A saved-record
 receipt proves persistence, not that the updated state is coherent or that acceptance was met.
 
-Tool checks restrict mutations to the manager's agent context. This is not an OS sandbox:
-agents must not bypass the tools with SQL, shell or file edits.
+Tool checks allow `task-board save` only for the exact current `orchestrator` or `memory-manager`
+agent with a current session. Other mutations remain manager-only; caller-supplied identity fields
+cannot grant access. This is not an OS sandbox: agents must not bypass the tools with SQL, shell or file edits.
 
 ## Reading and writing
 

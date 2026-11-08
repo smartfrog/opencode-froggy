@@ -2,7 +2,7 @@ import { response, textResponse } from "../memory/bounds"
 import { CONTENT_READ_PROPERTIES, contentReadInput, type ContentRead } from "../memory/content-read"
 import { openProjectMemory, type ProjectMemory } from "../memory/project"
 import { TASK_STATUSES, type TaskStatus } from "../memory/store"
-import { inputRecord, recordId, requireMemoryWriter, restoreInput, textPatch, versionInput } from "../memory/tool-input"
+import { inputRecord, recordId, requireMemoryWriter, requireTaskSaver, restoreInput, textPatch, versionInput } from "../memory/tool-input"
 import { formatBoard, formatRevisions, formatTaskDetails } from "../memory/views"
 
 const BOARD_STATUSES = TASK_STATUSES.filter((status) => status !== "done")
@@ -25,7 +25,7 @@ export function createTaskBoardTool(directory: string) {
   return {
     name: "task-board",
     options: { codemode: false },
-    description: "Project tasks: list (without done by default), get (complete or version-checked slices), and history limited to current + one previous version. Only memory-manager saves or restores. Updates and restores require the current expectedVersion; writes return JSON receipts.",
+    description: "Project tasks: list (without done by default), get (complete or version-checked slices), and history limited to current + one previous version. Orchestrator saves operational tasks; memory-manager saves delegated consolidations and alone restores. Writes require a current session and return JSON receipts; updates and restores also require current expectedVersion.",
     input: {
       type: "object",
       properties: {
@@ -45,7 +45,8 @@ export function createTaskBoardTool(directory: string) {
       const args = inputRecord(input, ["action", "id", "title", "status", "description", "expectedVersion", "restoreVersion", "offset", "limit", "version"])
       if (typeof args.action !== "string" || !TASK_ACTIONS.includes(args.action)) throw new Error(`action must be ${TASK_ACTIONS.join(", ")}`)
       const read = args.action === "list" || args.action === "get" || args.action === "history"
-      if (!read) requireMemoryWriter(context)
+      if (args.action === "save") requireTaskSaver(context)
+      else if (!read) requireMemoryWriter(context)
       const expectedVersion = versionInput(args.expectedVersion)
       if (read && expectedVersion !== null) throw new Error("expectedVersion is only valid for writes")
       const contentRead = contentReadInput(args)

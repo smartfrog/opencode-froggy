@@ -8,6 +8,7 @@ import { createTaskBoardTool } from "./task-board"
 
 const directories: string[] = []
 const context = { agent: "memory-manager", sessionID: "ses_test" }
+const orchestrator = { agent: "orchestrator", sessionID: "ses_orchestrator" }
 const reader = { agent: "build", sessionID: "ses_reader" }
 
 function tool() {
@@ -59,18 +60,91 @@ describe("task-board validation", () => {
     await expect(tool().execute({ action: "get", id: "T", expectedVersion: 1 }, context)).rejects.toThrow("only valid for writes")
   })
 
-  it("requires a current session for memory-manager writes", async () => {
-    await expect(tool().execute({ action: "save", id: "T", title: "Task" }, { agent: "memory-manager" })).rejects.toThrow("A current session is required")
+  it.each(["memory-manager", "orchestrator"].flatMap((agent) =>
+    [undefined, "", null, 7, [], {}].map((sessionID) => ({ agent, sessionID })),
+  ))("requires a current session for task saves with %j", async (caller) => {
+    const memory = tool()
+    await expect(memory.execute({ action: "save", id: "T", title: "Task" }, caller)).rejects.toThrow("A current session is required")
+    expect(existsSync(join(directories.at(-1)!, ".opencode"))).toBe(false)
   })
 
-  it("rejects task saves by other agents", async () => {
-    await expect(tool().execute({ action: "save", id: "T", title: "Task" }, reader)).rejects.toThrow("Only memory-manager")
+  it.each([undefined, "", "Orchestrator", "orchestrator-worker", "orchestrator "])("rejects task saves by non-exact agent %j", async (agent) => {
+    const memory = tool()
+    await expect(memory.execute({ action: "save", id: "T", title: "Task" }, { agent, sessionID: "ses_test" })).rejects.toThrow("Only")
+    expect(existsSync(join(directories.at(-1)!, ".opencode"))).toBe(false)
+  })
+
+  it.each([
+    { agent: "orchestrator" },
+    { sessionID: "ses_orchestrator" },
+    { context: orchestrator },
+  ])("rejects forged task-save identity in input %j", async (identity) => {
+    const memory = tool()
+    await expect(memory.execute({ action: "save", id: "T", title: "Task", ...identity }, reader)).rejects.toThrow("Unsupported memory parameter")
+    expect(existsSync(join(directories.at(-1)!, ".opencode"))).toBe(false)
   })
 
   it("reports a missing task", async () => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task" }, context)
     await expect(memory.execute({ action: "get", id: "missing" }, context)).rejects.toThrow("Task not found: missing")
+  })
+})
+
+describe("orchestrator task saves", () => {
+  it("allows the current orchestrator to create a task", async () => {
+    const memory = tool()
+    const receipt = JSON.parse((await memory.execute({
+      action: "save", id: "T", title: "Task", status: "in-progress", description: "Scope and recovery references.",
+    }, orchestrator)).content)
+    expect(receipt).toMatchObject({ id: "T", version: 1, created: true })
+    expect((await memory.execute({ action: "get", id: "T" }, reader)).content).toBe(
+      "**T** — Task\n\nStatus: in-progress\nVersion: 1\n\nScope and recovery references.",
+    )
+  })
+
+  it("allows the orchestrator to update a manager-saved task", async () => {
+    const memory = tool()
+    const first = JSON.parse((await memory.execute({ action: "save", id: "T", title: "Task", description: "Pending." }, context)).content)
+    const updated = JSON.parse((await memory.execute({
+      action: "save", id: "T", expectedVersion: first.version, title: "Ready task", status: "review", description: "Review: ses_review; workspace: /work/task; revision: abc123.",
+    }, orchestrator)).content)
+    expect(updated).toMatchObject({ id: "T", created: false })
+    expect(updated.version).toBeGreaterThan(first.version)
+    expect((await memory.execute({ action: "get", id: "T" }, reader)).content).toBe(
+      `**T** — Ready task\n\nStatus: review\nVersion: ${updated.version}\n\nReview: ses_review; workspace: /work/task; revision: abc123.`,
+    )
+  })
+
+  it("keeps the version and recovery buffer for an identical save", async () => {
+    const memory = tool()
+    const first = JSON.parse((await memory.execute({ action: "save", id: "T", title: "Task", description: "Original scope." }, orchestrator)).content)
+    const original = await memory.execute({ action: "get", id: "T" }, reader)
+    const current = JSON.parse((await memory.execute({ action: "save", id: "T", expectedVersion: first.version, status: "review", description: "Ready for review." }, orchestrator)).content)
+    const history = await memory.execute({ action: "history", id: "T" }, reader)
+    const saved = await memory.execute({ action: "get", id: "T" }, reader)
+
+    const repeated = JSON.parse((await memory.execute({ action: "save", id: "T", expectedVersion: current.version, title: "Task", status: "review", description: "Ready for review." }, orchestrator)).content)
+
+    expect(repeated).toEqual(current)
+    expect(await memory.execute({ action: "get", id: "T" }, reader)).toEqual(saved)
+    expect(await memory.execute({ action: "history", id: "T" }, reader)).toEqual(history)
+    expect(await memory.execute({ action: "history", id: "T", version: first.version }, reader)).toEqual(original)
+  })
+
+  it.each([
+    [{ title: "" }, "title is required"],
+    [{ title: " ".repeat(200) + "Task" }, "title must not exceed"],
+    [{ status: "invalid" }, "Invalid task status"],
+    [{ description: 7 }, "Invalid description"],
+  ] as const)("validates the full orchestrator save for patch %j", async (patch, error) => {
+    const memory = tool()
+    await memory.execute({ action: "save", id: "T", title: "Task" }, context)
+    const saved = await memory.execute({ action: "get", id: "T" }, reader)
+    const history = await memory.execute({ action: "history", id: "T" }, reader)
+    await expect(memory.execute({ action: "save", id: "T", expectedVersion: 1, ...patch }, orchestrator)).rejects.toThrow(error)
+    expect(await memory.execute({ action: "get", id: "T" }, reader)).toEqual(saved)
+    expect(await memory.execute({ action: "history", id: "T" }, reader)).toEqual(history)
   })
 })
 
@@ -203,16 +277,18 @@ describe("task-board current synthesis", () => {
     expect(content).toContain("Status: review")
   })
 
-  it("rejects an update without the task version", async () => {
+  it.each([context, orchestrator])("rejects an update without the task version from %j", async (caller) => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task" }, context)
-    await expect(memory.execute({ action: "save", id: "T", description: "Overwrite." }, context)).rejects.toThrow("provide expectedVersion")
+    await expect(memory.execute({ action: "save", id: "T", description: "Overwrite." }, caller)).rejects.toThrow("provide expectedVersion")
   })
 
-  it("rejects stale task updates", async () => {
+  it.each([context, orchestrator])("rejects stale task updates from %j", async (caller) => {
     const memory = tool()
     await memory.execute({ action: "save", id: "T", title: "Task" }, context)
     await memory.execute({ action: "save", id: "T", expectedVersion: 1, status: "review" }, context)
-    await expect(memory.execute({ action: "save", id: "T", expectedVersion: 1, status: "done" }, context)).rejects.toThrow("expected version 1, current 2")
+    const saved = await memory.execute({ action: "get", id: "T" }, reader)
+    await expect(memory.execute({ action: "save", id: "T", expectedVersion: 1, status: "done" }, caller)).rejects.toThrow("expected version 1, current 2")
+    expect(await memory.execute({ action: "get", id: "T" }, reader)).toEqual(saved)
   })
 })

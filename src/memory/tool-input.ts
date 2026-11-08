@@ -10,8 +10,20 @@ export function agentContext(value: unknown): { agent: string; session: string }
 
 export function requireMemoryWriter(value: unknown): void {
   const current = agentContext(value)
-  if (current.agent !== "memory-manager") throw new Error("Only memory-manager may change project memory")
-  if (!current.session) throw new Error("A current session is required to change project memory")
+  if (current.agent !== "memory-manager") throw new Error("Only memory-manager may perform this memory operation")
+  requireMemorySession(current.session)
+}
+
+export function requireTaskSaver(value: unknown): void {
+  const current = agentContext(value)
+  if (current.agent !== "orchestrator" && current.agent !== "memory-manager") {
+    throw new Error("Only orchestrator or memory-manager may save tasks")
+  }
+  requireMemorySession(current.session)
+}
+
+function requireMemorySession(session: string): void {
+  if (!session) throw new Error("A current session is required to change project memory")
 }
 
 export function inputRecord(value: unknown, fields: string[]): Record<string, unknown> {
