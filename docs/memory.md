@@ -14,21 +14,23 @@ flowchart LR
 
 ## Tasks
 
-A task has a stable **ID**, **title**, **status**, and **detailed description**.
+A task has a stable **ID**, **title**, **status**, and **current description**.
 Statuses are `todo`, `in-progress`, `blocked`, `review`, and `done`.
 
-The description holds scope, acceptance, current state, next step and useful evidence links.
-Keep session/workspace references there when needed to resume work. Title, status and
-description must agree with the current established state: replace obsolete blockers,
-assignments and former current-state sections rather than keeping a succession of snapshots.
+The description holds only scope, acceptance, established state, blocker, next action and
+necessary evidence/recovery links, including session/workspace/revision references needed to resume.
+Parents link children instead of copying their detail. Done tasks retain the accepted result,
+revision, proof, remaining limits and their own recovery/cleanup, not other tasks' stale state.
+Keep title, status and description consistent; replace obsolete state rather than retaining snapshots.
 There are no task notes, update feeds or history sections. `save` replaces supplied fields;
 it does not append a timeline. Read the current task with `get`, then replace its description
 using the returned `expectedVersion`. Keep unique constraints, unresolved risks and recovery
-links when removing obsolete prose. Detailed trials stay in linked reports; do not create
-reports merely to relocate redundant updates.
+links when removing obsolete prose. Link existing evidence instead of test-count, log, cleanup
+or superseded-trial inventories; never create reports merely to relocate redundant prose.
 
-The coordinator decides assignments and acceptance. A dispatched worker is not proof of
-execution, and a passing static check is not proof that the product objective is achieved.
+The coordinator decides assignments and acceptance. Distinguish verified facts/decisions from
+requested or planned work; curation must not infer execution, add approval gates or change technical
+meaning. Delegation-only instructions stay out of records. A check is not product acceptance.
 
 ## Project knowledge
 
@@ -36,7 +38,7 @@ Each entry has an **ID**, **topic**, **title**, and **content** in Markdown.
 Topics fit the project: for example `constraints`, `performance`, `build` or `runtime`.
 Include useful source links in the content, not separate metadata fields.
 
-Keep information that can change a future decision:
+Keep only durable, non-obvious information that aids a future decision or recovery:
 
 - user constraints and safety limits;
 - reproducible performance tips and their conditions;
@@ -45,10 +47,10 @@ Keep information that can change a future decision:
 
 For example, a 6 GiB memory ceiling or a measured scheduler optimization belongs here.
 “Trial #14 launched; results pending” belongs in the task. Raw logs stay in linked files.
-Do not duplicate facts already adequately covered by project instructions or documentation.
+Do not duplicate facts already adequately covered by code, config or documentation.
 
-A knowledge entry states the current conclusion, its conditions and uncertainty, and evidence
-links, not the investigation chronology. Replace obsolete explanations when evidence establishes
+A knowledge entry states the current conclusion, precise technical conditions, uncertainty and
+evidence links, not the investigation chronology. Replace obsolete explanations when evidence establishes
 the replacement instead of appending contradictory verdicts. Keep a refuted lead only when it
 helps avoid repeating a mistake: summarize the failed approach, its conditions and the reason,
 with a source link. Keep detailed trial sequences, timestamps and measurements in linked reports.
@@ -88,7 +90,8 @@ agents must not bypass the tools with SQL, shell or file edits.
 ## Reading and writing
 
 Use `/memory`, `/task-board` and `/knowledge` to inspect tasks and knowledge without modifying them. Each command calls one tool; the tool returns Markdown and the model relays it unchanged. Read the relevant task with `task-board get`. Discover knowledge with `topics`/`list`/`search`,
-then `get` only matching entries. Do not load the whole project on every reminder.
+then `get` only matching entries. Task-only updates need no unrelated knowledge discovery;
+change only affected records and fields. Do not load the whole project on every reminder.
 `project-rules`, if present, is an ordinary knowledge entry, not a special backend.
 
 Tools return complete Markdown, but rendering may be truncated. Narrow discovery with a
