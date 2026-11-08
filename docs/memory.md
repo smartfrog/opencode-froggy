@@ -105,12 +105,16 @@ versions, deletion reasons, conflicts and partial writes.
 
 The writer reads back affected records and checks titles, statuses, blockers, next steps and recovery
 references against the coordinator's decisions and evidence. For delegated work, the manager returns
-new useful findings, problems, consequences, material ambiguities/refusals or next action first,
-with compact IDs, versions and verification as a technical receipt. If there is no new
-decision-relevant content, the receipt and verification alone suffice; do not invent learning.
-Do not list unchanged constraints or actions performed; meaningful contradictions, omissions,
-removal reasons and partial writes remain visible. The coordinator checks this handback and
-requests decision-critical details when needed,
+a concrete useful technical finding, unresolved problem or material ambiguity established by
+supplied facts or reconciliation, then its practical consequence; add a next action only if useful.
+Do not invent learning or causes, or relabel every parent-supplied fact as a new discovery.
+Catalogues of reads/edits/saves/reorganization, copied record fields, unchanged constraints,
+routine completed steps or defensive "no other writes/tests" accounting are not substantive findings
+and do not belong in the handback. Meaningful errors, refusals, contradictions, omissions,
+removal reasons and partial writes remain visible. Compact IDs, versions and verification form
+the technical receipt: put it last when useful substance exists, not status/review as the main
+content; if nothing decision-relevant remains beyond requested persistence, the receipt alone suffices.
+The coordinator checks this handback and requests decision-critical details when needed,
 not full-record echoes or parent readback by default. A saved-record receipt
 proves persistence, not that the updated state is coherent or that acceptance was met.
 
