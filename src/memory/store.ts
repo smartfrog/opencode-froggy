@@ -1,4 +1,5 @@
 import { asRecord } from "../record"
+import { backupDatabase } from "./backup"
 import { initializeMemory } from "./migration"
 import { type SqliteDatabase } from "./sqlite"
 
@@ -22,6 +23,15 @@ export interface NoteRecord {
   content: string
   version: number
   updatedAt: number
+  excerpt?: string
+}
+
+export type MemoryEntity = "task" | "knowledge"
+
+export interface RevisionSummary {
+  version: number
+  operation: "save" | "remove"
+  recordedAt: number
 }
 
 export interface TaskPatch {
@@ -90,7 +100,7 @@ function checkVersion(id: string, current: { version: number } | null, expected:
 export class MemoryStore {
   readonly migrationBackup: string | null
 
-  constructor(private readonly database: SqliteDatabase, path?: string, readonly = false) {
+  constructor(private readonly database: SqliteDatabase, private readonly path?: string, readonly = false) {
     this.migrationBackup = initializeMemory(database, path, readonly)
   }
 
@@ -134,23 +144,26 @@ export class MemoryStore {
 
   saveTask(id: string, patch: TaskPatch, expectedVersion: number | null = null): SaveResult {
     assertId(id)
-    return this.transaction(() => {
-      const current = this.getTask(id)
-      checkVersion(id, current, expectedVersion)
-      const title = requiredText(patch.title ?? current?.title, "title", 200)
-      const status = taskStatus(patch.status ?? current?.status ?? "todo")
-      const description = patch.description ?? current?.description ?? ""
-      if (typeof description !== "string") throw new Error("Invalid description")
-      const now = Date.now()
-      const version = (current?.version ?? 0) + 1
-      const result = current
-        ? this.database.prepare("UPDATE tasks SET title = ?, status = ?, description = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?")
-          .run(title, status, description, version, now, id, current.version)
-        : this.database.prepare("INSERT INTO tasks (id, title, status, description, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-          .run(id, title, status, description, version, now, now)
-      if (Number(result.changes) !== 1) throw new Error(`Task ${id} changed; read it again`)
-      return { id, version, created: current === null }
-    })
+    return this.transaction(() => this.writeTask(id, patch, expectedVersion))
+  }
+
+  private writeTask(id: string, patch: TaskPatch, expectedVersion: number | null): SaveResult {
+    const current = this.getTask(id)
+    checkVersion(id, current, expectedVersion)
+    const title = requiredText(patch.title ?? current?.title, "title", 200)
+    const status = taskStatus(patch.status ?? current?.status ?? "todo")
+    const description = patch.description ?? current?.description ?? ""
+    if (typeof description !== "string") throw new Error("Invalid description")
+    const now = Date.now()
+    const version = (current?.version ?? 0) + 1
+    const result = current
+      ? this.database.prepare("UPDATE tasks SET title = ?, status = ?, description = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?")
+        .run(title, status, description, version, now, id, current.version)
+      : this.database.prepare("INSERT INTO tasks (id, title, status, description, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(id, title, status, description, version, now, now)
+    if (Number(result.changes) !== 1) throw new Error(`Task ${id} changed; read it again`)
+    this.recordRevision("task", id, "save")
+    return { id, version, created: current === null }
   }
 
   getNote(id: string): NoteRecord | null {
@@ -159,17 +172,22 @@ export class MemoryStore {
   }
 
   listNotes(options: { query?: string; topic?: string } = {}): NoteRecord[] {
-    const filters: string[] = []
-    const params: unknown[] = []
     if (options.query !== undefined) {
-      filters.push("instr(lower(topic || ' ' || title || ' ' || content), lower(?)) > 0")
-      params.push(requiredText(options.query, "query"))
+      const query = requiredText(options.query, "query").split(/\s+/u)
+        .map((term) => `"${term.replaceAll('"', '""')}"`).join(" AND ")
+      const topicFilter = options.topic === undefined ? "" : "AND k.topic = ?"
+      return this.database.prepare(`
+        SELECT k.*, snippet(knowledge_search, 3, '', '', '…', 40) AS excerpt
+        FROM knowledge_search JOIN knowledge k ON k.version = knowledge_search.rowid
+        WHERE knowledge_search MATCH ? ${topicFilter}
+        ORDER BY bm25(knowledge_search, 10, 5, 2, 1), k.topic, k.id
+      `).all(...(options.topic === undefined ? [query] : [query, options.topic])).map((value) => ({
+        ...mapNote(value), excerpt: String(asRecord(value).excerpt),
+      }))
     }
-    if (options.topic !== undefined) {
-      filters.push("topic = ?")
-      params.push(options.topic)
-    }
-    return this.database.prepare(`SELECT * FROM knowledge ${filters.length ? `WHERE ${filters.join(" AND ")}` : ""} ORDER BY topic, id`)
+    const topicFilter = options.topic === undefined ? "" : "WHERE topic = ?"
+    const params = options.topic === undefined ? [] : [options.topic]
+    return this.database.prepare(`SELECT * FROM knowledge ${topicFilter} ORDER BY topic, id`)
       .all(...params).map(mapNote)
   }
 
@@ -188,35 +206,108 @@ export class MemoryStore {
 
   saveNote(id: string, patch: NotePatch, expectedVersion: number | null = null): SaveResult {
     assertId(id)
-    return this.transaction(() => {
-      const current = this.getNote(id)
-      checkVersion(id, current, expectedVersion)
-      const topic = requiredText(patch.topic ?? current?.topic, "topic", 80)
-      const title = requiredText(patch.title ?? current?.title, "title", 200)
-      const content = patch.content ?? current?.content ?? ""
-      requiredText(content, "content")
-      const result = this.database.prepare(`
-        INSERT INTO knowledge (id, topic, title, content, updated_at) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET topic = excluded.topic, title = excluded.title,
-          content = excluded.content, version = excluded.version, updated_at = excluded.updated_at
-        WHERE knowledge.version = ?
-      `).run(id, topic, title, content, Date.now(), expectedVersion)
-      if (Number(result.changes) !== 1) throw new Error(`Knowledge ${id} changed; read it again`)
-      const saved = this.getNote(id)
-      if (!saved) throw new Error(`Knowledge ${id} could not be saved`)
-      return { id, version: saved.version, created: current === null }
-    })
+    return this.transaction(() => this.writeNote(id, patch, expectedVersion))
   }
 
-  removeNote(id: string, expectedVersion: number): { id: string; removed: true } {
+  private writeNote(id: string, patch: NotePatch, expectedVersion: number | null): SaveResult {
+    const current = this.getNote(id)
+    checkVersion(id, current, expectedVersion)
+    const topic = requiredText(patch.topic ?? current?.topic, "topic", 80)
+    const title = requiredText(patch.title ?? current?.title, "title", 200)
+    const content = patch.content ?? current?.content ?? ""
+    requiredText(content, "content")
+    const result = this.database.prepare(`
+      INSERT INTO knowledge (id, topic, title, content, updated_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET topic = excluded.topic, title = excluded.title,
+        content = excluded.content, version = excluded.version, updated_at = excluded.updated_at
+      WHERE knowledge.version = ? RETURNING version
+    `).get(id, topic, title, content, Date.now(), expectedVersion)
+    if (!result) throw new Error(`Knowledge ${id} changed; read it again`)
+    this.recordRevision("knowledge", id, "save")
+    return { id, version: Number(asRecord(result).version), created: current === null }
+  }
+
+  removeNote(id: string, expectedVersion: number): { id: string; removed: true; version: number } {
     assertId(id)
     return this.transaction(() => {
       const current = this.getNote(id)
       if (!current) throw new Error(`Knowledge not found: ${id}`)
       checkVersion(id, current, expectedVersion)
-      const result = this.database.prepare("DELETE FROM knowledge WHERE id = ? AND version = ?").run(id, expectedVersion)
-      if (Number(result.changes) !== 1) throw new Error(`Knowledge ${id} changed; read it again`)
-      return { id, removed: true }
+      const generation = this.database.prepare("UPDATE sqlite_sequence SET seq = seq + 1 WHERE name = 'knowledge' RETURNING seq").get()
+      const version = Number(asRecord(generation).seq)
+      if (!Number.isSafeInteger(version) || version <= expectedVersion) throw new Error("Cannot allocate a knowledge removal version")
+      this.recordRevision("knowledge", id, "remove", version)
+      const result = this.database.prepare("DELETE FROM knowledge WHERE id = ? AND version = ? RETURNING version").get(id, expectedVersion)
+      if (!result) throw new Error(`Knowledge ${id} changed; read it again`)
+      return { id, removed: true, version }
     })
+  }
+
+  private recordRevision(entity: MemoryEntity, id: string, operation: RevisionSummary["operation"], version?: number): void {
+    const table = entity === "task" ? "tasks" : "knowledge"
+    const row = this.database.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id)
+    if (!row) throw new Error(`Cannot record missing ${entity}: ${id}`)
+    this.database.prepare(`
+      INSERT INTO memory_revisions(entity, entity_id, version, operation, snapshot, recorded_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(entity, id, version ?? asRecord(row).version, operation, operation === "remove" ? "{}" : JSON.stringify(row), Date.now())
+    if (operation === "save") {
+      this.database.prepare("DELETE FROM memory_revisions WHERE entity = ? AND entity_id = ? AND operation = 'remove'").run(entity, id)
+    }
+    this.database.prepare(`
+      DELETE FROM memory_revisions WHERE entity = ? AND entity_id = ? AND version NOT IN (
+        SELECT version FROM memory_revisions WHERE entity = ? AND entity_id = ? ORDER BY version DESC LIMIT 2
+      )
+    `).run(entity, id, entity, id)
+  }
+
+  listRevisions(entity: MemoryEntity, id: string): RevisionSummary[] {
+    return this.database.prepare(`
+      SELECT version, operation, recorded_at FROM memory_revisions
+      WHERE entity = ? AND entity_id = ? ORDER BY version DESC
+    `).all(entity, assertId(id)).map((value) => {
+      const row = asRecord(value)
+      if (row.operation !== "save" && row.operation !== "remove") throw new Error("Invalid revision operation")
+      return { version: Number(row.version), operation: row.operation, recordedAt: Number(row.recorded_at) }
+    })
+  }
+
+  private revisionSnapshot(entity: MemoryEntity, id: string, version: number): unknown {
+    if (!Number.isSafeInteger(version) || version < 1) throw new Error("version must be a positive integer")
+    const row = this.database.prepare(`
+      SELECT snapshot FROM memory_revisions WHERE entity = ? AND entity_id = ? AND version = ? AND operation = 'save'
+    `).get(entity, assertId(id), version)
+    if (!row) throw new Error(`Historical version not found: ${entity} ${id} version ${version}`)
+    return JSON.parse(String(asRecord(row).snapshot)) as unknown
+  }
+
+  getTaskRevision(id: string, version: number): TaskRecord {
+    return mapTask(this.revisionSnapshot("task", id, version))
+  }
+
+  getNoteRevision(id: string, version: number): NoteRecord {
+    return mapNote(this.revisionSnapshot("knowledge", id, version))
+  }
+
+  restoreTask(id: string, version: number, expectedVersion: number): SaveResult {
+    return this.transaction(() => this.writeTask(id, this.getTaskRevision(id, version), expectedVersion))
+  }
+
+  restoreNote(id: string, version: number, expectedVersion: number): SaveResult {
+    return this.transaction(() => {
+      const current = this.getNote(id)
+      if (current) {
+        checkVersion(id, current, expectedVersion)
+      } else {
+        const latest = this.listRevisions("knowledge", id)[0]
+        if (latest?.operation !== "remove" || latest.version !== expectedVersion) throw new Error(`Knowledge ${id} changed; read its history again`)
+      }
+      const snapshot = this.getNoteRevision(id, version)
+      return this.writeNote(id, snapshot, current ? expectedVersion : null)
+    })
+  }
+
+  backup(): { path: string; bytes: number } {
+    return this.transaction(() => backupDatabase(this.database, this.path ?? ""), false)
   }
 }

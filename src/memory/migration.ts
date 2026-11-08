@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto"
-import { readFileSync, writeFileSync } from "node:fs"
 import { asRecord } from "../record"
-import { openSqlite, type SqliteDatabase } from "./sqlite"
+import { backupDatabase } from "./backup"
+import { BOUNDED_HISTORY_MIGRATION, MEMORY_SCHEMA_VERSION, RELIABILITY_SCHEMA } from "./reliability-schema"
+import { type SqliteDatabase } from "./sqlite"
 
 const SCHEMA = `
   CREATE TABLE tasks (
@@ -41,43 +41,20 @@ function originalLabel(title: string, value: unknown, maximum: number): string {
   return typeof value === "string" && Array.from(value).length > maximum ? section(title, value) : ""
 }
 
-function backup(database: SqliteDatabase, path?: string): string {
-  if (!path) throw new Error("A database path is required to back up memory before migration")
-  const target = `${path}.pre-simple-${randomUUID()}.bak`
-  const bytes = database.serialize()
-  writeFileSync(target, bytes, { flag: "wx", mode: 0o600, flush: true })
-  if (!Buffer.from(bytes).equals(readFileSync(target))) throw new Error(`Memory backup verification failed: ${target}`)
-  const copy = openSqlite(target)
-  try {
-    copy.exec("PRAGMA journal_mode=DELETE")
-    const integrity = asRecord(copy.prepare("PRAGMA integrity_check").get())
-    if (integrity.integrity_check !== "ok") throw new Error(`Memory backup integrity check failed: ${target}`)
-    for (const table of ["tasks", "notes", "history"]) {
-      const sql = `SELECT count(*) AS count FROM ${table}`
-      if (asRecord(copy.prepare(sql).get()).count !== asRecord(database.prepare(sql).get()).count) {
-        throw new Error(`Memory backup count mismatch for ${table}: ${target}`)
-      }
-    }
-  } finally {
-    copy.close()
-  }
-  return target
-}
-
 export function initializeMemory(database: SqliteDatabase, path?: string, readonly = false): string | null {
   if (readonly) {
     const version = Number(asRecord(database.prepare("PRAGMA user_version").get()).user_version)
-    if (version !== 2) throw new Error("A read requires the current memory schema; upgrade it separately before reading")
+    if (version !== MEMORY_SCHEMA_VERSION) throw new Error("A read requires the current memory schema; upgrade it separately before reading")
     return null
   }
   database.exec("BEGIN IMMEDIATE")
   try {
     const version = Number(asRecord(database.prepare("PRAGMA user_version").get()).user_version)
-    if (version > 2) throw new Error(`Unsupported memory schema version: ${version}`)
+    if (version > MEMORY_SCHEMA_VERSION) throw new Error(`Unsupported memory schema version: ${version}`)
     const columns = database.prepare("PRAGMA table_info(tasks)").all().map((row) => asRecord(row).name)
     let savedBackup: string | null = null
     if (columns.includes("objective")) {
-      savedBackup = backup(database, path)
+      savedBackup = backupDatabase(database, path ?? "", "pre-simple").path
       const tasks = database.prepare("SELECT * FROM tasks ORDER BY id").all().map(asRecord)
       const notes = database.prepare("SELECT * FROM notes WHERE status = 'active' ORDER BY id").all().map(asRecord)
       const descriptions = tasks.map((row) => [
@@ -108,8 +85,15 @@ export function initializeMemory(database: SqliteDatabase, path?: string, readon
       }
     } else if (columns.length === 0) {
       database.exec(SCHEMA)
-    } else if (version !== 2 || !columns.includes("description")) {
+    } else if (![2, 3, MEMORY_SCHEMA_VERSION].includes(version) || !columns.includes("description")) {
       throw new Error("Unrecognized memory schema; no changes were made")
+    }
+    if (version === 3) {
+      savedBackup = backupDatabase(database, path ?? "", "pre-bounded-history").path
+      for (const statement of BOUNDED_HISTORY_MIGRATION) database.exec(statement)
+    } else if (version !== MEMORY_SCHEMA_VERSION) {
+      if (version === 2 && !savedBackup) savedBackup = backupDatabase(database, path ?? "", "pre-reliability").path
+      database.exec(RELIABILITY_SCHEMA)
     }
     database.exec("COMMIT")
     return savedBackup

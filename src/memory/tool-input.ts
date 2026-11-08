@@ -27,10 +27,22 @@ export function recordId(value: unknown): string {
   return value
 }
 
-export function versionInput(value: unknown): number | null {
+export function versionInput(value: unknown, field = "expectedVersion"): number | null {
   if (value === undefined) return null
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) throw new Error("expectedVersion must be a positive integer")
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) throw new Error(`${field} must be a positive integer`)
   return value
+}
+
+export function restoreInput(args: Record<string, unknown>): { version: number; expectedVersion: number } | null {
+  if (args.action !== "restore") {
+    if (args.restoreVersion !== undefined) throw new Error("restoreVersion is only valid for restore")
+    return null
+  }
+  const expectedVersion = versionInput(args.expectedVersion)
+  if (expectedVersion === null) throw new Error("expectedVersion is required for restore")
+  const version = versionInput(args.restoreVersion, "restoreVersion")
+  if (version === null) throw new Error("restoreVersion is required")
+  return { version, expectedVersion }
 }
 
 export function pageNumber(value: unknown): number {

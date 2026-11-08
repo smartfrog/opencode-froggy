@@ -12,6 +12,7 @@ import {
   createOrchestratorLoopTools,
   createTaskBoardTool,
   createKnowledgeTool,
+  createMemoryBackupTool,
   createMemoryReviewTool,
   createMemoryOverviewTool,
   createAgentPromoteTool,
@@ -94,6 +95,7 @@ export default Plugin.define({
     const tools = [
       createTaskBoardTool(ctx.location.project.canonical),
       createKnowledgeTool(ctx.location.project.canonical),
+      createMemoryBackupTool(ctx.location.project.canonical),
       createMemoryReviewTool(ctx.location.project.canonical),
       createMemoryOverviewTool(ctx.location.project.canonical),
       gitingestTool,

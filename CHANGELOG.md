@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.8.0
+
+- Behavior change: knowledge search now matches literal terms rather than arbitrary substrings; knowledge removal retains the last saved content for recovery instead of permanently erasing it
+- Add SQLite FTS5 ranked knowledge search with weighted titles/IDs, accent-insensitive matching and passage-centered excerpts
+- Add one-step recovery and version-checked restoration for tasks and knowledge: current + one previous version, or only the last saved content after removal; older snapshots are automatically discarded
+- Add manager-only `memory-backup` for verified standalone local database copies; back up and transactionally upgrade schema 2 without changing current IDs or versions
+- Back up schema 3 stores before bounding their history in schema 4; preserve current records and removal tokens while retaining older history in the standalone pre-upgrade backup
+- Run `/memory-review` through a dedicated read-only `memory-reviewer`; record tools reject its mutations and it cannot create backups or delegate
+- Add optional Unicode character slices to record reads, with version checks for continuations and full Markdown reads preserved by default
+
 ## 1.7.0
 
 - Breaking change: remove the standalone `froggy-session-context` binary, `bun run session-context` script and text renderer; use `/session-context` or the `session-context` tool for Markdown reports inside OpenCode
