@@ -117,11 +117,17 @@ Create records without `expectedVersion`. Updating or removing an existing recor
 its current version. Versions are opaque conflict guards and recovery identifiers; never calculate
 the next value. On conflict, report it and reread before deciding how to reconcile.
 
+After validation, a `save` whose merged fields equal the current record is a no-op,
+including empty patches. It returns the existing ID and version with `created: false`,
+without changing timestamps, recovery history or the search index. The current
+`expectedVersion` is still required; stale or invalid tokens are rejected.
+
 ## Recovery history and backups
 
 Both record tools expose `history` with an `id`, but it is a **one-step recovery buffer**, not
 a complete history. For a live record it lists the current version and, after an update,
-only the immediately previous version, newest first. Each save replaces that previous version.
+only the immediately previous version, newest first. Each save that changes fields replaces
+that previous version.
 For removed knowledge it lists only the last saved version and a distinct removal token;
 the removal metadata contains no second copy of the content. Recreating or restoring the
 entry drops the removal token and keeps that last saved content as the previous version.
@@ -132,10 +138,11 @@ restores. Two successive bad edits can therefore lose the last good content. Rec
 is separate from ordinary lists, search and task descriptions; it is not an activity journal.
 
 Only `memory-manager` can `restore`, using `id`, `restoreVersion` and `expectedVersion`.
-Restoration writes a new current version; it never rewinds version counters. For an existing
-record, use its current version. For removed knowledge, use the most recent `remove` version
-from history; an intervening recreation and removal invalidates the old token. Read and
-verify the restored current record, including its references, before reporting recovery.
+Restoration always writes a new current version, even for identical content; it never rewinds
+version counters. For an existing record, use its current version. For removed knowledge,
+use the most recent `remove` version from history; an intervening recreation and removal
+invalidates the old token. Read and verify the restored current record, including its
+references, before reporting recovery.
 For an existing record, the state replaced by restoration becomes its one previous version.
 
 The manager can call `memory-backup` with no arguments to create a uniquely named, local

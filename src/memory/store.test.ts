@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it, spyOn } from "bun:test"
 import { createTemporaryDirectory } from "../test-fixtures/temporary-directory"
 import { openSqlite } from "./sqlite"
 import { MemoryStore } from "./store"
@@ -185,5 +185,145 @@ describe("memory store", () => {
   it.each(["", " "])("rejects blank knowledge content %j", (content) => {
     const { memory } = store()
     expect(() => memory.saveNote("rule", { title: "Rule", topic: "constraints", content })).toThrow("content is required")
+  })
+})
+
+describe("unchanged saves", () => {
+  it.each([
+    {},
+    { description: "Second." },
+    { title: "Task", status: "review", description: "Second." },
+    { title: " Task " },
+  ])("preserves task state and recovery without storage writes for patch %j", (patch) => {
+    const { memory, database } = store()
+    const clock = spyOn(Date, "now").mockReturnValue(1_000)
+    try {
+      const first = memory.saveTask("T", { title: "Task", status: "review", description: "First." })
+      const previous = memory.getTask("T")
+      clock.mockReturnValue(2_000)
+      const second = memory.saveTask("T", { description: "Second." }, first.version)
+      const current = memory.getTask("T")
+      const history = memory.listRevisions("task", "T")
+      const changes = database.prepare("SELECT total_changes() AS count").get()
+      const bytes = Buffer.from(database.serialize())
+
+      clock.mockReturnValue(3_000)
+      const repeated = memory.saveTask("T", patch, second.version)
+
+      expect({ receipt: repeated, current: memory.getTask("T"), history: memory.listRevisions("task", "T") }).toEqual({
+        receipt: { id: "T", version: second.version, created: false }, current, history,
+      })
+      expect(memory.getTaskRevision("T", first.version)).toEqual(previous)
+      expect(database.prepare("SELECT total_changes() AS count").get()).toEqual(changes)
+      expect(Buffer.from(database.serialize()).equals(bytes)).toBe(true)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it.each([
+    {},
+    { content: "Second." },
+    { topic: "build", title: "Rule", content: "Second." },
+    { topic: " build ", title: " Rule " },
+  ])("preserves knowledge state, recovery and search without storage writes for patch %j", (patch) => {
+    const { memory, database } = store()
+    const clock = spyOn(Date, "now").mockReturnValue(1_000)
+    try {
+      const first = memory.saveNote("rule", { topic: "build", title: "Rule", content: "First." })
+      const previous = memory.getNote("rule")
+      clock.mockReturnValue(2_000)
+      const second = memory.saveNote("rule", { content: "Second." }, first.version)
+      const current = memory.getNote("rule")
+      const history = memory.listRevisions("knowledge", "rule")
+      const search = memory.listNotes({ query: "Second" })
+      const changes = database.prepare("SELECT total_changes() AS count").get()
+      const bytes = Buffer.from(database.serialize())
+
+      clock.mockReturnValue(3_000)
+      const repeated = memory.saveNote("rule", patch, second.version)
+
+      expect({ receipt: repeated, current: memory.getNote("rule"), history: memory.listRevisions("knowledge", "rule") }).toEqual({
+        receipt: { id: "rule", version: second.version, created: false }, current, history,
+      })
+      expect(memory.getNoteRevision("rule", first.version)).toEqual(previous)
+      expect(memory.listNotes({ query: "Second" })).toEqual(search)
+      expect(database.prepare("SELECT total_changes() AS count").get()).toEqual(changes)
+      expect(Buffer.from(database.serialize()).equals(bytes)).toBe(true)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it.each([
+    [undefined, "provide expectedVersion"],
+    [1, "changed"],
+    [0, "positive integer"],
+    [1.5, "positive integer"],
+  ] as const)("rejects an identical task save with expectedVersion %s", (expectedVersion, error) => {
+    const { memory, database } = store()
+    const first = memory.saveTask("T", { title: "Task", description: "First." })
+    memory.saveTask("T", { description: "Second." }, first.version)
+    const bytes = Buffer.from(database.serialize())
+    expect(() => memory.saveTask("T", { description: "Second." }, expectedVersion)).toThrow(error)
+    expect(Buffer.from(database.serialize()).equals(bytes)).toBe(true)
+  })
+
+  it.each([
+    [undefined, "provide expectedVersion"],
+    [1, "changed"],
+    [0, "positive integer"],
+    [1.5, "positive integer"],
+  ] as const)("rejects an identical knowledge save with expectedVersion %s", (expectedVersion, error) => {
+    const { memory, database } = store()
+    const first = memory.saveNote("rule", { topic: "build", title: "Rule", content: "First." })
+    memory.saveNote("rule", { content: "Second." }, first.version)
+    const bytes = Buffer.from(database.serialize())
+    expect(() => memory.saveNote("rule", { content: "Second." }, expectedVersion)).toThrow(error)
+    expect(Buffer.from(database.serialize()).equals(bytes)).toBe(true)
+  })
+
+  it("validates a task title's length before treating its trimmed value as unchanged", () => {
+    const { memory } = store()
+    const first = memory.saveTask("T", { title: "Task" })
+    expect(() => memory.saveTask("T", { title: " ".repeat(200) + "Task" }, first.version)).toThrow("title must not exceed")
+  })
+
+  it.each([
+    [{ title: " ".repeat(200) + "Rule" }, "title must not exceed"],
+    [{ topic: " ".repeat(80) + "build" }, "topic must not exceed"],
+  ] as const)("validates knowledge field lengths before treating trimmed values as unchanged: %j", (patch, error) => {
+    const { memory } = store()
+    const first = memory.saveNote("rule", { topic: "build", title: "Rule", content: "First." })
+    expect(() => memory.saveNote("rule", patch, first.version)).toThrow(error)
+  })
+
+  it.each([
+    { title: "Renamed" },
+    { status: "done" },
+    { description: "First.\n" },
+    { description: "" },
+  ])("creates a new task version when a field changes: %j", (patch) => {
+    const { memory } = store()
+    const first = memory.saveTask("T", { title: "Task", description: "First." })
+    const next = memory.saveTask("T", patch, first.version)
+    expect(next.version).toBeGreaterThan(first.version)
+    expect(next.created).toBe(false)
+    expect(memory.getTask("T")).toMatchObject({ ...patch, version: next.version })
+    expect(memory.listRevisions("task", "T").map(({ version }) => version)).toEqual([next.version, first.version])
+  })
+
+  it.each([
+    { topic: "runtime" },
+    { title: "Renamed" },
+    { content: "First.\n" },
+  ])("creates a new knowledge version when a field changes: %j", (patch) => {
+    const { memory } = store()
+    const first = memory.saveNote("rule", { topic: "build", title: "Rule", content: "First." })
+    const next = memory.saveNote("rule", patch, first.version)
+    expect(next.version).toBeGreaterThan(first.version)
+    expect(next.created).toBe(false)
+    expect(memory.getNote("rule")).toMatchObject({ ...patch, version: next.version })
+    expect(memory.listRevisions("knowledge", "rule").map(({ version }) => version)).toEqual([next.version, first.version])
   })
 })

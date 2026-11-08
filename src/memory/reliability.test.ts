@@ -179,6 +179,26 @@ describe("restorable record history", () => {
     expect(store.getTask("T")).toMatchObject({ title: "Original", status: "blocked", description: "Keep the blocker.", version: 3 })
   }))
 
+  it.each([false, true])("restores identical task content as a new version (previous=%j)", (previous) => withStore((store) => {
+    const first = store.saveTask("T", { title: "Task", description: "Keep." })
+    const current = previous ? store.restoreTask("T", first.version, first.version) : first
+    const restored = store.restoreTask("T", first.version, current.version)
+    expect(restored.version).toBeGreaterThan(current.version)
+    expect(restored.created).toBe(false)
+    expect(store.getTask("T")).toMatchObject({ title: "Task", description: "Keep.", version: restored.version })
+    expect(store.listRevisions("task", "T").map(({ version }) => version)).toEqual([restored.version, current.version])
+  }))
+
+  it.each([false, true])("restores identical knowledge content as a new version (previous=%j)", (previous) => withStore((store) => {
+    const first = store.saveNote("rule", { topic: "build", title: "Rule", content: "Keep." })
+    const current = previous ? store.restoreNote("rule", first.version, first.version) : first
+    const restored = store.restoreNote("rule", first.version, current.version)
+    expect(restored.version).toBeGreaterThan(current.version)
+    expect(restored.created).toBe(false)
+    expect(store.getNote("rule")).toMatchObject({ topic: "build", title: "Rule", content: "Keep.", version: restored.version })
+    expect(store.listRevisions("knowledge", "rule").map(({ version }) => version)).toEqual([restored.version, current.version])
+  }))
+
   it("rejects a historical version from a different record", () => withStore((store) => {
     const first = store.saveNote("A", { title: "A", topic: "build", content: "First." })
     const other = store.saveNote("B", { title: "B", topic: "build", content: "Other." })

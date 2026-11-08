@@ -147,13 +147,16 @@ export class MemoryStore {
     return this.transaction(() => this.writeTask(id, patch, expectedVersion))
   }
 
-  private writeTask(id: string, patch: TaskPatch, expectedVersion: number | null): SaveResult {
+  private writeTask(id: string, patch: TaskPatch, expectedVersion: number | null, restoring = false): SaveResult {
     const current = this.getTask(id)
     checkVersion(id, current, expectedVersion)
     const title = requiredText(patch.title ?? current?.title, "title", 200)
     const status = taskStatus(patch.status ?? current?.status ?? "todo")
     const description = patch.description ?? current?.description ?? ""
     if (typeof description !== "string") throw new Error("Invalid description")
+    if (!restoring && current && title === current.title && status === current.status && description === current.description) {
+      return { id, version: current.version, created: false }
+    }
     const now = Date.now()
     const version = (current?.version ?? 0) + 1
     const result = current
@@ -209,13 +212,16 @@ export class MemoryStore {
     return this.transaction(() => this.writeNote(id, patch, expectedVersion))
   }
 
-  private writeNote(id: string, patch: NotePatch, expectedVersion: number | null): SaveResult {
+  private writeNote(id: string, patch: NotePatch, expectedVersion: number | null, restoring = false): SaveResult {
     const current = this.getNote(id)
     checkVersion(id, current, expectedVersion)
     const topic = requiredText(patch.topic ?? current?.topic, "topic", 80)
     const title = requiredText(patch.title ?? current?.title, "title", 200)
     const content = patch.content ?? current?.content ?? ""
     requiredText(content, "content")
+    if (!restoring && current && topic === current.topic && title === current.title && content === current.content) {
+      return { id, version: current.version, created: false }
+    }
     const result = this.database.prepare(`
       INSERT INTO knowledge (id, topic, title, content, updated_at) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET topic = excluded.topic, title = excluded.title,
@@ -290,7 +296,7 @@ export class MemoryStore {
   }
 
   restoreTask(id: string, version: number, expectedVersion: number): SaveResult {
-    return this.transaction(() => this.writeTask(id, this.getTaskRevision(id, version), expectedVersion))
+    return this.transaction(() => this.writeTask(id, this.getTaskRevision(id, version), expectedVersion, true))
   }
 
   restoreNote(id: string, version: number, expectedVersion: number): SaveResult {
@@ -303,7 +309,7 @@ export class MemoryStore {
         if (latest?.operation !== "remove" || latest.version !== expectedVersion) throw new Error(`Knowledge ${id} changed; read its history again`)
       }
       const snapshot = this.getNoteRevision(id, version)
-      return this.writeNote(id, snapshot, current ? expectedVersion : null)
+      return this.writeNote(id, snapshot, current ? expectedVersion : null, true)
     })
   }
 
