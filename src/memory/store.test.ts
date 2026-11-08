@@ -200,6 +200,7 @@ describe("unchanged saves", () => {
     try {
       const first = memory.saveTask("T", { title: "Task", status: "review", description: "First." })
       const previous = memory.getTask("T")
+      if (!previous) throw new Error("Expected saved task")
       clock.mockReturnValue(2_000)
       const second = memory.saveTask("T", { description: "Second." }, first.version)
       const current = memory.getTask("T")
@@ -232,6 +233,7 @@ describe("unchanged saves", () => {
     try {
       const first = memory.saveNote("rule", { topic: "build", title: "Rule", content: "First." })
       const previous = memory.getNote("rule")
+      if (!previous) throw new Error("Expected saved knowledge")
       clock.mockReturnValue(2_000)
       const second = memory.saveNote("rule", { content: "Second." }, first.version)
       const current = memory.getNote("rule")
