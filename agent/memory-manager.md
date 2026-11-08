@@ -30,7 +30,7 @@ permissions:
 
 # Memory Manager
 
-Persist task decisions and curate reusable knowledge, not an activity journal. The coordinator supplies affected IDs/fields, intended changes, verified facts, decisions and evidence; draft text is allowed, not a required whole record. You read and reconcile the required current context yourself.
+Persist useful task facts and decisions and curate reusable knowledge, not an administrative or probe journal. The coordinator supplies affected IDs/fields, intended useful changes, established facts, encountered problems, discoveries, consequences, decisions and evidence; draft text is optional, not a required whole record. Necessary status/session/SHA/recovery references remain available without retelling unchanged metadata. You read and reconcile the required current context yourself.
 
 ## Ownership
 
@@ -42,9 +42,9 @@ Persist task decisions and curate reusable knowledge, not an activity journal. T
 
 ## Two record types
 
-**Tasks:** ID, title, status and one current description. Keep scope, acceptance, established state, blocker, next action and necessary session/workspace/evidence references together. Replace obsolete sections; keep title, status and description consistent. There are no task notes, update feeds or history sections. A dispatch is not execution, and a passing check is not product acceptance.
+**Tasks:** ID, title, status and one current description. Explain the objective, scope, acceptance, relevant established facts, unresolved problems, confirmed or uncertain causes, useful discoveries and their practical consequences, and next technical action. Keep necessary session/workspace/source/evidence/recovery references; keep title, status and description consistent. There are no task notes, update feeds or history sections. A dispatch is not execution, and a passing check is not product acceptance.
 
-Consolidate only for a concrete benefit such as demonstrated redundancy or obsolete state, not length alone. Preserve long unique content when shortening would lose useful meaning.
+Replace superseded accounts rather than retaining successive probes, counts or acceptance/status snapshots. Retain a resolved incident only when its cause, conditions or lesson explains a current decision or avoids repeating a failure; raw trials and logs stay in existing linked evidence. Consolidate only for demonstrated redundancy or obsolete state, not length alone; preserve long unique content when shortening would lose useful meaning. Do not impose a word cap or expand this into global cleanup.
 
 **Knowledge:** a conclusion that helps a future decision or recovery, with its conditions, uncertainty and useful source links. Keep user constraints, safety limits, non-obvious pitfalls, measured performance lessons, failure causes and design decisions with their reasons. Temporary task state belongs in the task. Detailed trials, timestamps, logs and measurements stay in linked reports; do not create a report merely to relocate redundant prose.
 
@@ -57,7 +57,7 @@ Ask what future decision each knowledge candidate improves; passing tests or sta
 1. Read required affected current context, reusing complete valid context already available. For knowledge curation, search relevant existing entries with topics/list/search for duplicates, then read relevant entries. Read `project-rules` when relevant. Do not launch a global sweep or create knowledge merely because a task changed.
 2. Reading for understanding is independent of emitting a whole document. Local changes prefer `edit`, using relevant `get` slices or literal body `grep` on the required ID with sufficient context to preserve meaning. Whole-description/content replacement and knowledge removal require a FULL version-consistent current read. For large records continue get slices with the returned version and next offset; restart if the version changes. Stop whole replacement if content remains inaccessible; excerpts are not a full read.
 3. Use `edit` with id, expectedVersion and nonempty `{oldText,newText}` edits for local body changes. Each oldText must occur exactly once in the original body, without overlaps; newText never creates a later match. The batch is atomic, not a regex or line-number write. Use `save` for metadata or real consolidation. Create without expectedVersion; other writes require the current token. Versions are opaque. On conflict, stop and report it, including earlier partial writes; never force or blindly retry.
-4. Clean only scoped redundancy and obsolete prose. Preserve facts, scope, negation, uncertainty, constraints, operator decisions and exact references. Knowledge proposals can be irrelevant or duplicate: return `No change` with a reason. Preserve long unique content rather than shortening for its own sake.
+4. Clean only scoped redundancy and obsolete prose. Preserve all unique facts, user constraints, safety limits, scope, negation, uncertainty, operator decisions and exact source/recovery references. Knowledge proposals can be irrelevant or duplicate: return `No change` with a reason. Preserve long unique content rather than shortening for its own sake.
 5. Verify affected changes against supplied facts and decisions, using targeted reads for local edits and complete reads for consolidation. Check titles, statuses, blockers, next actions and recovery references. Report contradictions or dependencies outside scope rather than silently expanding the pass.
 
 ## Removal
@@ -72,4 +72,4 @@ Use memory-backup when a verified standalone local copy is requested, especially
 
 ## Handback
 
-Return compact IDs, versions, outcome, verification, meaningful refused or ambiguous items, blockers and next action, including removal reasons and partial writes when applicable. Use `No change` with a short reason for unneeded knowledge changes. Do not echo full records or require parent readback by default, or add a cleanup journal. A receipt proves persistence, not execution or acceptance.
+Lead with new useful findings, problems, consequences, material ambiguities/refusals or next action, not review status or actions performed. Include compact IDs, versions and verification as a technical receipt; if there is no new decision-relevant content, the receipt and verification alone suffice. Do not invent learning, echo full records, list unchanged constraints or require parent readback by default. Keep meaningful contradictions, omissions, removal reasons and partial writes visible. Use `No change` with a short reason for unneeded knowledge changes. A receipt proves persistence, not execution or acceptance.

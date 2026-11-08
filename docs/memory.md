@@ -17,10 +17,13 @@ flowchart LR
 A task has a stable **ID**, **title**, **status**, and **detailed description**.
 Statuses are `todo`, `in-progress`, `blocked`, `review`, and `done`.
 
-The description holds scope, acceptance, current state, next step and useful evidence links.
-Keep session/workspace references there when needed to resume work. Title, status and
-description must agree with the current established state: replace obsolete blockers,
-assignments and former current-state sections rather than keeping a succession of snapshots.
+The description explains the objective, scope, acceptance, relevant established facts,
+unresolved problems, confirmed or uncertain causes, useful discoveries and their practical
+consequences, and next technical action. Keep necessary session/workspace/source/evidence/recovery
+references. Title, status and description must agree with the current established state:
+replace superseded accounts rather than keeping successive probes, counts or acceptance/status
+snapshots. Retain a resolved incident only when its cause, conditions or lesson explains a current
+decision or avoids repeating a failure.
 There are no task notes, update feeds or history sections. `save` replaces supplied fields;
 it does not append a timeline. The manager reads required current context, then uses local `edit`
 or a consolidated `save` with current `expectedVersion`. Keep unique constraints, unresolved risks and recovery
@@ -44,7 +47,8 @@ Keep information that can change a future decision:
 - non-obvious project facts and design decisions with their reasons.
 
 For example, a 6 GiB memory ceiling or a measured scheduler optimization belongs here.
-“Trial #14 launched; results pending” belongs in the task. Raw logs stay in linked files.
+A task-specific unresolved dependency and the next way to investigate it belong in the task,
+not a sequence of trial launches. Raw logs stay in existing linked files.
 Do not duplicate facts already adequately covered by project instructions or documentation.
 
 A knowledge entry states the current conclusion, its conditions and uncertainty, and evidence
@@ -68,9 +72,11 @@ The manager works in its own context, curates scoped prose, restores records and
 Before delegating knowledge curation, ask: **what future decision would this improve?**
 An existing-record correction or explicit memory request may justify a pass. Status, tests,
 reminders, review references or unchanged state alone do not. Group available useful knowledge
-candidates in one bounded pass, supplying verified facts, decisions, obsolete conclusions,
-affected IDs/fields, intended changes and evidence. Draft text is allowed; the orchestrator
-need not reconstruct or send whole records. Do not send a whole transcript.
+candidates in one bounded pass, supplying established facts, encountered problems/causes,
+discoveries/consequences, decisions, obsolete conclusions, affected IDs/fields, intended useful
+changes and evidence. Draft text is optional; the orchestrator need not reconstruct or send whole
+records. Keep necessary status/session/SHA/recovery references available without retelling unchanged
+metadata or supplying every run/proof receipt as narrative. Do not send a whole transcript.
 Persist needed task/recovery references promptly. Explicit retention requests and important
 confirmed findings warrant curation even while blocked or in progress; do not wait for done
 or other deliveries. Passing tests alone do not establish a reusable lesson.
@@ -99,8 +105,12 @@ versions, deletion reasons, conflicts and partial writes.
 
 The writer reads back affected records and checks titles, statuses, blockers, next steps and recovery
 references against the coordinator's decisions and evidence. For delegated work, the manager returns
-compact IDs, versions, outcome, verification, meaningful refused or ambiguous items, blockers and
-next action. The coordinator checks these and requests decision-critical details when needed,
+new useful findings, problems, consequences, material ambiguities/refusals or next action first,
+with compact IDs, versions and verification as a technical receipt. If there is no new
+decision-relevant content, the receipt and verification alone suffice; do not invent learning.
+Do not list unchanged constraints or actions performed; meaningful contradictions, omissions,
+removal reasons and partial writes remain visible. The coordinator checks this handback and
+requests decision-critical details when needed,
 not full-record echoes or parent readback by default. A saved-record receipt
 proves persistence, not that the updated state is coherent or that acceptance was met.
 
